@@ -8,7 +8,7 @@ måste ha:
 - [ ] UI
 - [ ] Input modul
 - [ ] Event Loop
-- [ ] Main Menu / start games
+- [ ] Main Menu / start games / next game screen / score
 
 
 Nice to have:
@@ -49,3 +49,12 @@ Input:
 8 riktningar och två knappar är all input
 
 Par vis utveckling av minigames när vi är klara med grundläggande Game Engine 
+
+
+
+Mini Game Ideas:
+- Fråga Jonatan om hjälp
+- Typ racer koncept t.ex. skriva ett tal i binärt så snabbt som möjligt
+- simple smash 
+- Submitta till kattis 100% rng om den lyckas 
+- måndagsstäd
