@@ -1,36 +1,20 @@
 const rl = @import("raylib");
+const win = @import("window.zig");
 
 pub fn main() void {
-    var window_width: i32 = 800;
-    var window_height: i32 = 640;
-
-    // Init
-    rl.setTraceLogLevel(rl.TraceLogLevel.log_error);
-    rl.setConfigFlags(rl.ConfigFlags.flag_window_resizable);
-    rl.initWindow(800, 640, "++party");
-    rl.setTargetFPS(60);
+    var window = win.Window.init(1920, 1080);
+    defer window.deinit();
 
     // Game loop
-    while(true) {
-        // Exit
-        if(rl.windowShouldClose() or rl.isKeyPressed(rl.KeyboardKey.key_escape)) {
-            break;
-        }
-
-        // Window resize
-        if(rl.isWindowResized()) {
-            window_width = rl.getRenderWidth();
-            window_height = rl.getRenderHeight();
-        }
-
-        // Update goes here
+    while(window.running) {
+        // Updates goes here
+        window.update();        
 
         rl.beginDrawing();
         
-        // Render goes here
+        // Rendering goes here
 
         rl.endDrawing();
     }
 
-    rl.closeWindow();
 }
