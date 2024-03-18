@@ -8,6 +8,7 @@ måste ha:
 - [ ] UI
 - [ ] Input modul
 - [ ] Event Loop
+- [ ] Main Menu / start games
 
 
 Nice to have:
@@ -41,6 +42,10 @@ raylib för allt
 zig
 alla ser exakt samma sak 
 låst till 60fps
+pusha endast till main om det compilerar.
+annvänd zig formater
 
 Input:
 8 riktningar och två knappar är all input
+
+Par vis utveckling av minigames när vi är klara med grundläggande Game Engine 
