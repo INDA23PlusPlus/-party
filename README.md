@@ -26,9 +26,9 @@ långt i framtiden:
 ECS: (first Draft)
 - Position
 - Transform (endast för dynamiska saker)
-    - position
     - sub-pixel position
     - velocitiy
+    - acceleration
 - Collider
     - dim
 - Texture
