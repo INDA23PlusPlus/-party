@@ -6,15 +6,14 @@ pub fn main() void {
     defer window.deinit();
 
     // Game loop
-    while(window.running) {
+    while (window.running) {
         // Updates goes here
-        window.update();        
+        window.update();
 
         rl.beginDrawing();
-        
+
         // Rendering goes here
 
         rl.endDrawing();
     }
-
 }
