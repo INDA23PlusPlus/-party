@@ -1,3 +1,13 @@
+# ++Party
+
+## Clone and Run
+```bash
+git clone git@github.com:INDA23PlusPlus/plusplusparty.git --recursive
+cd plusplusparty
+zig build run
+```
+
+## Desing Doc
 måste ha:
 - [ ] 2D Graphics
 - [ ] Networking
@@ -10,18 +20,12 @@ måste ha:
 - [ ] Event Loop
 - [ ] Main Menu / start games / next game screen / score
 
-
 Nice to have:
-- [ ] Vår egen ECS
 - [ ] Ljud
-
 
 Ska icke
 - [ ] inte 3D
 - [ ] allt som raylib gör
-
-långt i framtiden:
-- [ ] multiple inputs
 
 ECS: (first Draft)
 - Position
@@ -34,23 +38,28 @@ ECS: (first Draft)
 - Texture
     - texture pointer
     - dim
-
-
+- Text
+    - text
+    - dim
 
 Assets gör inte vi
-raylib för allt
-zig
-alla ser exakt samma sak 
-låst till 60fps
-pusha endast till main om det compilerar.
-annvänd zig formater
 
-Input:
-8 riktningar och två knappar är all input
+raylib för allt
+
+zig master branch
+
+alla ser exakt samma sak i mutliplayer
+
+låst till 60fps
+
+pusha endast till main om det compilerar.
+
+annvänd zig formater
 
 Par vis utveckling av minigames när vi är klara med grundläggande Game Engine 
 
-
+Input:
+8 riktningar och två knappar är all input
 
 Mini Game Ideas:
 - Fråga Jonatan om hjälp
