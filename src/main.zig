@@ -1,5 +1,6 @@
 const rl = @import("raylib");
 const win = @import("window.zig");
+const input = @import("input.zig");
 
 pub fn main() void {
     var window = win.Window.init(1920, 1080);
@@ -7,12 +8,16 @@ pub fn main() void {
 
     // Game loop
     while (window.running) {
-        // Updates goes here
+
+        // Update stuff here
+        input.update();
         window.update();
 
         rl.beginDrawing();
 
-        // Rendering goes here
+        // Draw stuff here
+        rl.clearBackground(rl.Color.white);
+        rl.drawText("++party! :D", 8, 8, 96, rl.Color.blue);
 
         rl.endDrawing();
     }
