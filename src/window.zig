@@ -23,13 +23,14 @@ pub const Window = struct {
     }
 
     pub fn update(self: *Self) void {
-        if(rl.windowShouldClose() or rl.isKeyPressed(rl.KeyboardKey.key_escape)) {
+        if  (rl.windowShouldClose() or rl.isKeyPressed(rl.KeyboardKey.key_escape)) {
             self.running = false;
         }
 
-        if(rl.isWindowResized()) {
+        if  (rl.isWindowResized()) {
             self.width = rl.getRenderWidth();
             self.height = rl.getRenderHeight();
         }
     }
 };
+
