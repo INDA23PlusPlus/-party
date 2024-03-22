@@ -19,8 +19,12 @@ pub fn main() void {
     defer frame_arena.deinit();
     const frame_allocator = frame_arena.allocator();
 
+    // init systems and game
     var render_system = render.init(game_allocator, BC_COLOR);
     defer render_system.deinit();
+
+    // var current_game = game.init(game_allocator);
+    // defer current_game.deinit();
 
     // Game loop
     while (window.running) {
@@ -30,15 +34,17 @@ pub fn main() void {
         // Updates game systems
         input.update();
         window.update();
-        // physics.update()
+        // const res = physics.update()
 
         rl.beginDrawing();
-        render_system.update();
         // Render -----------------------------
+
+        // current_game.update(res);
 
         rl.drawText("++party! :D", 8, 8, 96, rl.Color.blue);
 
         // Stop Render -----------------------
+        render_system.update();
         rl.endDrawing();
     }
 }
