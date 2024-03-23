@@ -14,7 +14,7 @@ måste ha:
 - [ ] Pysics
 - [ ] Collision
 - [ ] Asset loading
-- [ ] ECS
+- [X] ECS
 - [ ] UI
 - [ ] Input modul
 - [ ] Event Loop
