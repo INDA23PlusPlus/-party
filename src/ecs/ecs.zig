@@ -1,9 +1,8 @@
 const std = @import("std");
 const cps = @import("components.zig");
-const sys = @import("systems.zig");
 
 /// This constant determines the maximum number of entities a World supports.
-pub const N: usize = 10;
+pub const N: usize = 2;
 
 /// This constant determines which components a World supports.
 pub const Cs: []const type = &.{
@@ -49,6 +48,9 @@ pub const WorldError = error{
     NullQuery,
 };
 
+// This can be moved into World.init() when Zig gets pinned structs.
+pub const WorldBuffer = [buffer_size]u8;
+
 pub const World = struct {
     const Self = @This();
     const Entities = std.bit_set.ArrayBitSet(u32, N);
@@ -59,13 +61,11 @@ pub const World = struct {
     entities: Entities = Entities.initEmpty(),
     generations: [N]Generation = [_]Generation{0} ** N,
     signatures: [N]Signature = [_]Signature{Signature.initEmpty()} ** N,
-    buffer: [buffer_size]u8,
+    buffer: *[buffer_size]u8,
     components: [Cs.len]*anyopaque,
 
-    pub fn init() Self {
-        var buffer: [buffer_size]u8 = undefined;
+    pub fn init(buffer: *WorldBuffer) Self {
         var components: [Cs.len]*anyopaque = undefined;
-
         var cursor: usize = 0;
         for (0..Cs.len) |i| {
             const size = component_sizes[i];
@@ -83,6 +83,12 @@ pub const World = struct {
             .buffer = buffer,
             .components = components,
         };
+    }
+
+    pub fn reset(self: *Self) void {
+        self.entities = Entities.initEmpty();
+        self.generations = [_]Generation{0} ** N;
+        self.signatures = [_]Signature{Signature.initEmpty()} ** N;
     }
 
     pub fn spawn(self: *Self, comptime Components: []const type) !Entity {
@@ -156,7 +162,7 @@ pub const World = struct {
 
                 while (self.iterator.next()) |i| {
                     const signature = self.world.signatures[i];
-                    if (signature.intersectWith(include).intersectWith(exclude.complement()).mask == 0) {
+                    if (signature.intersectWith(include).intersectWith(exclude.complement()).mask != 0) {
                         self.cursor = i;
                         return Entity{ .identifier = @intCast(i), .generation = self.world.generations[i] };
                     }
@@ -167,9 +173,9 @@ pub const World = struct {
 
             pub fn get(self: *@This(), comptime C: type) !*C {
                 if (self.cursor) |i| {
-                    const index = comptime for (Include, 0..) |c, j| {
+                    const index = comptime for (Include) |c| {
                         if (c == C) {
-                            break j;
+                            break componentIndex(c);
                         }
                     } else {
                         @compileError("Invalid component: " ++ @typeName(C));
@@ -220,7 +226,9 @@ fn componentSignature(comptime Components: []const type) Signature {
 }
 
 test "spawn_promote_demote_kill" {
-    var world = World.init();
+    std.log.warn("", .{});
+    var buffer: WorldBuffer = undefined;
+    var world = World.init(&buffer);
 
     const entity = try world.spawn(&.{cps.Pos});
 
@@ -232,7 +240,9 @@ test "spawn_promote_demote_kill" {
 }
 
 test "spawn_limit" {
-    var world = World.init();
+    std.log.warn("", .{});
+    var buffer: WorldBuffer = undefined;
+    var world = World.init(&buffer);
 
     for (0..N) |_| {
         _ = try world.spawn(&.{});
@@ -242,16 +252,32 @@ test "spawn_limit" {
 }
 
 test "run_system" {
-    var world = World.init();
+    std.log.warn("", .{});
+    var buffer: WorldBuffer = undefined;
+    var world = World.init(&buffer);
 
     for (0..N) |_| {
         _ = try world.spawn(&.{ cps.Pos, cps.Vel });
     }
 
-    try system(&world);
+    try print(&world);
+    try accelerate(&world);
+    try move(&world);
+    try print(&world);
+
+    world.reset();
 }
 
-pub fn system(world: *World) !void {
+pub fn accelerate(world: *World) !void {
+    var query = world.query(&.{cps.Vel}, &.{});
+    while (query.next()) |entity| {
+        const vel = try query.get(cps.Vel);
+        vel.x += @floatFromInt(entity.identifier + 1);
+        vel.y += @floatFromInt(entity.identifier + 1);
+    }
+}
+
+pub fn move(world: *World) !void {
     var query = world.query(&.{ cps.Pos, cps.Vel }, &.{});
     while (query.next()) |_| {
         const pos = try query.get(cps.Pos);
@@ -262,29 +288,12 @@ pub fn system(world: *World) !void {
     }
 }
 
-// const ecs = @import("ecs.zig");
+pub fn print(world: *World) !void {
+    var query = world.query(&.{ cps.Pos, cps.Vel }, &.{});
+    while (query.next()) |_| {
+        const pos = try query.get(cps.Pos);
+        const vel = try query.get(cps.Vel);
 
-// const Pos = struct { i32, i32 };
-// const Vel = struct { i32, i32 };
-
-// const WorldType = ecs.World(&.{ Pos, Vel });
-
-// pub fn move(world: *WorldType) void {
-//     var query = world.query(&.{ Pos, Vel });
-
-//     while (query.next()) |entity| {
-//         const pos = query.get(Pos);
-//         const vel = query.get(Vel);
-
-//         pos.x += vel.x;
-//         pos.y += vel.y;
-//     }
-// }
-
-// pub fn main() void {
-//     var world = WorldType.init();
-
-//     while (true) {
-//         move(&world);
-//     }
-// }
+        std.log.warn("Pos({}, {}), Vel({}, {})", .{ pos.x, pos.y, vel.x, vel.y });
+    }
+}
