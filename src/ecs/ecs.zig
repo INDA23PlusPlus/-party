@@ -2,12 +2,12 @@ const std = @import("std");
 
 // COMPONENTS
 
-const Position = struct {
+pub const Position = struct {
     x: i32 = 0,
     y: i32 = 0,
 };
 
-const Mover = struct {
+pub const Mover = struct {
     subpixel_x: f32 = 0.0,
     subpixel_y: f32 = 0.0,
     velocity_x: f32 = 0.0,
@@ -16,27 +16,41 @@ const Mover = struct {
     acceleration_y: f32 = 0.0,
 };
 
-const Collider = struct {};
+pub const Collider = struct {
+    w: i32 = 0,
+    h: i32 = 0,
+    collided: []Entity = &.{},
+};
 
-const Texture = struct {
+pub const Texture = struct {
     file: []const u8 = "",
     texture: ?*anyopaque = null,
     src_x: i32 = 0,
     src_y: i32 = 0,
+    src_w: i32 = 0,
+    src_h: i32 = 0,
+    dst_x: i32 = 0, // Useful for positioning a texture more accurately
+    dst_y: i32 = 0, // Useful for positioning a texture more accurately
+    dst_w: i32 = 0,
+    dst_h: i32 = 0,
 };
 
-const Text = struct {};
+pub const Text = struct {
+    string: []const u8 = "",
+};
 
 // WORLD
 
 /// Determines the maximum number of entities a World supports.
-pub const N: usize = 512;
+pub const N: usize = 2048;
 
 /// Determines which components a World supports.
 pub const Cs: []const type = &.{
     Position,
     Mover,
     Collider,
+    Texture,
+    Text,
 };
 
 pub const Identifier = u32;
@@ -80,7 +94,7 @@ pub const WorldError = error{
 };
 
 // This can be moved into World.init() when Zig gets pinned structs.
-pub const WorldBuffer = [buffer_size]u8;
+pub const Buffer = [buffer_size]u8;
 
 /// Stores and manipulates entities and their corresponding components.
 pub const World = struct {
@@ -97,7 +111,7 @@ pub const World = struct {
     components: [Cs.len]*anyopaque,
 
     /// Creates a new world
-    pub fn init(buffer: *WorldBuffer) Self {
+    pub fn init(buffer: *Buffer) Self {
         var components: [Cs.len]*anyopaque = undefined;
         var cursor: usize = 0;
         for (0..Cs.len) |i| {
@@ -145,7 +159,7 @@ pub const World = struct {
     }
 
     /// Creates a new entity with components inferred from passed values.
-    pub fn build(self: *Self, comptime Components: anytype) !Entity {
+    pub fn build(self: *Self, Components: anytype) !Entity {
         const identifier = self.entities.complement().findFirstSet() orelse return WorldError.SpawnLimitExceeded;
 
         const Type = @TypeOf(Components);
@@ -200,16 +214,21 @@ pub const World = struct {
         self.signatures[entity.identifier].setIntersection(comptime componentSignature(Components).complement());
     }
 
-    fn componentArray(self: *Self, comptime Component: type) *[N]Component {
-        const index = comptime componentIndex(Component);
-        const component = self.components[index];
-
-        return @ptrCast(@alignCast(component));
+    /// TODO
+    pub fn inspect(self: *Self, entity: Entity) void {
+        std.debug.assert(self.entities.isSet(entity.identifier));
     }
 
     /// Constructs a Query.
     pub fn query(self: *Self, comptime Include: []const type, comptime Exclude: []const type) Query(Include, Exclude) {
         return Query(Include, Exclude).init(self);
+    }
+
+    fn componentArray(self: *Self, comptime Component: type) *[N]Component {
+        const index = comptime componentIndex(Component);
+        const component = self.components[index];
+
+        return @ptrCast(@alignCast(component));
     }
 };
 
@@ -314,7 +333,7 @@ fn componentSignature(comptime Components: []const type) Signature {
 
 test "spawn_promote_demote_kill" {
     std.log.warn("", .{});
-    var buffer: WorldBuffer = undefined;
+    var buffer: Buffer = undefined;
     var world = World.init(&buffer);
 
     const entity = try world.spawn(&.{Position});
@@ -328,7 +347,7 @@ test "spawn_promote_demote_kill" {
 
 test "spawn_limit" {
     std.log.warn("", .{});
-    var buffer: WorldBuffer = undefined;
+    var buffer: Buffer = undefined;
     var world = World.init(&buffer);
 
     for (0..N) |_| {
@@ -338,9 +357,9 @@ test "spawn_limit" {
     try std.testing.expect(world.spawn(&.{}) == WorldError.SpawnLimitExceeded);
 }
 
-test "run_system" {
+test "reset" {
     std.log.warn("", .{});
-    var buffer: WorldBuffer = undefined;
+    var buffer: Buffer = undefined;
     var world = World.init(&buffer);
 
     for (0..N) |_| {
@@ -378,12 +397,14 @@ test "run_system" {
 
 test "build entities" {
     std.log.warn("", .{});
-    var buffer: WorldBuffer = undefined;
+    var buffer: Buffer = undefined;
     var world = World.init(&buffer);
 
-    inline for (0..N) |i| {
+    for (0..N) |i| {
+        const j: i32 = @intCast(i);
         const col = Collider{};
-        _ = try world.build(.{ Position{ .x = @intCast(i), .y = @intCast(2 * i) }, col });
+        const pos = Position{ .x = j, .y = j };
+        _ = try world.build(.{ pos, col });
     }
 }
 
