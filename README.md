@@ -37,9 +37,10 @@ ECS: (first Draft)
     - dim
 - Texture
     - texture pointer
+    - source rectangle
     - dim
 - Text
-    - text
+    - string
     - dim
 
 Assets gör inte vi
