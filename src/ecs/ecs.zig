@@ -49,7 +49,7 @@ pub const Cs: []const type = &.{
     Position,
     Mover,
     Collider,
-    Texture,
+    @import("../render.zig").TextureComponent,
     Text,
 };
 
