@@ -1,4 +1,5 @@
 const std = @import("std");
+const fix = @import("fixed.zig");
 
 // COMPONENTS
 
@@ -7,13 +8,16 @@ pub const Position = struct {
     y: i32 = 0,
 };
 
+const F16_16 = fix.F(16, 16);
+const F8_24 = fix.F(8, 24);
+
 pub const Mover = struct {
-    subpixel_x: f32 = 0.0,
-    subpixel_y: f32 = 0.0,
-    velocity_x: f32 = 0.0,
-    velocity_y: f32 = 0.0,
-    acceleration_x: f32 = 0.0,
-    acceleration_y: f32 = 0.0,
+    subpixel_x: F8_24 = F8_24{},
+    subpixel_y: F8_24 = F8_24{},
+    velocity_x: F16_16 = F16_16{},
+    velocity_y: F16_16 = F16_16{},
+    acceleration_x: F16_16 = F16_16{},
+    acceleration_y: F16_16 = F16_16{},
 };
 
 pub const Collider = struct {
@@ -42,7 +46,7 @@ pub const Text = struct {
 // WORLD
 
 /// Determines the maximum number of entities a World supports.
-pub const N: usize = 2048;
+pub const N: usize = 512;
 
 /// Determines which components a World supports.
 pub const Cs: []const type = &.{
