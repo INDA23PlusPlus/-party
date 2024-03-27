@@ -150,7 +150,6 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
             return @bitCast(@as(Fixed, @intFromFloat(float * (1 << fractional_bits))));
         }
 
-        /// TODO: Test
         /// Converts a fixed point number to a different fixed point representation.
         pub inline fn cast(self: Self, comptime new_integer_bits: u16, comptime new_fractional_bits: u16, comptime safety: enum { Safe, Unsafe }) F(new_integer_bits, new_fractional_bits) {
             const Other = F(new_integer_bits, new_fractional_bits);

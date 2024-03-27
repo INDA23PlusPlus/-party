@@ -8,8 +8,17 @@ const ecs = @import("ecs/ecs.zig");
 // Settings
 const BC_COLOR = rl.Color.gray;
 
+inline fn initWindow(resolution: enum { FHD, HD, qHD, nHD }) win.Window {
+    switch (resolution) {
+        .FHD => return win.Window.init(1980, 1080),
+        .HD => return win.Window.init(1280, 720),
+        .qHD => return win.Window.init(960, 540),
+        .nHD => return win.Window.init(640, 360),
+    }
+}
+
 pub fn main() !void {
-    var window = win.Window.init(1920, 1080);
+    var window = initWindow(.qHD);
     defer window.deinit();
 
     var game_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -30,11 +39,8 @@ pub fn main() !void {
     // defer current_game.deinit();
 
     // example
-    _ = try world.build(.{
-        ecs.Position{
-            .x = 0,
-            .y = 0,
-        },
+    const thing = try world.spawnWith(.{
+        ecs.Position{},
         render.TextureComponent{
             .texture_hash = try render_system.load_texture("assets/test.png"),
             .tint = rl.Color.white,
@@ -58,9 +64,7 @@ pub fn main() !void {
 
         // current_game.update(res);
 
-        var query = world.query(&.{ ecs.Position, render.TextureComponent }, &.{});
-        _ = query.next();
-        const pos = try query.get(ecs.Position);
+        const pos = try world.inspect(thing, ecs.Position);
         pos.x += 1;
         pos.y += 1;
 

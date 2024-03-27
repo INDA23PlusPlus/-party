@@ -59,8 +59,8 @@ pub fn update(self: *Self) void {
 
     var query = self.world.query(&.{ ecs.Position, TextureComponent }, &.{});
     while (query.next()) |_| {
-        const pos_component = query.get(ecs.Position) catch @panic("PositionComponent not found");
-        const c = query.get(TextureComponent) catch @panic("TextureComponent not found");
+        const pos_component = query.get(ecs.Position) catch unreachable;
+        const c = query.get(TextureComponent) catch unreachable;
 
         const pos = rl.Vector2{ .x = @floatFromInt(pos_component.x), .y = @floatFromInt(pos_component.y) };
         const texture = self.textures.get(c.texture_hash) orelse @panic("Texture not found");

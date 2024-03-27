@@ -1,5 +1,15 @@
 const std = @import("std");
-const fix = @import("fixed.zig");
+const fixed = @import("fixed.zig");
+
+// TODO:
+//  * Implement isAlive()
+//  * Implement hasComponents()
+//  * Implement setComponents()
+//  * Implement respawn()
+//  * Implement respawnWith()
+//  * Implement promoteWith()
+//  * Implement spawnEmpty()
+//  * Implement repsawnEmpty()
 
 // COMPONENTS
 
@@ -8,8 +18,8 @@ pub const Position = struct {
     y: i32 = 0,
 };
 
-const F16_16 = fix.F(16, 16);
-const F8_24 = fix.F(8, 24);
+const F16_16 = fixed.F(16, 16);
+const F8_24 = fixed.F(8, 24);
 
 pub const Mover = struct {
     subpixel_x: F8_24 = F8_24{},
@@ -95,6 +105,7 @@ const component_alignments = blk: {
 pub const WorldError = error{
     SpawnLimitExceeded,
     NullQuery,
+    DeadInspection,
     InvalidInspection,
 };
 
@@ -115,7 +126,7 @@ pub const World = struct {
     buffer: *[buffer_size]u8,
     components: [Cs.len]*anyopaque,
 
-    /// Creates a new world
+    /// Creates a new world.
     pub fn init(buffer: *Buffer) Self {
         var components: [Cs.len]*anyopaque = undefined;
         var cursor: usize = 0;
@@ -164,7 +175,7 @@ pub const World = struct {
     }
 
     /// Creates a new entity with components inferred from passed values.
-    pub fn build(self: *Self, Components: anytype) !Entity {
+    pub fn spawnWith(self: *Self, Components: anytype) !Entity {
         const identifier = self.entities.complement().findFirstSet() orelse return WorldError.SpawnLimitExceeded;
 
         const Type = @TypeOf(Components);
@@ -211,6 +222,27 @@ pub const World = struct {
         self.signatures[entity.identifier].setUnion(comptime componentSignature(Components));
     }
 
+    /// TODO
+    pub fn promoteWith(self: *Self, entity: Entity, Components: anytype) void {
+        _ = self;
+        _ = entity;
+        _ = Components;
+    }
+
+    /// TODO
+    pub fn respawn(self: *Self, entity: Entity, comptime Components: []const type) void {
+        _ = self;
+        _ = entity;
+        _ = Components;
+    }
+
+    /// TODO
+    pub fn respawnWith(self: *Self, entity: Entity, Components: anytype) void {
+        _ = self;
+        _ = entity;
+        _ = Components;
+    }
+
     /// Removes components from an entity.
     pub fn demote(self: *Self, entity: Entity, comptime Components: []const type) void {
         std.debug.assert(self.entities.isSet(entity.identifier));
@@ -219,15 +251,21 @@ pub const World = struct {
         self.signatures[entity.identifier].setIntersection(comptime componentSignature(Components).complement());
     }
 
-    /// TODO: test
-    pub fn inspect(self: *Self, entity: Entity, comptime C: type) !C {
-        std.debug.assert(self.entities.isSet(entity.identifier));
-
-        if (self.signatures[entity.identifier].intersectWith(componentTag(C))) {
-            return self.componentArray(C)[entity.identifier];
+    /// Retrieves a component from an entity. Prefer using query().
+    pub fn inspect(self: *Self, entity: Entity, comptime C: type) !*C {
+        if (!self.entities.isSet(entity.identifier)) {
+            return WorldError.DeadInspection;
         }
 
-        return WorldError.InvalidInspection;
+        if (entity.generation != self.generations[entity.identifier]) {
+            return WorldError.DeadInspection;
+        }
+
+        if (self.signatures[entity.identifier].intersectWith(comptime componentTag(C)).mask == 0) {
+            return WorldError.InvalidInspection;
+        }
+
+        return &self.componentArray(C)[entity.identifier];
     }
 
     /// Constructs a Query.
@@ -284,22 +322,21 @@ fn Query(comptime Include: []const type, comptime Exclude: []const type) type {
             return null;
         }
 
-        /// Retrieves a component from the current queried entity.
+        /// Retrieves a component for the current queried entity.
         pub fn get(self: *@This(), comptime C: type) !*C {
-            if (self.cursor) |i| {
-                const index = comptime for (Include) |c| {
-                    if (c == C) {
-                        break componentIndex(c);
-                    }
-                } else {
-                    @compileError("invalid component: " ++ @typeName(C));
-                };
+            const cursor = self.cursor orelse return WorldError.NullQuery;
 
-                const array: *[N]C = @ptrCast(@alignCast(self.world.components[index]));
+            const index = comptime for (Include) |c| {
+                if (c == C) {
+                    break componentIndex(c);
+                }
+            } else {
+                @compileError("invalid component: " ++ @typeName(C));
+            };
 
-                return &array[i];
-            }
-            return WorldError.NullQuery;
+            const array: *[N]C = @ptrCast(@alignCast(self.world.components[index]));
+
+            return &array[cursor];
         }
     };
 }
@@ -415,7 +452,7 @@ test "build entities" {
         const j: i32 = @intCast(i);
         const col = Collider{};
         const pos = Position{ .x = j, .y = j };
-        _ = try world.build(.{ pos, col });
+        _ = try world.spawnWith(.{ pos, col });
     }
 }
 
