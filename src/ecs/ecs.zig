@@ -414,7 +414,7 @@ test "build entities" {
 
 // EXAMPLE SYSTEMS
 
-pub fn accelerate(world: *World) !void {
+fn accelerate(world: *World) !void {
     var query = world.query(&.{Mover}, &.{});
     while (query.next()) |entity| {
         const mov = try query.get(Mover);
@@ -423,7 +423,7 @@ pub fn accelerate(world: *World) !void {
     }
 }
 
-pub fn move(world: *World) !void {
+fn move(world: *World) !void {
     var query = world.query(&.{ Position, Mover }, &.{});
     while (query.next()) |_| {
         const pos = try query.get(Position);
@@ -434,7 +434,7 @@ pub fn move(world: *World) !void {
     }
 }
 
-pub fn print(world: *World) !void {
+fn print(world: *World) !void {
     var query = world.query(&.{ Position, Mover }, &.{});
     while (query.next()) |_| {
         const pos = try query.get(Position);

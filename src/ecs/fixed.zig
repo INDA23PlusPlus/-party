@@ -121,7 +121,7 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
         }
 
         /// Source: Jonathan Hallström.
-        /// Returns the square root of a fixed point number. Slower than @sqrt()
+        /// Returns the square root of a fixed point number. Slower than @sqrt().
         pub inline fn sqrt(self: Self) Self {
             // std.debug.assert(self.bits >= 0);
             // @setFloatMode(.Optimized);
@@ -148,7 +148,7 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
         }
 
         /// TODO: Test
-        /// Converts fixed point number to a different fixed point representation.
+        /// Converts a fixed point number to a different fixed point representation.
         pub inline fn cast(self: Self, comptime new_integer_bits: u16, comptime new_fractional_bits: u16, comptime safety: enum { Safe, Unsafe }) F(new_integer_bits, new_fractional_bits) {
             const Other = F(new_integer_bits, new_fractional_bits);
 
