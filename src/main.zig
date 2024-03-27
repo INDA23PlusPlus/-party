@@ -4,6 +4,7 @@ const win = @import("window.zig");
 const input = @import("input.zig");
 const render = @import("render.zig");
 const ecs = @import("ecs/ecs.zig");
+const linear = @import("ecs/linear.zig");
 
 // Settings
 const BC_COLOR = rl.Color.gray;
@@ -49,6 +50,11 @@ pub fn main() !void {
         },
     });
 
+    var point_1 = linear.V(16, 16).init(100, 500);
+    var point_2 = linear.V(16, 16).init(500, 100);
+    var up = false;
+    var left = false;
+
     // Game loop
     while (window.running) {
         defer _ = frame_arena.reset(std.heap.ArenaAllocator.ResetMode.retain_capacity);
@@ -68,7 +74,26 @@ pub fn main() !void {
         pos.x += 1;
         pos.y += 1;
 
+        if (left) {
+            point_1.x = point_1.x.sub(comptime point_1.F.init(3, 2));
+        } else {
+            point_1.x = point_1.x.add(comptime point_1.F.init(3, 2));
+        }
+
+        if (up) {
+            point_2.y = point_2.y.sub(1);
+        } else {
+            point_2.y = point_2.y.add(1);
+        }
+
+        if (point_1.x.toInt() > 960) left = true;
+        if (point_1.x.toInt() <= 0) left = false;
+        if (point_2.y.toInt() > 540) up = true;
+        if (point_2.y.toInt() <= 0) up = false;
+
         rl.drawText("++party! :D", 8, 8, 96, rl.Color.blue);
+
+        rl.drawLine(point_1.x.toInt(), point_1.y.toInt(), point_2.x.toInt(), point_2.y.toInt(), rl.Color.black);
 
         // Stop Render -----------------------
         render_system.update();

@@ -2,14 +2,16 @@ const std = @import("std");
 const fixed = @import("fixed.zig");
 
 // TODO:
-//  * Implement isAlive()
-//  * Implement hasComponents()
-//  * Implement setComponents()
-//  * Implement respawn()
-//  * Implement respawnWith()
-//  * Implement promoteWith()
-//  * Implement spawnEmpty()
-//  * Implement repsawnEmpty()
+//  [X] Implement isAlive()
+//  [ ] Implement hasComponents()
+//  [ ] Implement setComponents()
+//  [ ] Implement respawn()
+//  [ ] Implement respawnWith()
+//  [ ] Implement promoteWith()
+//  [ ] Implement spawnEmpty()
+//  [ ] Implement repsawnEmpty()
+//  [ ] Implement serialize()
+//  [ ] Implement deserialize()
 
 // COMPONENTS
 
@@ -230,17 +232,28 @@ pub const World = struct {
     }
 
     /// TODO
-    pub fn respawn(self: *Self, entity: Entity, comptime Components: []const type) void {
+    pub fn respawn(self: *Self, entity: Entity, comptime Components: []const type) !void {
         _ = self;
         _ = entity;
         _ = Components;
     }
 
     /// TODO
-    pub fn respawnWith(self: *Self, entity: Entity, Components: anytype) void {
+    pub fn respawnWith(self: *Self, entity: Entity, Components: anytype) !void {
         _ = self;
         _ = entity;
         _ = Components;
+    }
+
+    /// TODO
+    pub fn spawnEmpty(self: *Self) !Entity {
+        _ = self;
+    }
+
+    /// TODO
+    pub fn respawnEmpty(self: *Self, entity: Entity) !void {
+        _ = self;
+        _ = entity;
     }
 
     /// Removes components from an entity.
@@ -251,15 +264,17 @@ pub const World = struct {
         self.signatures[entity.identifier].setIntersection(comptime componentSignature(Components).complement());
     }
 
-    /// Retrieves a component from an entity. Prefer using query().
-    pub fn inspect(self: *Self, entity: Entity, comptime C: type) !*C {
+    pub fn isAlive(self: *Self, entity: Entity) bool {
         if (!self.entities.isSet(entity.identifier)) {
-            return WorldError.DeadInspection;
+            return false;
         }
 
-        if (entity.generation != self.generations[entity.identifier]) {
-            return WorldError.DeadInspection;
-        }
+        return entity.generation == self.generations[entity.identifier];
+    }
+
+    /// Retrieves a component from an entity. Prefer using query().
+    pub fn inspect(self: *Self, entity: Entity, comptime C: type) !*C {
+        if (!isAlive(self, entity)) return WorldError.DeadInspection;
 
         if (self.signatures[entity.identifier].intersectWith(comptime componentTag(C)).mask == 0) {
             return WorldError.InvalidInspection;

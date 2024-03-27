@@ -145,6 +145,11 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
             return @as(Float, @floatFromInt(self.bits)) / (1 << fractional_bits);
         }
 
+        /// Lossy cast to integer.
+        pub inline fn toInt(self: Self) Int {
+            return @truncate(self.bits >> fractional_bits);
+        }
+
         /// Returns the fixed point representation of a floating point number.
         inline fn fromFloat(float: Float) Self {
             return @bitCast(@as(Fixed, @intFromFloat(float * (1 << fractional_bits))));
@@ -176,11 +181,6 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
         /// Safely casts an integer to its fixed point representation.
         inline fn fixedFromInt(int: anytype) Fixed {
             return @as(Fixed, @as(Int, int)) << fractional_bits;
-        }
-
-        /// Lossy cast to integer.
-        pub inline fn toInt(self: Self) Int {
-            return @truncate(self.bits >> fractional_bits);
         }
     };
 }
