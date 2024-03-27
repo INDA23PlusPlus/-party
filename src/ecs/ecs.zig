@@ -95,6 +95,7 @@ const component_alignments = blk: {
 pub const WorldError = error{
     SpawnLimitExceeded,
     NullQuery,
+    InvalidInspection,
 };
 
 // This can be moved into World.init() when Zig gets pinned structs.
@@ -218,9 +219,15 @@ pub const World = struct {
         self.signatures[entity.identifier].setIntersection(comptime componentSignature(Components).complement());
     }
 
-    /// TODO
-    pub fn inspect(self: *Self, entity: Entity) void {
+    /// TODO: test
+    pub fn inspect(self: *Self, entity: Entity, comptime C: type) !C {
         std.debug.assert(self.entities.isSet(entity.identifier));
+
+        if (self.signatures[entity.identifier].intersectWith(componentTag(C))) {
+            return self.componentArray(C)[entity.identifier];
+        }
+
+        return WorldError.InvalidInspection;
     }
 
     /// Constructs a Query.
@@ -268,7 +275,7 @@ fn Query(comptime Include: []const type, comptime Exclude: []const type) type {
 
             while (self.iterator.next()) |i| {
                 const signature = self.world.signatures[i];
-                if (signature.intersectWith(include).intersectWith(exclude.complement()).mask != 0) {
+                if (signature.intersectWith(include).differenceWith(exclude).mask != 0) {
                     self.cursor = i;
                     return Entity{ .identifier = @intCast(i), .generation = self.world.generations[i] };
                 }

@@ -4,28 +4,31 @@ const std = @import("std");
 /// Use exactly 32 bits for optimal performance.
 pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
     // This is the type of the backing integer for the fixed point type.
-    const Fixed = std.meta.Int(.signed, integer_bits + fractional_bits);
+    const BackingInteger = std.meta.Int(.signed, integer_bits + fractional_bits);
 
-    // This is used for casting when performing certain operations.
-    const LargeFixed = if ((integer_bits + fractional_bits) % 8 == 0) std.meta.Int(.signed, 2 * (integer_bits + fractional_bits)) else std.meta.Int(.signed, 1 + integer_bits + fractional_bits);
-
-    // This is used for casting when performing certain operations.
-    const Int = std.meta.Int(.signed, integer_bits);
-
-    // This is used to guarantee that the number of digits in the fixed point
-    // value is always less than or equal to the number of significant digits
-    // in its float representation, thereby guaranteeing conversion precision.
-    const Float = std.meta.Float(switch (integer_bits + fractional_bits) {
-        0...10 => 16,
-        11...24 => 32,
-        25...50 => 64,
-        51...113 => 128,
-        else => @compileError("Invalid bit size"),
-    });
-
-    return packed struct(Fixed) {
+    return packed struct(BackingInteger) {
         const Self = @This();
-        const Cast = Fixed;
+
+        // This is used for casting between fixed point representations.
+        const Fixed = BackingInteger;
+
+        // This is used for casting when performing certain operations.
+        const LargeFixed = if ((integer_bits + fractional_bits) % 8 == 0) std.meta.Int(.signed, 2 * (integer_bits + fractional_bits)) else std.meta.Int(.signed, 1 + integer_bits + fractional_bits);
+
+        // This is used for casting when performing certain operations.
+        // It represents integer part of the fixed point value.
+        pub const Int = std.meta.Int(.signed, integer_bits);
+
+        // This is used to guarantee that the number of digits in the fixed point
+        // value is always less than or equal to the number of significant digits
+        // in its float representation, thereby guaranteeing conversion precision.
+        pub const Float = std.meta.Float(switch (integer_bits + fractional_bits) {
+            0...10 => 16,
+            11...24 => 32,
+            25...50 => 64,
+            51...113 => 128,
+            else => @compileError("Unable to represent fixed point value exactly with floating point value"),
+        });
 
         bits: Fixed = 0,
 
@@ -121,7 +124,7 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
         }
 
         /// Source: Jonathan Hallström.
-        /// Returns the square root of a fixed point number. Slower than @sqrt().
+        /// Returns the square root of a fixed point number.
         pub inline fn sqrt(self: Self) Self {
             // std.debug.assert(self.bits >= 0);
             // @setFloatMode(.Optimized);
@@ -158,15 +161,15 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
 
             if (integer_bits + fractional_bits < new_integer_bits + new_fractional_bits) {
                 if (fractional_bits > new_fractional_bits) {
-                    return @bitCast(@as(Other.Cast, @intCast(self.bits >> (fractional_bits - new_fractional_bits))));
+                    return @bitCast(@as(Other.Fixed, @intCast(self.bits >> (fractional_bits - new_fractional_bits))));
                 } else {
-                    return @bitCast(@as(Other.Cast, @intCast(self.bits)) << (new_fractional_bits - fractional_bits));
+                    return @bitCast(@as(Other.Fixed, @intCast(self.bits)) << (new_fractional_bits - fractional_bits));
                 }
             } else {
                 if (fractional_bits > new_fractional_bits) {
-                    return @bitCast(@as(Other.Cast, @truncate(self.bits >> (fractional_bits - new_fractional_bits))));
+                    return @bitCast(@as(Other.Fixed, @truncate(self.bits >> (fractional_bits - new_fractional_bits))));
                 } else {
-                    return @bitCast(@as(Other.Cast, @truncate(self.bits)) << (new_fractional_bits - fractional_bits));
+                    return @bitCast(@as(Other.Fixed, @truncate(self.bits)) << (new_fractional_bits - fractional_bits));
                 }
             }
         }
@@ -186,7 +189,7 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
 // Source: Jonathan Hallström
 test "sqrt" {
     const FixedType = F(16, 16);
-    for (0..1081) |i| {
+    for (0..1920) |i| {
         const f = @as(f64, @floatFromInt(i));
         const correct_val = FixedType.fromFloat(@sqrt(f));
         const computed_val = FixedType.fromFloat(f).sqrt();
@@ -206,7 +209,7 @@ test "sqrt" {
     var prng = std.rand.DefaultPrng.init(0);
     const rand = prng.random();
     for (0..100_000) |_| {
-        const f = rand.float(f64) * (1080);
+        const f = rand.float(f64) * (1920);
         const computed_val = FixedType.fromFloat(f).sqrt();
 
         var correct_val = FixedType.fromFloat(@sqrt(f));
@@ -221,23 +224,48 @@ test "sqrt" {
     }
 }
 
-test "cast" {
-    const From = F(16, 16);
+test "sqrt_predictability" {
+    const FixedType = F(24, 8);
 
+    var prng = std.rand.DefaultPrng.init(0);
+    const rand = prng.random();
+
+    for (0..1920 * 1080 + 1) |i| {
+        for (0..10) |_| {
+            const f1 = @as(FixedType.Float, @floatFromInt(i));
+            const f2 = @as(FixedType.Float, @floatFromInt(i)) + rand.float(FixedType.Float) * 0.001;
+            const a = FixedType.fromFloat(f1).sqrt();
+            const b = FixedType.fromFloat(f2).sqrt();
+            try std.testing.expectEqual(a.bits, b.bits);
+        }
+    }
+}
+
+test "cast" {
+    const from = 16;
     const safe = 32;
     const unsafe = 8;
 
     for (0..std.math.maxInt(i8)) |i| {
-        const x = From.init(@as(i8, @intCast(i)), @as(i8, @intCast(std.math.maxInt(i8) - i)));
+        const x = F(from, from).init(@as(i8, @intCast(i)), @as(i8, @intCast(std.math.maxInt(i8) - i)));
 
         const safe_bits = x.cast(safe, safe, .Safe);
         const unsafe_integer_bits = x.cast(unsafe, safe, .Unsafe);
         const unsafe_fractional_bits = x.cast(safe, unsafe, .Unsafe);
         const unsafe_bits = x.cast(unsafe, unsafe, .Unsafe);
 
-        if (x.toInt() != safe_bits.toInt()) unreachable;
-        if (x.toInt() != unsafe_integer_bits.toInt()) unreachable;
-        if (x.toInt() != unsafe_fractional_bits.toInt()) unreachable;
-        if (x.toInt() != unsafe_bits.toInt()) unreachable;
+        try std.testing.expectEqual(x.toInt(), safe_bits.toInt());
+        try std.testing.expectEqual(x.toInt(), unsafe_integer_bits.toInt());
+        try std.testing.expectEqual(x.toInt(), unsafe_fractional_bits.toInt());
+        try std.testing.expectEqual(x.toInt(), unsafe_bits.toInt());
+    }
+
+    inline for (1..unsafe) |i| {
+        const x = F(from, from).init(1, 1 << @as(u8, @intCast(i)));
+        const safe_cast = x.cast(safe, safe, .Safe);
+        const unsafe_cast = safe_cast.cast(unsafe, unsafe, .Unsafe);
+        const y = unsafe_cast.cast(from, from, .Safe);
+
+        try std.testing.expectEqual(x.bits, y.bits);
     }
 }
