@@ -5,6 +5,7 @@ const input = @import("input.zig");
 const render = @import("render.zig");
 const ecs = @import("ecs/ecs.zig");
 const linear = @import("ecs/linear.zig");
+const time = @import("time.zig");
 
 // Settings
 const BC_COLOR = rl.Color.gray;
@@ -61,7 +62,8 @@ pub fn main() !void {
         _ = frame_allocator;
 
         // Updates game systems
-        input.update();
+        time.update();
+        input.preUpdate();
         window.update();
         // const res = physics.update()
 
@@ -91,12 +93,24 @@ pub fn main() !void {
         if (point_2.y.toInt() > 540) up = true;
         if (point_2.y.toInt() <= 0) up = false;
 
-        rl.drawText("++party! :D", 8, 8, 96, rl.Color.blue);
+        var textColor: rl.Color = rl.Color.blue;
+        if (input.A.down() and input.B.down()) {
+            textColor = rl.Color.pink;
+        } else if (input.A.down()) {
+            textColor = rl.Color.green;
+        } else if (input.B.down()) {
+            textColor = rl.Color.red;
+        }
+        rl.drawText("++party! :D", 8, 8, 96, textColor);
 
         rl.drawLine(point_1.x.toInt(), point_1.y.toInt(), point_2.x.toInt(), point_2.y.toInt(), rl.Color.black);
+
+        // std.debug.print("\ndpad: (dx:{} dy:{})\n", .{ input.DPad.dx(), input.DPad.dy() });
 
         // Stop Render -----------------------
         render_system.update();
         rl.endDrawing();
+
+        input.postUpdate();
     }
 }
