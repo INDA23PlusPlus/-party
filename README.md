@@ -12,7 +12,7 @@ måste ha:
 - [ ] 2D Graphics
 - [ ] Networking
 - [ ] Pysics
-- [ ] Collision
+- [X] Collision
 - [ ] Asset loading
 - [X] ECS
 - [ ] UI
