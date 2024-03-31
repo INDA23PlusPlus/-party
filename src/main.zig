@@ -4,9 +4,10 @@ const win = @import("window.zig");
 const input = @import("input.zig");
 const render = @import("render.zig");
 const ecs = @import("ecs/ecs.zig");
-const linear = @import("ecs/linear.zig");
 const time = @import("time.zig");
 const networking = @import("networking.zig");
+const linear = @import("math/linear.zig");
+const fixed = @import("math/fixed.zig");
 
 // Settings
 const BC_COLOR = rl.Color.gray;
@@ -16,9 +17,7 @@ const StartNetRole = enum {
     server,
 };
 
-const LaunchErrors = error {
-    UnknownRole
-};
+const LaunchErrors = error{UnknownRole};
 
 const LaunchOptions = struct {
     start_as_role: StartNetRole = StartNetRole.client,
@@ -95,11 +94,6 @@ pub fn main() !void {
         },
     });
 
-    var point_1 = linear.V(16, 16).init(100, 500);
-    var point_2 = linear.V(16, 16).init(500, 100);
-    var up = false;
-    var left = false;
-
     // Game loop
     while (window.running) {
         _ = frame_allocator;
@@ -120,36 +114,7 @@ pub fn main() !void {
         pos.x += 1;
         pos.y += 1;
 
-        if (left) {
-            point_1.x = point_1.x.sub(comptime point_1.F.init(3, 2));
-        } else {
-            point_1.x = point_1.x.add(comptime point_1.F.init(3, 2));
-        }
-
-        if (up) {
-            point_2.y = point_2.y.sub(1);
-        } else {
-            point_2.y = point_2.y.add(1);
-        }
-
-        if (point_1.x.toInt() > 960) left = true;
-        if (point_1.x.toInt() <= 0) left = false;
-        if (point_2.y.toInt() > 540) up = true;
-        if (point_2.y.toInt() <= 0) up = false;
-
-        var textColor: rl.Color = rl.Color.blue;
-        if (input.A.down() and input.B.down()) {
-            textColor = rl.Color.pink;
-        } else if (input.A.down()) {
-            textColor = rl.Color.green;
-        } else if (input.B.down()) {
-            textColor = rl.Color.red;
-        }
-        rl.drawText("++party! :D", 8, 8, 96, textColor);
-
-        rl.drawLine(point_1.x.toInt(), point_1.y.toInt(), point_2.x.toInt(), point_2.y.toInt(), rl.Color.black);
-
-        // std.debug.print("\ndpad: (dx:{} dy:{})\n", .{ input.DPad.dx(), input.DPad.dy() });
+        rl.drawText("++party! :D", 8, 8, 96, rl.Color.blue);
 
         // Stop Render -----------------------
         render_system.update();

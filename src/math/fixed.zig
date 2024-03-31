@@ -1,7 +1,21 @@
 const std = @import("std");
 
-/// Fixed point number with custom bit size.
+// TODO
+//  - [ ] mul() overflow check
+//  - [ ] div() overflow check
+//  - [X] integerPart() test
+//  - [ ] fractionalPart() test
+//  - [X] fromInt() test
+//  - [x] eq()
+//  - [x] ne()
+//  - [x] lt()
+//  - [x] le()
+//  - [x] gt()
+//  - [x] ge()
+
+/// Fixed point number with custom bit sizes.
 /// Use exactly 32 bits for optimal performance.
+/// Initializing from raw value or use one constant for optimal performance.
 pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
     // This is the type of the backing integer for the fixed point type.
     const BackingInteger = std.meta.Int(.signed, integer_bits + fractional_bits);
@@ -9,11 +23,15 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
     return packed struct(BackingInteger) {
         const Self = @This();
 
+        // Used by vectors.
+        pub const Template = F;
+        pub const shift = fractional_bits;
+
         // This is used for casting between fixed point representations.
-        const Fixed = BackingInteger;
+        pub const Fixed = BackingInteger;
 
         // This is used for casting when performing certain operations.
-        const LargeFixed = if ((integer_bits + fractional_bits) % 8 == 0) std.meta.Int(.signed, 2 * (integer_bits + fractional_bits)) else std.meta.Int(.signed, 1 + integer_bits + fractional_bits);
+        pub const LargeFixed = if ((integer_bits + fractional_bits) % 8 == 0) std.meta.Int(.signed, 2 * (integer_bits + fractional_bits)) else std.meta.Int(.signed, 1 + integer_bits + fractional_bits);
 
         // This is used for casting when performing certain operations.
         // It represents integer part of the fixed point value.
@@ -30,6 +48,10 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
             else => @compileError("Unable to represent fixed point value exactly with floating point value"),
         });
 
+        pub usingnamespace if (integer_bits >= 2) struct {
+            const one = Self{ .bits = 1 << fractional_bits };
+        } else struct {};
+
         bits: Fixed = 0,
 
         /// Initializes a fixed point value from a fraction.
@@ -40,7 +62,7 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
             const denominator_info = @typeInfo(Denominator);
 
             const n = if (numerator_info == .Int or numerator_info == .ComptimeInt) blk: {
-                break :blk fixedFromInt(numerator);
+                break :blk intToFixed(numerator);
             } else {
                 @compileError("Expected type " ++ @typeName(Fixed) ++ ", but got type " ++ @typeName(Numerator));
             };
@@ -56,34 +78,12 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
 
         /// Returns the sum of two fixed point numbers.
         pub inline fn add(augend: Self, addend: anytype) Self {
-            const Type = @TypeOf(addend);
-            const info = @typeInfo(Type);
-
-            if (Type == Self) {
-                return @bitCast(augend.bits + addend.bits);
-            }
-
-            if (info == .Int or info == .ComptimeInt) {
-                return @bitCast(augend.bits + fixedFromInt(addend));
-            }
-
-            @compileError("Expected type " ++ @typeName(Self) ++ " or " ++ @typeName(Fixed) ++ ", but got type " ++ @typeName(Type));
+            return @bitCast(augend.bits + infer(addend));
         }
 
         /// Returns the difference of two fixed point numbers.
         pub inline fn sub(minuend: Self, subtrahend: anytype) Self {
-            const Type = @TypeOf(subtrahend);
-            const info = @typeInfo(Type);
-
-            if (Type == Self) {
-                return @bitCast(minuend.bits - subtrahend.bits);
-            }
-
-            if (info == .Int or info == .ComptimeInt) {
-                return @bitCast(minuend.bits - fixedFromInt(subtrahend));
-            }
-
-            @compileError("Expected type " ++ @typeName(Self) ++ " or " ++ @typeName(Fixed) ++ ", but got type " ++ @typeName(Type));
+            return @bitCast(minuend.bits - infer(subtrahend));
         }
 
         /// Returns the product of two fixed point numbers.
@@ -96,7 +96,7 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
             }
 
             if (info == .Int or info == .ComptimeInt) {
-                return @bitCast(@as(Fixed, @truncate((@as(LargeFixed, multiplicand.bits) * @as(LargeFixed, fixedFromInt(multiplier))) >> fractional_bits)));
+                return @bitCast(multiplicand.bits * @as(Fixed, multiplier));
             }
 
             @compileError("Expected type " ++ @typeName(Self) ++ " or " ++ @typeName(Fixed) ++ ", but got type " ++ @typeName(Type));
@@ -139,10 +139,27 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
             return Self{ .bits = x };
         }
 
+        /// Compares two fixed point numbers.
+        pub inline fn cmp(a: Self, b: anytype, comptime op: enum { eq, ne, gt, ge, lt, le }) bool {
+            return switch (op) {
+                .eq => a.bits == infer(b),
+                .ne => a.bits != infer(b),
+                .gt => a.bits > infer(b),
+                .ge => a.bits >= infer(b),
+                .lt => a.bits < infer(b),
+                .le => a.bits <= infer(b),
+            };
+        }
+
         /// Returns the floating point representation of a fixed point number.
         /// Should not be used in logic unless discarding imprecisions deterministically.
         pub inline fn toFloat(self: Self) Float {
             return @as(Float, @floatFromInt(self.bits)) / (1 << fractional_bits);
+        }
+
+        /// Returns the fixed point representation of a floating point number.
+        inline fn fromFloat(float: Float) Self {
+            return @bitCast(@as(Fixed, @intFromFloat(float * (1 << fractional_bits))));
         }
 
         /// Lossy cast to integer.
@@ -150,9 +167,21 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
             return @truncate(self.bits >> fractional_bits);
         }
 
-        /// Returns the fixed point representation of a floating point number.
-        inline fn fromFloat(float: Float) Self {
-            return @bitCast(@as(Fixed, @intFromFloat(float * (1 << fractional_bits))));
+        /// Returns the fixed point representation of an integer.
+        pub inline fn fromInt(int: anytype) Self {
+            return @bitCast(intToFixed(int));
+        }
+
+        /// Returns the integer part of a fixed point number.
+        pub inline fn integerPart(self: Self) Self {
+            if (integer_bits == 0) return Self{};
+            return @bitCast(self.bits & comptime ((((1 << (integer_bits - 1)) - 1)) << fractional_bits));
+        }
+
+        /// Returns the fractional part of a fixed point number.
+        pub inline fn fractionalPart(self: Self) Self {
+            if (fractional_bits == 0) return Self{};
+            return @bitCast(self.bits & comptime ((1 << fractional_bits) - 1));
         }
 
         /// Converts a fixed point number to a different fixed point representation.
@@ -179,8 +208,24 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
         }
 
         /// Safely casts an integer to its fixed point representation.
-        inline fn fixedFromInt(int: anytype) Fixed {
+        pub inline fn intToFixed(int: anytype) Fixed {
             return @as(Fixed, @as(Int, int)) << fractional_bits;
+        }
+
+        /// Safely casts a value to its fixed point representation.
+        pub inline fn infer(value: anytype) Fixed {
+            const Type = @TypeOf(value);
+            const info = @typeInfo(Type);
+
+            if (Type == Self) {
+                return value.bits;
+            }
+
+            switch (info) {
+                inline .Int => return intToFixed(value),
+                inline .ComptimeInt => return intToFixed(value),
+                inline else => @compileError("Expected type " ++ @typeName(Self) ++ " or " ++ @typeName(Fixed) ++ ", but got type " ++ @typeName(Type)),
+            }
         }
     };
 }
@@ -188,6 +233,7 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
 // Source: Jonathan Hallström
 test "sqrt" {
     const FixedType = F(16, 16);
+
     for (0..1920) |i| {
         const f = @as(f64, @floatFromInt(i));
         const correct_val = FixedType.fromFloat(@sqrt(f));
@@ -224,19 +270,37 @@ test "sqrt" {
 }
 
 test "sqrt_predictability" {
-    const FixedType = F(24, 8);
-
     var prng = std.rand.DefaultPrng.init(0);
     const rand = prng.random();
 
-    for (0..1920 * 1080 + 1) |i| {
-        for (0..10) |_| {
-            const f1 = @as(FixedType.Float, @floatFromInt(i));
-            const f2 = @as(FixedType.Float, @floatFromInt(i)) + rand.float(FixedType.Float) * 0.001;
-            const a = FixedType.fromFloat(f1).sqrt();
-            const b = FixedType.fromFloat(f2).sqrt();
-            try std.testing.expectEqual(a.bits, b.bits);
-        }
+    const F24_8 = F(24, 8);
+
+    for (0..std.math.maxInt(F24_8.Int)) |i| {
+        const f1 = @as(F24_8.Float, @floatFromInt(i));
+        const f2 = @as(F24_8.Float, @floatFromInt(i)) + rand.float(F24_8.Float) * 0.001;
+        const a = F24_8.fromFloat(f1).sqrt();
+        const b = F24_8.fromFloat(f2).sqrt();
+        try std.testing.expectEqual(a.bits, b.bits);
+    }
+
+    const F16_16 = F(16, 16);
+
+    for (0..std.math.maxInt(F16_16.Int)) |i| {
+        const f1 = @as(F16_16.Float, @floatFromInt(i));
+        const f2 = @as(F16_16.Float, @floatFromInt(i)) + rand.float(F16_16.Float) * 0.00001;
+        const a = F16_16.fromFloat(f1).sqrt();
+        const b = F16_16.fromFloat(f2).sqrt();
+        try std.testing.expectEqual(a.bits, b.bits);
+    }
+
+    const F8_24 = F(8, 24);
+
+    for (0..std.math.maxInt(F8_24.Int)) |i| {
+        const f1 = @as(F8_24.Float, @floatFromInt(i));
+        const f2 = @as(F8_24.Float, @floatFromInt(i)) + rand.float(F8_24.Float) * 0.00000001;
+        const a = F8_24.fromFloat(f1).sqrt();
+        const b = F8_24.fromFloat(f2).sqrt();
+        try std.testing.expectEqual(a.bits, b.bits);
     }
 }
 
@@ -266,5 +330,92 @@ test "cast" {
         const y = unsafe_cast.cast(from, from, .Safe);
 
         try std.testing.expectEqual(x.bits, y.bits);
+    }
+}
+
+test "arithmetic" {
+    const eq = std.testing.expectEqual;
+    const F32 = F(16, 16);
+
+    for (1..100) |i| {
+        const j: i16 = @intCast(i);
+        const f = F32.init(j, 1);
+
+        try eq(j + j, f.add(j).toInt());
+        try eq(j + j, f.add(f).toInt());
+        try eq(j - j, f.sub(j).toInt());
+        try eq(j - j, f.sub(f).toInt());
+        try eq(j * j, f.mul(j).toInt());
+        try eq(j * j, f.mul(f).toInt());
+        try eq(@divFloor(j, j), f.div(j).toInt());
+        try eq(@divFloor(j, j), f.div(f).toInt());
+    }
+}
+
+test "from_integer" {
+    const max_bits = 113;
+    inline for (2..max_bits + 1) |i| {
+        const FX = F(i, max_bits - i);
+        try std.testing.expectEqual(FX.fromInt(i - 1), FX.init(i - 1, 1));
+    }
+}
+
+test "one" {
+    const max_bits = 113;
+    inline for (2..max_bits + 1) |i| {
+        const FX = F(i, max_bits - i);
+        try std.testing.expectEqual(FX.fromInt(1), FX.one);
+    }
+}
+
+test "integer_part" {
+    const eq = std.testing.expectEqual;
+    const max_bits = 64;
+    inline for (2..max_bits + 1) |i| {
+        const FX = F(i, max_bits - i);
+        const max_int = @min(std.math.maxInt(FX.Int), 5000);
+
+        for (1..max_int) |j| {
+            const k: FX.Int = @intCast(j);
+
+            const computed = FX.init(k, max_int - k).integerPart();
+            const expected = FX.fromInt(@divFloor(k, max_int - k));
+
+            try eq(expected, computed);
+        }
+    }
+}
+
+test "comparisons" {
+    const F32 = F(16, 16);
+    var prng = std.rand.DefaultPrng.init(0);
+    const rand = prng.random();
+    for (0..100_000) |_| {
+        const r1 = rand.int(i15);
+        const r2 = rand.int(i15);
+        const f = F32.init(r1, if (r2 != 0) r2 else 1);
+        const g = f.add(1);
+        const l = f.sub(1);
+
+        try std.testing.expect(f.cmp(f, .eq));
+        try std.testing.expect(!f.cmp(f, .ne));
+        try std.testing.expect(!f.cmp(f, .gt));
+        try std.testing.expect(f.cmp(f, .ge));
+        try std.testing.expect(!f.cmp(f, .lt));
+        try std.testing.expect(f.cmp(f, .le));
+
+        try std.testing.expect(!f.cmp(g, .eq));
+        try std.testing.expect(f.cmp(g, .ne));
+        try std.testing.expect(!f.cmp(g, .gt));
+        try std.testing.expect(!f.cmp(g, .ge));
+        try std.testing.expect(f.cmp(g, .lt));
+        try std.testing.expect(f.cmp(g, .le));
+
+        try std.testing.expect(!f.cmp(l, .eq));
+        try std.testing.expect(f.cmp(l, .ne));
+        try std.testing.expect(f.cmp(l, .gt));
+        try std.testing.expect(f.cmp(l, .ge));
+        try std.testing.expect(!f.cmp(l, .lt));
+        try std.testing.expect(!f.cmp(l, .le));
     }
 }

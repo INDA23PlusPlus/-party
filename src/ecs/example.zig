@@ -100,7 +100,7 @@ test "throw_ballz" {
 
         try printEntity(i, position.x, position.y, mover.velocity_x, mover.velocity_y, &w);
 
-        _ = try world.build(.{ position, mover });
+        _ = try world.spawnWith(.{ position, mover });
     }
 
     // Simulate 10 frames.

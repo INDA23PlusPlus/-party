@@ -6,7 +6,7 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
     const raylib = rl.getModule(b, "raylib-zig");
     const raylib_math = rl.math.getModule(b, "raylib-zig");
-    const xev = b.dependency("libxev", .{ .target = target, .optimize = optimize});
+    const xev = b.dependency("libxev", .{ .target = target, .optimize = optimize });
 
     // Nobody cares about emscripten
     // if (target.result.os.tag == .emscripten) {

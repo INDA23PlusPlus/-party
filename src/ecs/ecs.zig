@@ -1,17 +1,20 @@
 const std = @import("std");
-const fixed = @import("fixed.zig");
+const fixed = @import("../math/fixed.zig");
 
 // TODO:
-//  [X] Implement isAlive()
-//  [ ] Implement hasComponents()
-//  [ ] Implement setComponents()
-//  [ ] Implement respawn()
-//  [ ] Implement respawnWith()
-//  [ ] Implement promoteWith()
-//  [ ] Implement spawnEmpty()
-//  [ ] Implement repsawnEmpty()
-//  [ ] Implement serialize()
-//  [ ] Implement deserialize()
+//  - [X] Implement isAlive()
+//  - [ ] Implement hasComponents()
+//  - [ ] Implement setComponents()
+//  - [ ] Implement respawn()
+//  - [ ] Implement respawnWith()
+//  - [ ] Implement respawnEmpty()
+//  - [ ] Implement promoteWith()
+//  - [ ] Implement promoteEmpty()
+//  - [ ] Implement spawnEmpty()
+//  - [ ] Implement serialize()
+//  - [ ] Implement deserialize()
+//  - [ ] Implement replace() // kill() -> spawn()
+//  - [ ] Implement replaceWith() // kill() -> spawnWith()
 
 // COMPONENTS
 
@@ -35,7 +38,7 @@ pub const Mover = struct {
 pub const Collider = struct {
     w: i32 = 0,
     h: i32 = 0,
-    collided: []Entity = &.{},
+    collided: ?[]Entity = null,
 };
 
 pub const Texture = struct {
@@ -73,9 +76,20 @@ pub const Identifier = u32;
 pub const Generation = u32;
 pub const Signature = std.bit_set.IntegerBitSet(Cs.len);
 
-pub const Entity = packed struct {
+const Entity = packed struct {
+    const Self = @This();
+    const Bits = @typeInfo(Self).Struct.backing_integer.?;
+
     identifier: Identifier = 0,
     generation: Generation = 0,
+
+    pub inline fn toBits(self: Self) Bits {
+        return @bitCast(self);
+    }
+
+    pub inline fn fromBits(bits: Bits) Self {
+        return @bitCast(bits);
+    }
 };
 
 const Entities = std.bit_set.ArrayBitSet(u64, N);
@@ -395,7 +409,6 @@ fn componentSignature(comptime Components: []const type) Signature {
 // TESTS
 
 test "spawn_promote_demote_kill" {
-    std.log.warn("", .{});
     var buffer: Buffer = undefined;
     var world = World.init(&buffer);
 
@@ -409,7 +422,6 @@ test "spawn_promote_demote_kill" {
 }
 
 test "spawn_limit" {
-    std.log.warn("", .{});
     var buffer: Buffer = undefined;
     var world = World.init(&buffer);
 
@@ -437,8 +449,8 @@ test "reset" {
         }
     }
 
-    try accelerate(&world);
-    try move(&world);
+    // try accelerate(&world);
+    // try move(&world);
 
     world.reset();
 
@@ -454,8 +466,8 @@ test "reset" {
         }
     }
 
-    try accelerate(&world);
-    try move(&world);
+    // try accelerate(&world);
+    // try move(&world);
 }
 
 test "build entities" {
@@ -468,46 +480,5 @@ test "build entities" {
         const col = Collider{};
         const pos = Position{ .x = j, .y = j };
         _ = try world.spawnWith(.{ pos, col });
-    }
-}
-
-// EXAMPLE SYSTEMS
-
-fn accelerate(world: *World) !void {
-    var query = world.query(&.{Mover}, &.{});
-    while (query.next()) |entity| {
-        const mov = try query.get(Mover);
-        mov.velocity_x += @floatFromInt(entity.identifier + 1);
-        mov.velocity_y += @floatFromInt(entity.identifier + 1);
-    }
-}
-
-fn move(world: *World) !void {
-    var query = world.query(&.{ Position, Mover }, &.{});
-    while (query.next()) |_| {
-        const pos = try query.get(Position);
-        const mov = try query.get(Mover);
-
-        pos.x += std.math.lossyCast(i32, mov.velocity_x);
-        pos.y += std.math.lossyCast(i32, mov.velocity_y);
-    }
-}
-
-fn print(world: *World) !void {
-    var query = world.query(&.{ Position, Mover }, &.{});
-    while (query.next()) |_| {
-        const pos = try query.get(Position);
-        const mov = try query.get(Mover);
-
-        std.log.warn("\n\tPosition: {}, {}\n\tMover: {}, {}, {}, {}, {}, {}", .{
-            pos.x,
-            pos.y,
-            mov.subpixel_x,
-            mov.subpixel_y,
-            mov.velocity_x,
-            mov.velocity_y,
-            mov.acceleration_x,
-            mov.acceleration_y,
-        });
     }
 }

@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const rl = @import("raylib");
-const fixed = @import("ecs/fixed.zig");
+const fixed = @import("math/fixed.zig");
 const time = @import("time.zig");
 
 // Directional input.

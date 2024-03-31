@@ -1,5 +1,5 @@
 const std = @import("std");
-const fixed = @import("ecs/fixed.zig");
+const fixed = @import("math/fixed.zig");
 
 var frames: i48 = 0;
 const fps: i16 = 60;
