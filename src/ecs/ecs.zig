@@ -22,18 +22,18 @@ pub const Collider = struct {
     collided: []Entity = &.{},
 };
 
-pub const Texture = struct {
-    file: []const u8 = "",
-    texture: ?*anyopaque = null,
-    src_x: i32 = 0,
-    src_y: i32 = 0,
-    src_w: i32 = 0,
-    src_h: i32 = 0,
-    dst_x: i32 = 0, // Useful for positioning a texture more accurately
-    dst_y: i32 = 0, // Useful for positioning a texture more accurately
-    dst_w: i32 = 0,
-    dst_h: i32 = 0,
-};
+// pub const Texture = struct {
+//     file: []const u8 = "",
+//     texture: ?*anyopaque = null,
+//     src_x: i32 = 0,
+//     src_y: i32 = 0,
+//     src_w: i32 = 0,
+//     src_h: i32 = 0,
+//     dst_x: i32 = 0, // Useful for positioning a texture more accurately
+//     dst_y: i32 = 0, // Useful for positioning a texture more accurately
+//     dst_w: i32 = 0,
+//     dst_h: i32 = 0,
+// };
 
 pub const Text = struct {
     string: []const u8 = "",
@@ -44,12 +44,14 @@ pub const Text = struct {
 /// Determines the maximum number of entities a World supports.
 pub const N: usize = 2048;
 
+const TextureComponent = @import("../render.zig").TextureComponent;
+
 /// Determines which components a World supports.
 pub const Cs: []const type = &.{
     Position,
     Mover,
     Collider,
-    @import("../render.zig").TextureComponent,
+    TextureComponent,
     Text,
 };
 
