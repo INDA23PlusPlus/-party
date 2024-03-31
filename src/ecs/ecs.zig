@@ -1,4 +1,17 @@
 const std = @import("std");
+const fixed = @import("fixed.zig");
+
+// TODO:
+//  [X] Implement isAlive()
+//  [ ] Implement hasComponents()
+//  [ ] Implement setComponents()
+//  [ ] Implement respawn()
+//  [ ] Implement respawnWith()
+//  [ ] Implement promoteWith()
+//  [ ] Implement spawnEmpty()
+//  [ ] Implement repsawnEmpty()
+//  [ ] Implement serialize()
+//  [ ] Implement deserialize()
 
 // COMPONENTS
 
@@ -7,13 +20,16 @@ pub const Position = struct {
     y: i32 = 0,
 };
 
+const F16_16 = fixed.F(16, 16);
+const F8_24 = fixed.F(8, 24);
+
 pub const Mover = struct {
-    subpixel_x: f32 = 0.0,
-    subpixel_y: f32 = 0.0,
-    velocity_x: f32 = 0.0,
-    velocity_y: f32 = 0.0,
-    acceleration_x: f32 = 0.0,
-    acceleration_y: f32 = 0.0,
+    subpixel_x: F8_24 = F8_24{},
+    subpixel_y: F8_24 = F8_24{},
+    velocity_x: F16_16 = F16_16{},
+    velocity_y: F16_16 = F16_16{},
+    acceleration_x: F16_16 = F16_16{},
+    acceleration_y: F16_16 = F16_16{},
 };
 
 pub const Collider = struct {
@@ -42,7 +58,7 @@ pub const Text = struct {
 // WORLD
 
 /// Determines the maximum number of entities a World supports.
-pub const N: usize = 2048;
+pub const N: usize = 512;
 
 const TextureComponent = @import("../render.zig").TextureComponent;
 
@@ -93,6 +109,8 @@ const component_alignments = blk: {
 pub const WorldError = error{
     SpawnLimitExceeded,
     NullQuery,
+    DeadInspection,
+    InvalidInspection,
 };
 
 // This can be moved into World.init() when Zig gets pinned structs.
@@ -112,7 +130,7 @@ pub const World = struct {
     buffer: *[buffer_size]u8,
     components: [Cs.len]*anyopaque,
 
-    /// Creates a new world
+    /// Creates a new world.
     pub fn init(buffer: *Buffer) Self {
         var components: [Cs.len]*anyopaque = undefined;
         var cursor: usize = 0;
@@ -161,7 +179,7 @@ pub const World = struct {
     }
 
     /// Creates a new entity with components inferred from passed values.
-    pub fn build(self: *Self, Components: anytype) !Entity {
+    pub fn spawnWith(self: *Self, Components: anytype) !Entity {
         const identifier = self.entities.complement().findFirstSet() orelse return WorldError.SpawnLimitExceeded;
 
         const Type = @TypeOf(Components);
@@ -208,6 +226,38 @@ pub const World = struct {
         self.signatures[entity.identifier].setUnion(comptime componentSignature(Components));
     }
 
+    /// TODO
+    pub fn promoteWith(self: *Self, entity: Entity, Components: anytype) void {
+        _ = self;
+        _ = entity;
+        _ = Components;
+    }
+
+    /// TODO
+    pub fn respawn(self: *Self, entity: Entity, comptime Components: []const type) !void {
+        _ = self;
+        _ = entity;
+        _ = Components;
+    }
+
+    /// TODO
+    pub fn respawnWith(self: *Self, entity: Entity, Components: anytype) !void {
+        _ = self;
+        _ = entity;
+        _ = Components;
+    }
+
+    /// TODO
+    pub fn spawnEmpty(self: *Self) !Entity {
+        _ = self;
+    }
+
+    /// TODO
+    pub fn respawnEmpty(self: *Self, entity: Entity) !void {
+        _ = self;
+        _ = entity;
+    }
+
     /// Removes components from an entity.
     pub fn demote(self: *Self, entity: Entity, comptime Components: []const type) void {
         std.debug.assert(self.entities.isSet(entity.identifier));
@@ -216,9 +266,23 @@ pub const World = struct {
         self.signatures[entity.identifier].setIntersection(comptime componentSignature(Components).complement());
     }
 
-    /// TODO
-    pub fn inspect(self: *Self, entity: Entity) void {
-        std.debug.assert(self.entities.isSet(entity.identifier));
+    pub fn isAlive(self: *Self, entity: Entity) bool {
+        if (!self.entities.isSet(entity.identifier)) {
+            return false;
+        }
+
+        return entity.generation == self.generations[entity.identifier];
+    }
+
+    /// Retrieves a component from an entity. Prefer using query().
+    pub fn inspect(self: *Self, entity: Entity, comptime C: type) !*C {
+        if (!isAlive(self, entity)) return WorldError.DeadInspection;
+
+        if (self.signatures[entity.identifier].intersectWith(comptime componentTag(C)).mask == 0) {
+            return WorldError.InvalidInspection;
+        }
+
+        return &self.componentArray(C)[entity.identifier];
     }
 
     /// Constructs a Query.
@@ -266,7 +330,7 @@ fn Query(comptime Include: []const type, comptime Exclude: []const type) type {
 
             while (self.iterator.next()) |i| {
                 const signature = self.world.signatures[i];
-                if (signature.intersectWith(include).intersectWith(exclude.complement()).mask != 0) {
+                if (signature.intersectWith(include).differenceWith(exclude).mask != 0) {
                     self.cursor = i;
                     return Entity{ .identifier = @intCast(i), .generation = self.world.generations[i] };
                 }
@@ -275,22 +339,21 @@ fn Query(comptime Include: []const type, comptime Exclude: []const type) type {
             return null;
         }
 
-        /// Retrieves a component from the current queried entity.
+        /// Retrieves a component for the current queried entity.
         pub fn get(self: *@This(), comptime C: type) !*C {
-            if (self.cursor) |i| {
-                const index = comptime for (Include) |c| {
-                    if (c == C) {
-                        break componentIndex(c);
-                    }
-                } else {
-                    @compileError("invalid component: " ++ @typeName(C));
-                };
+            const cursor = self.cursor orelse return WorldError.NullQuery;
 
-                const array: *[N]C = @ptrCast(@alignCast(self.world.components[index]));
+            const index = comptime for (Include) |c| {
+                if (c == C) {
+                    break componentIndex(c);
+                }
+            } else {
+                @compileError("invalid component: " ++ @typeName(C));
+            };
 
-                return &array[i];
-            }
-            return WorldError.NullQuery;
+            const array: *[N]C = @ptrCast(@alignCast(self.world.components[index]));
+
+            return &array[cursor];
         }
     };
 }
@@ -406,13 +469,13 @@ test "build entities" {
         const j: i32 = @intCast(i);
         const col = Collider{};
         const pos = Position{ .x = j, .y = j };
-        _ = try world.build(.{ pos, col });
+        _ = try world.spawnWith(.{ pos, col });
     }
 }
 
 // EXAMPLE SYSTEMS
 
-pub fn accelerate(world: *World) !void {
+fn accelerate(world: *World) !void {
     var query = world.query(&.{Mover}, &.{});
     while (query.next()) |entity| {
         const mov = try query.get(Mover);
@@ -421,7 +484,7 @@ pub fn accelerate(world: *World) !void {
     }
 }
 
-pub fn move(world: *World) !void {
+fn move(world: *World) !void {
     var query = world.query(&.{ Position, Mover }, &.{});
     while (query.next()) |_| {
         const pos = try query.get(Position);
@@ -432,7 +495,7 @@ pub fn move(world: *World) !void {
     }
 }
 
-pub fn print(world: *World) !void {
+fn print(world: *World) !void {
     var query = world.query(&.{ Position, Mover }, &.{});
     while (query.next()) |_| {
         const pos = try query.get(Position);

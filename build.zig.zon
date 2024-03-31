@@ -1,10 +1,14 @@
 .{
-    .name = "raylib-zig",
+    .name = "plusplusparty",
     .version = "0.1.1",
     .dependencies = .{
         .raylib = .{
             .url = "https://github.com/raysan5/raylib/archive/25caf14be8d0284aceaa0de28753b3012e71b7bb.tar.gz",
             .hash = "1220b16c8af89b76b718f2a23b3c26ec3b95d2b2c20360671fe0618dbc7978547b56",
+        },
+        .libxev = .{
+            .url = "https://github.com/mitchellh/libxev/archive/0f73adfda1cff9c740160717b5431ebada6b8755.tar.gz",
+            .hash = "12203dcbe098ee49ea242432cd198b1ca557626988f056bea86630dcfe8660244407",
         },
     },
     .paths = .{""},
