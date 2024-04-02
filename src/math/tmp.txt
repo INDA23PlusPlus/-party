@@ -1,0 +1,210 @@
+
+test "initialization" {
+    const F16_16 = fixed.F(16, 16);
+
+    for (0..std.math.maxInt(F16_16.Int)) |i| {
+        const j: i16 = @intCast(i);
+
+        const vec2 = V(2, F16_16).init(j, j);
+        const vec3 = V(3, F16_16).init(j, j, j);
+        const vec4 = V(4, F16_16).init(j, j, j, j);
+
+        const x = F16_16.intToFixed(j);
+
+        try std.testing.expect(vec2.x().bits == x);
+        try std.testing.expect(vec2.y().bits == x);
+
+        try std.testing.expect(vec3.x().bits == x);
+        try std.testing.expect(vec3.y().bits == x);
+        try std.testing.expect(vec3.z().bits == x);
+
+        try std.testing.expect(vec4.x().bits == x);
+        try std.testing.expect(vec4.y().bits == x);
+        try std.testing.expect(vec4.z().bits == x);
+        try std.testing.expect(vec4.w().bits == x);
+    }
+
+    for (0..std.math.maxInt(F16_16.Int)) |i| {
+        const int: i16 = @intCast(i);
+        const fix = F16_16.init(int, 1);
+
+        const vec2_int = V(2, F16_16).init(int, int);
+        const vec3_int = V(3, F16_16).init(int, int, int);
+        const vec4_int = V(4, F16_16).init(int, int, int, int);
+
+        const vec2_fix = V(2, F16_16).init(fix, fix);
+        const vec3_fix = V(3, F16_16).init(fix, fix, fix);
+        const vec4_fix = V(4, F16_16).init(fix, fix, fix, fix);
+
+        try std.testing.expectEqual(vec2_int, vec2_fix);
+        try std.testing.expectEqual(vec3_int, vec3_fix);
+        try std.testing.expectEqual(vec4_int, vec4_fix);
+    }
+}
+
+test "cross_product" {
+    const F16_16 = fixed.F(16, 16);
+
+    const u_1 = V(2, F16_16).init(-3, 7);
+    const u_2 = V(2, F16_16).init(1, 2);
+
+    try std.testing.expect(u_1.cross(u_2).bits == F16_16.init(-13, 1).bits);
+
+    const v_1 = V(3, F16_16).init(6, 7, 4);
+    const v_2 = V(3, F16_16).init(5, -2, 1);
+    const cross = v_1.cross(v_2);
+
+    try std.testing.expect(cross.x().bits == F16_16.init(15, 1).bits);
+    try std.testing.expect(cross.y().bits == F16_16.init(14, 1).bits);
+    try std.testing.expect(cross.z().bits == F16_16.init(-47, 1).bits);
+}
+
+test "addition" {
+    const F16_16 = fixed.F(16, 16);
+    const V2_16_16 = V(2, F16_16);
+
+    const u = V2_16_16.init(-3, 7);
+    const v = V2_16_16.init(1, 2);
+    const int = 10;
+    const fix = F16_16.init(4, 1);
+
+    const sum_1 = u.add(v);
+    const sum_2 = u.add(int);
+    const sum_3 = u.add(fix);
+
+    try std.testing.expectEqual(@Vector(2, F16_16.Fixed){ F16_16.init(-2, 1).bits, F16_16.init(9, 1).bits }, sum_1.vector);
+    try std.testing.expectEqual(@Vector(2, F16_16.Fixed){ F16_16.init(7, 1).bits, F16_16.init(17, 1).bits }, sum_2.vector);
+    try std.testing.expectEqual(@Vector(2, F16_16.Fixed){ F16_16.init(1, 1).bits, F16_16.init(11, 1).bits }, sum_3.vector);
+}
+
+test "subtraction" {
+    const F16_16 = fixed.F(16, 16);
+    const V2_16_16 = V(2, F16_16);
+
+    const u = V2_16_16.init(-3, 7);
+    const v = V2_16_16.init(1, 2);
+    const int = 10;
+    const fix = F16_16.init(4, 1);
+
+    const difference_1 = u.sub(v);
+    const difference_2 = u.sub(int);
+    const difference_3 = u.sub(fix);
+
+    try std.testing.expectEqual(@Vector(2, F16_16.Fixed){ F16_16.init(-4, 1).bits, F16_16.init(5, 1).bits }, difference_1.vector);
+    try std.testing.expectEqual(@Vector(2, F16_16.Fixed){ F16_16.init(-13, 1).bits, F16_16.init(-3, 1).bits }, difference_2.vector);
+    try std.testing.expectEqual(@Vector(2, F16_16.Fixed){ F16_16.init(-7, 1).bits, F16_16.init(3, 1).bits }, difference_3.vector);
+}
+
+test "multiplication" {
+    const F16_16 = fixed.F(16, 16);
+    const V2_16_16 = V(2, F16_16);
+
+    const u = V2_16_16.init(2, -1);
+    const v = V2_16_16.init(6, 3);
+    const int = 2;
+    const fix = F16_16.init(4, 1);
+
+    const product_1 = u.mul(v);
+    const product_2 = u.mul(int);
+    const product_3 = u.mul(fix);
+
+    try std.testing.expectEqual(@Vector(2, F16_16.Fixed){ F16_16.init(12, 1).bits, F16_16.init(-3, 1).bits }, product_1.vector);
+    try std.testing.expectEqual(@Vector(2, F16_16.Fixed){ F16_16.init(4, 1).bits, F16_16.init(-2, 1).bits }, product_2.vector);
+    try std.testing.expectEqual(@Vector(2, F16_16.Fixed){ F16_16.init(8, 1).bits, F16_16.init(-4, 1).bits }, product_3.vector);
+
+    const a = V2_16_16.init(3, 4);
+    const b = F16_16.init(3, 2);
+    const x_expected = b.mul(3).bits;
+    const y_extpected = b.mul(4).bits;
+    try std.testing.expectEqual(@Vector(2, F16_16.Fixed){ x_expected, y_extpected }, a.mul(b).vector);
+}
+
+test "division" {
+    const F16_16 = fixed.F(16, 16);
+    const V2_16_16 = V(2, F16_16);
+
+    const u = V2_16_16.init(10, -2);
+    const v = V2_16_16.init(2, 4);
+    const int = 7;
+    const fix = F16_16.init(1, 2);
+
+    const quotient_1 = u.div(v);
+    const quotient_2 = u.div(int);
+    const quotient_3 = u.div(fix);
+
+    try std.testing.expectEqual(@Vector(2, F16_16.Fixed){ F16_16.init(10, 2).bits, F16_16.init(-2, 4).bits }, quotient_1.vector);
+    try std.testing.expectEqual(@Vector(2, F16_16.Fixed){ F16_16.init(10, 7).bits, F16_16.init(-2, 7).bits }, quotient_2.vector);
+    try std.testing.expectEqual(@Vector(2, F16_16.Fixed){ F16_16.init(20, 1).bits, F16_16.init(-4, 1).bits }, quotient_3.vector);
+}
+
+test "vector_sum" {
+    const F16_16 = fixed.F(16, 16);
+    const u = V(4, F16_16).init(2, -1, 10, -2);
+    try std.testing.expectEqual(F16_16.init(9, 1).bits, u.reduce(.Add).bits);
+
+    for (0..std.math.maxInt(F16_16.Int) / 4) |i| {
+        const j: i16 = @intCast(i);
+        const x = j - 10;
+        const y = @divFloor(j, 3);
+        const z = j;
+        const w = @divFloor(j, 2) + 1;
+        const v = V(4, F16_16).init(x, y, z, w);
+        try std.testing.expectEqual(F16_16.init(x + y + z + w, 1).bits, v.reduce(.Add).bits);
+    }
+}
+
+test "magnitude_squared" {
+    const eq = std.testing.expectEqual;
+    const F32 = fixed.F(16, 16);
+
+    const V2 = V(2, F32);
+    const V3 = V(3, F32);
+    const V4 = V(4, F32);
+
+    for (0..90) |i| {
+        const a = F32.init(@as(i16, @intCast(i + 0)), 1);
+        const b = F32.init(@as(i16, @intCast(i + 1)), 1);
+        const c = F32.init(@as(i16, @intCast(i + 2)), 1);
+        const d = F32.init(@as(i16, @intCast(i + 3)), 1);
+
+        const v2_computed = V2.init(a, b).mag2();
+        const v2_expected = a.mul(a).add(b.mul(b));
+        try eq(v2_expected, v2_computed);
+
+        const v3_computed = V3.init(a, b, c).mag2();
+        const v3_expected = a.mul(a).add(b.mul(b)).add(c.mul(c));
+        try eq(v3_expected, v3_computed);
+
+        const v4_computed = V4.init(a, b, c, d).mag2();
+        const v4_expected = a.mul(a).add(b.mul(b)).add(c.mul(c)).add(d.mul(d));
+        try eq(v4_expected, v4_computed);
+    }
+}
+
+test "magnitude" {
+    const eq = std.testing.expectEqual;
+    const F32 = fixed.F(16, 16);
+
+    const V2 = V(2, F32);
+    const V3 = V(3, F32);
+    const V4 = V(4, F32);
+
+    for (0..90) |i| {
+        const a = F32.init(@as(i16, @intCast(i + 0)), 1);
+        const b = F32.init(@as(i16, @intCast(i + 1)), 1);
+        const c = F32.init(@as(i16, @intCast(i + 2)), 1);
+        const d = F32.init(@as(i16, @intCast(i + 3)), 1);
+
+        const v2_computed = V2.init(a, b).mag();
+        const v2_expected = a.mul(a).add(b.mul(b)).sqrt();
+        try eq(v2_expected, v2_computed);
+
+        const v3_computed = V3.init(a, b, c).mag();
+        const v3_expected = a.mul(a).add(b.mul(b)).add(c.mul(c)).sqrt();
+        try eq(v3_expected, v3_computed);
+
+        const v4_computed = V4.init(a, b, c, d).mag();
+        const v4_expected = a.mul(a).add(b.mul(b)).add(c.mul(c)).add(d.mul(d)).sqrt();
+        try eq(v4_expected, v4_computed);
+    }
+}

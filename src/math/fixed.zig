@@ -4,7 +4,7 @@ const std = @import("std");
 //  - [ ] mul() overflow check
 //  - [ ] div() overflow check
 //  - [X] integerPart() test
-//  - [ ] fractionalPart() test
+//  - [X] fractionalPart() test
 //  - [X] fromInt() test
 //  - [x] eq()
 //  - [x] ne()
@@ -15,8 +15,7 @@ const std = @import("std");
 
 /// Fixed point number with custom bit sizes.
 /// Use exactly 32 bits for optimal performance.
-/// Initializing from raw value or use one constant for optimal performance.
-pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
+pub fn F(comptime integer_bits: comptime_int, comptime fractional_bits: comptime_int) type {
     // This is the type of the backing integer for the fixed point type.
     const BackingInteger = std.meta.Int(.signed, integer_bits + fractional_bits);
 
@@ -51,6 +50,16 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
         pub usingnamespace if (integer_bits >= 2) struct {
             const one = Self{ .bits = 1 << fractional_bits };
         } else struct {};
+
+        pub const max_int = switch (@as(Fixed, std.math.maxInt(Int))) {
+            inline 0 => 0,
+            inline else => |max| max << fractional_bits,
+        };
+
+        pub const min_int = switch (@as(Fixed, std.math.minInt(Int))) {
+            inline 0 => 0,
+            inline else => |min| min << fractional_bits,
+        };
 
         bits: Fixed = 0,
 
@@ -164,24 +173,34 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
 
         /// Lossy cast to integer.
         pub inline fn toInt(self: Self) Int {
+            if (integer_bits == 0) return 0;
             return @truncate(self.bits >> fractional_bits);
         }
 
         /// Returns the fixed point representation of an integer.
-        pub inline fn fromInt(int: anytype) Self {
-            return @bitCast(intToFixed(int));
+        pub inline fn fromInt(int: Int) Self {
+            if (integer_bits == 0) return Self{};
+            return @bitCast(@as(Fixed, int) << fractional_bits);
         }
 
         /// Returns the integer part of a fixed point number.
         pub inline fn integerPart(self: Self) Self {
             if (integer_bits == 0) return Self{};
-            return @bitCast(self.bits & comptime ((((1 << (integer_bits - 1)) - 1)) << fractional_bits));
+
+            const Mask = std.meta.Int(.unsigned, integer_bits + fractional_bits);
+            const mask: Mask = ((1 << integer_bits) - 1) << fractional_bits;
+
+            return @bitCast(@as(Mask, @bitCast(self.bits)) & mask);
         }
 
         /// Returns the fractional part of a fixed point number.
         pub inline fn fractionalPart(self: Self) Self {
             if (fractional_bits == 0) return Self{};
-            return @bitCast(self.bits & comptime ((1 << fractional_bits) - 1));
+
+            const Mask = std.meta.Int(.unsigned, integer_bits + fractional_bits);
+            const mask: Mask = ((1 << fractional_bits) - 1);
+
+            return @bitCast(@as(Mask, @bitCast(self.bits)) & mask);
         }
 
         /// Converts a fixed point number to a different fixed point representation.
@@ -209,6 +228,7 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
 
         /// Safely casts an integer to its fixed point representation.
         pub inline fn intToFixed(int: anytype) Fixed {
+            if (integer_bits == 0) return 0;
             return @as(Fixed, @as(Int, int)) << fractional_bits;
         }
 
@@ -222,9 +242,8 @@ pub fn F(comptime integer_bits: u16, comptime fractional_bits: u16) type {
             }
 
             switch (info) {
-                inline .Int => return intToFixed(value),
-                inline .ComptimeInt => return intToFixed(value),
-                inline else => @compileError("Expected type " ++ @typeName(Self) ++ " or " ++ @typeName(Fixed) ++ ", but got type " ++ @typeName(Type)),
+                inline .Int, .ComptimeInt => return intToFixed(value),
+                else => @compileError("Expected type " ++ @typeName(Self) ++ " or " ++ @typeName(Fixed) ++ ", but got type " ++ @typeName(Type)),
             }
         }
     };
@@ -371,15 +390,43 @@ test "one" {
 test "integer_part" {
     const eq = std.testing.expectEqual;
     const max_bits = 64;
+
+    try eq(0, (F(0, max_bits){}).integerPart().bits);
+    try eq(0, (F(1, max_bits - 1){}).integerPart().bits);
+
     inline for (2..max_bits + 1) |i| {
         const FX = F(i, max_bits - i);
         const max_int = @min(std.math.maxInt(FX.Int), 5000);
+        const min_int = @max(std.math.minInt(FX.Int), -5000);
 
-        for (1..max_int) |j| {
+        var j: isize = min_int;
+        while (j < max_int) : (j += 1) {
             const k: FX.Int = @intCast(j);
 
-            const computed = FX.init(k, max_int - k).integerPart();
-            const expected = FX.fromInt(@divFloor(k, max_int - k));
+            const computed = FX.init(k, max_int).integerPart();
+            const expected = FX.fromInt(@divFloor(k, max_int));
+
+            try eq(expected, computed);
+        }
+    }
+}
+
+test "fractional_part" {
+    const eq = std.testing.expectEqual;
+    const max_bits = 64;
+
+    inline for (2..max_bits + 1) |i| {
+        const FX = F(i, max_bits - i);
+        const max_int = @min(std.math.maxInt(FX.Int), 5000);
+        const min_int = @max(std.math.minInt(FX.Int), -5000);
+
+        var j: isize = min_int;
+        while (j < max_int) : (j += 1) {
+            const k: FX.Int = @intCast(j);
+
+            const computed = FX.init(k, max_int).fractionalPart();
+            const a = FX.init(k, max_int);
+            const expected = a.sub(a.integerPart());
 
             try eq(expected, computed);
         }
@@ -419,3 +466,25 @@ test "comparisons" {
         try std.testing.expect(!f.cmp(l, .le));
     }
 }
+
+test "extreme_values" {
+    const maxInt = std.math.maxInt;
+    const minInt = std.math.minInt;
+    const Int = std.meta.Int;
+    const eq = std.testing.expectEqual;
+    const max_bits = 64;
+    inline for (0..max_bits + 1) |i| {
+        const FX = F(i, max_bits - i);
+
+        const expected_max = maxInt(Int(.signed, i));
+        const expected_min = minInt(Int(.signed, i));
+
+        const computed_max = (FX{ .bits = FX.max_int }).toInt();
+        const computed_min = (FX{ .bits = FX.min_int }).toInt();
+
+        try eq(expected_max, computed_max);
+        try eq(expected_min, computed_min);
+    }
+}
+
+test "parts" {}

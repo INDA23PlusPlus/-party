@@ -13,8 +13,8 @@ const fixed = @import("../math/fixed.zig");
 //  - [ ] Implement spawnEmpty()
 //  - [ ] Implement serialize()
 //  - [ ] Implement deserialize()
-//  - [ ] Implement replace() // kill() -> spawn()
-//  - [ ] Implement replaceWith() // kill() -> spawnWith()
+//  - [ ] Implement replace() // kill() then spawn(), faster
+//  - [ ] Implement replaceWith() // kill() then spawnWith(), faster
 
 // COMPONENTS
 
@@ -89,6 +89,14 @@ const Entity = packed struct {
 
     pub inline fn fromBits(bits: Bits) Self {
         return @bitCast(bits);
+    }
+
+    pub inline fn eq(a: Self, b: Self) bool {
+        return a.toBits() == b.toBits();
+    }
+
+    pub inline fn ne(a: Self, b: Self) bool {
+        return a.toBits() != b.toBits();
     }
 };
 
@@ -433,7 +441,6 @@ test "spawn_limit" {
 }
 
 test "reset" {
-    std.log.warn("", .{});
     var buffer: Buffer = undefined;
     var world = World.init(&buffer);
 
@@ -471,7 +478,6 @@ test "reset" {
 }
 
 test "build entities" {
-    std.log.warn("", .{});
     var buffer: Buffer = undefined;
     var world = World.init(&buffer);
 

@@ -2,13 +2,20 @@ const std = @import("std");
 const fixed = @import("fixed.zig");
 
 // TODO
-//  - [ ] mul() overflow check
-//  - [ ] div() overflow check
-//  - [ ] lerp() test
-//  - [ ] proj()
-//  - [ ] dist()
+//  - [ ] mul() overflow check, fast int version
+//  - [ ] div() overflow check, fast int version
+//  - [X] lerp() test
+//  - [X] proj()
+//  - [ ] dist() test
+//  - [X] init() refactor
 //  - [ ] swizzle()
-//  - [ ] infer()
+//  - [X] infer() & refactor
+//  - [ ] integerParts()
+//  - [ ] fractionalParts()
+//  - [X] toInts()
+//  - [X] fromInts()
+//  - [ ] fixedCast()
+//  - [ ] resizeCast()
 //  - [X] min()
 //  - [X] max()
 //  - [X] eq()
@@ -30,8 +37,12 @@ pub fn V(comptime dimensions: comptime_int, comptime F: anytype) type {
         const Vector = @Vector(dimensions, F.Fixed);
         const LargeVector = @Vector(dimensions, F.LargeFixed);
 
-        vector: Vector,
+        vector: Vector = [_]F.Fixed{0} ** dimensions,
         comptime Fixed: type = F,
+
+        pub inline fn fromAny(value: anytype) Self {
+            return Self{ .vector = infer(value) };
+        }
 
         pub inline fn i() Self {
             switch (dimensions) {
@@ -86,29 +97,7 @@ pub fn V(comptime dimensions: comptime_int, comptime F: anytype) type {
         pub usingnamespace switch (dimensions) {
             inline 2 => struct {
                 pub inline fn init(x_init: anytype, y_init: anytype) Self {
-                    const X = @TypeOf(x_init);
-                    const Y = @TypeOf(y_init);
-
-                    const x_info = @typeInfo(X);
-                    const y_info = @typeInfo(Y);
-
-                    const xx = if (x_info == .Int or x_info == .ComptimeInt) blk: {
-                        break :blk F.init(x_init, 1).bits;
-                    } else if (X == Fixed) blk: {
-                        break :blk x_init.bits;
-                    } else {
-                        @compileError("Expected type " ++ @typeName(Fixed.Int) ++ ", but got type " ++ @typeName(X));
-                    };
-
-                    const yy = if (y_info == .Int or y_info == .ComptimeInt) blk: {
-                        break :blk F.init(y_init, 1).bits;
-                    } else if (Y == Fixed) blk: {
-                        break :blk y_init.bits;
-                    } else {
-                        @compileError("Expected type " ++ @typeName(Fixed.Int) ++ ", but got type " ++ @typeName(Y));
-                    };
-
-                    return Self{ .vector = .{ xx, yy } };
+                    return Self{ .vector = .{ F.infer(x_init), F.infer(y_init) } };
                 }
 
                 pub inline fn cross(self: Self, vec: Self) F {
@@ -117,39 +106,7 @@ pub fn V(comptime dimensions: comptime_int, comptime F: anytype) type {
             },
             inline 3 => struct {
                 pub inline fn init(x_init: anytype, y_init: anytype, z_init: anytype) Self {
-                    const X = @TypeOf(x_init);
-                    const Y = @TypeOf(y_init);
-                    const Z = @TypeOf(z_init);
-
-                    const x_info = @typeInfo(X);
-                    const y_info = @typeInfo(Y);
-                    const z_info = @typeInfo(Z);
-
-                    const xx = if (x_info == .Int or x_info == .ComptimeInt) blk: {
-                        break :blk F.init(x_init, 1).bits;
-                    } else if (X == Fixed) blk: {
-                        break :blk x_init.bits;
-                    } else {
-                        @compileError("Expected type " ++ @typeName(Fixed.Int) ++ ", but got type " ++ @typeName(X));
-                    };
-
-                    const yy = if (y_info == .Int or y_info == .ComptimeInt) blk: {
-                        break :blk F.init(y_init, 1).bits;
-                    } else if (Y == Fixed) blk: {
-                        break :blk y_init.bits;
-                    } else {
-                        @compileError("Expected type " ++ @typeName(Fixed.Int) ++ ", but got type " ++ @typeName(Y));
-                    };
-
-                    const zz = if (z_info == .Int or z_info == .ComptimeInt) blk: {
-                        break :blk F.init(z_init, 1).bits;
-                    } else if (Z == Fixed) blk: {
-                        break :blk z_init.bits;
-                    } else {
-                        @compileError("Expected type " ++ @typeName(Fixed.Int) ++ ", but got type " ++ @typeName(Z));
-                    };
-
-                    return Self{ .vector = .{ xx, yy, zz } };
+                    return Self{ .vector = .{ F.infer(x_init), F.infer(y_init), F.infer(z_init) } };
                 }
 
                 pub inline fn cross(self: Self, vec: Self) Self {
@@ -162,131 +119,34 @@ pub fn V(comptime dimensions: comptime_int, comptime F: anytype) type {
             },
             inline 4 => struct {
                 pub inline fn init(x_init: anytype, y_init: anytype, z_init: anytype, w_init: anytype) Self {
-                    const X = @TypeOf(x_init);
-                    const Y = @TypeOf(y_init);
-                    const Z = @TypeOf(z_init);
-                    const W = @TypeOf(w_init);
-
-                    const x_info = @typeInfo(X);
-                    const y_info = @typeInfo(Y);
-                    const z_info = @typeInfo(Z);
-                    const w_info = @typeInfo(W);
-
-                    const xx = if (x_info == .Int or x_info == .ComptimeInt) blk: {
-                        break :blk F.init(x_init, 1).bits;
-                    } else if (X == Fixed) blk: {
-                        break :blk x_init.bits;
-                    } else {
-                        @compileError("Expected type " ++ @typeName(Fixed.Int) ++ ", but got type " ++ @typeName(X));
-                    };
-
-                    const yy = if (y_info == .Int or y_info == .ComptimeInt) blk: {
-                        break :blk F.init(y_init, 1).bits;
-                    } else if (Y == Fixed) blk: {
-                        break :blk y_init.bits;
-                    } else {
-                        @compileError("Expected type " ++ @typeName(Fixed.Int) ++ ", but got type " ++ @typeName(Y));
-                    };
-
-                    const zz = if (z_info == .Int or z_info == .ComptimeInt) blk: {
-                        break :blk F.init(z_init, 1).bits;
-                    } else if (Z == Fixed) blk: {
-                        break :blk z_init.bits;
-                    } else {
-                        @compileError("Expected type " ++ @typeName(Fixed.Int) ++ ", but got type " ++ @typeName(Z));
-                    };
-
-                    const ww = if (w_info == .Int or w_info == .ComptimeInt) blk: {
-                        break :blk F.init(w_init, 1).bits;
-                    } else if (W == Fixed) blk: {
-                        break :blk w_init.bits;
-                    } else {
-                        @compileError("Expected type " ++ @typeName(Fixed.Int) ++ ", but got type " ++ @typeName(W));
-                    };
-
-                    return Self{ .vector = .{ xx, yy, zz, ww } };
+                    return Self{ .vector = .{ F.infer(x_init), F.infer(y_init), F.infer(z_init), F.infer(w_init) } };
                 }
             },
             inline else => unreachable,
         };
 
+        /// Performs elementwise addition.
         pub inline fn add(augend: Self, addend: anytype) Self {
-            const Type = @TypeOf(addend);
-            const info = @typeInfo(Type);
-
-            if (Type == Self) {
-                return Self{ .vector = augend.vector + addend.vector };
-            }
-
-            if (Type == F) {
-                return Self{ .vector = augend.vector + @as(Vector, @splat(addend.bits)) };
-            }
-
-            if (info == .Int or info == .ComptimeInt) {
-                return Self{ .vector = augend.vector + @as(Vector, @splat(F.intToFixed(addend))) };
-            }
-
-            @compileError("Expected type " ++ @typeName(Self) ++ " or " ++ @typeName(F) ++ ", but got type " ++ @typeName(Type));
+            return Self{ .vector = augend.vector + infer(addend) };
         }
 
+        /// Performs elementwise subtraction.
         pub inline fn sub(minuend: Self, subtrahend: anytype) Self {
-            const Type = @TypeOf(subtrahend);
-            const info = @typeInfo(Type);
-
-            if (Type == Self) {
-                return Self{ .vector = minuend.vector - subtrahend.vector };
-            }
-
-            if (Type == F) {
-                return Self{ .vector = minuend.vector - @as(Vector, @splat(subtrahend.bits)) };
-            }
-
-            if (info == .Int or info == .ComptimeInt) {
-                return Self{ .vector = minuend.vector - @as(Vector, @splat(F.intToFixed(subtrahend))) };
-            }
-
-            @compileError("Expected type " ++ @typeName(Self) ++ " or " ++ @typeName(F) ++ ", but got type " ++ @typeName(Type));
+            return Self{ .vector = minuend.vector - infer(subtrahend) };
         }
 
+        /// Performs elementwise division.
         pub inline fn mul(multiplicand: Self, multiplier: anytype) Self {
-            const Type = @TypeOf(multiplier);
-            const info = @typeInfo(Type);
-
-            // Hadamard product.
-            if (Type == Self) {
-                return Self{ .vector = @as(Vector, @truncate((@as(LargeVector, multiplicand.vector) * @as(LargeVector, multiplier.vector)) >> @splat(F.shift))) };
-            }
-
-            if (Type == F) {
-                return Self{ .vector = @as(Vector, @truncate((@as(LargeVector, multiplicand.vector) * @as(LargeVector, @splat(multiplier.bits))) >> @splat(F.shift))) };
-            }
-
-            if (info == .Int or info == .ComptimeInt) {
-                return Self{ .vector = @as(Vector, @truncate((@as(LargeVector, multiplicand.vector) * @as(LargeVector, @splat(F.intToFixed(multiplier)))) >> @splat(F.shift))) };
-            }
-
-            @compileError("Expected type " ++ @typeName(Self) ++ " or " ++ @typeName(F) ++ ", but got type " ++ @typeName(Type));
+            return Self{ .vector = @as(Vector, @truncate((@as(LargeVector, multiplicand.vector) * @as(LargeVector, infer(multiplier))) >> @splat(F.shift))) };
         }
 
+        /// Performs elementwise division.
         pub inline fn div(dividend: Self, divisor: anytype) Self {
-            const Type = @TypeOf(divisor);
-            const info = @typeInfo(Type);
-
-            if (Type == Self) {
-                return Self{ .vector = @as(Vector, @truncate(@divFloor(@as(LargeVector, dividend.vector) << @splat(F.shift), @as(LargeVector, divisor.vector)))) };
-            }
-
-            if (Type == F) {
-                return Self{ .vector = @as(Vector, @truncate(@divFloor(@as(LargeVector, dividend.vector) << @splat(F.shift), @as(LargeVector, @splat(divisor.bits))))) };
-            }
-
-            if (info == .Int or info == .ComptimeInt) {
-                return Self{ .vector = @as(Vector, @truncate(@divFloor(@as(LargeVector, dividend.vector) << @splat(F.shift), @as(LargeVector, @splat(F.intToFixed(divisor)))))) };
-            }
-
-            @compileError("Expected type " ++ @typeName(Self) ++ " or " ++ @typeName(F) ++ ", but got type " ++ @typeName(Type));
+            return Self{ .vector = @as(Vector, @truncate(@divFloor(@as(LargeVector, dividend.vector) << @splat(F.shift), @as(LargeVector, infer(divisor))))) };
         }
 
+        /// Returns a fixed point number representing the largest element,
+        /// the smallest element, or the sum of all elements.
         pub inline fn reduce(self: Self, comptime op: std.builtin.ReduceOp) F {
             switch (op) {
                 .Add => return fixedCast(@reduce(.Add, self.vector)),
@@ -296,74 +156,89 @@ pub fn V(comptime dimensions: comptime_int, comptime F: anytype) type {
             }
         }
 
+        /// Compares two vectors for inequality.
         pub inline fn eq(a: Self, b: Self) bool {
             return @reduce(std.builtin.ReduceOp.And, a.vector == b.vector);
         }
 
+        /// Compares two vectors for inequality.
         pub inline fn ne(a: Self, b: Self) bool {
             return @reduce(std.builtin.ReduceOp.Or, a.vector != b.vector);
         }
 
+        /// Returns the squared magnitude of a vector.
         pub inline fn mag2(self: Self) F {
             return self.mul(self).reduce(.Add);
         }
 
+        /// Returns the magnitude of a vector.
         pub inline fn mag(self: Self) F {
             return self.mag2().sqrt();
         }
 
+        /// returns the dot product of two vectors.
         pub inline fn dot(self: Self, vec: Self) F {
             return self.mul(vec).reduce(.Add);
         }
 
+        /// Returns additive inverse of a vector.
         pub inline fn neg(self: Self) Self {
             return self.mul(-1);
         }
 
         pub inline fn lerp(from: Self, to: Self, t: anytype) Self {
-            const Type = @TypeOf(t);
-            const info = @typeInfo(Type);
-
-            if (Type == F) {
-                return from.add(to.sub(from)).mul(@as(Vector, @splat(t.bits)));
-            }
-
-            if (info == .Int or info == .ComptimeInt) {
-                return from.add(to.sub(from)).mul(@as(Vector, @splat(F.fixedFromInt(t))));
-            }
-
-            @compileError("Expected type " ++ @typeName(F) ++ ", but got type " ++ @typeName(Type));
+            return to.sub(from).mul(t).add(from);
         }
 
-        pub inline fn dist(from: Self, to: Self) Self {
-            _ = from;
-            _ = to;
+        pub inline fn proj(self: Self, onto: Self) Self {
+            return onto.mul(self.dot(onto).div(mag2(onto)));
+        }
+
+        /// Returns the squared distance between two points.
+        pub inline fn dist2(from: Self, to: Self) F {
+            return to.sub(from).mag2();
+        }
+
+        /// Returns the distance between two points.
+        pub inline fn dist(from: Self, to: Self) F {
+            return dist(from, to).sqrt();
+        }
+
+        /// Lossy cast to integer vector.
+        pub inline fn toInts(self: Self) @Vector(dimensions, F.Int) {
+            return @truncate(self.vector >> @splat(F.shift));
+        }
+
+        /// Returns the fixed point representation vector of an integer vector or integer array.
+        pub inline fn fromInts(ints: @Vector(dimensions, F.Int)) Self {
+            return Self{ .vector = @as(@Vector(dimensions, F.Fixed), ints) << @splat(F.shift) };
+        }
+
+        inline fn intsToVector(ints: anytype) Vector {
+            return @as(Vector, @as(@Vector(dimensions, F.Int), ints)) << @splat(F.shift);
         }
 
         inline fn infer(value: anytype) Vector {
             const Type = @TypeOf(value);
-            // const info = @typeInfo(Type);
+            const info = @typeInfo(Type);
 
             if (Type == Self) {
                 return value.vector;
             }
 
-            // switch (info) {
-            //     .Array => |array| {
-            //         if (array.child == F) {
-            //             return value;
-            //         }
+            switch (info) {
+                inline .Array, .Vector => |vector| {
+                    if (vector.child == F) {
+                        return value;
+                    }
 
-            //         switch (@typeInfo(array.child)) {
-            //             inline .Int => return fixedFromInt(value),
-            //             inline .ComptimeInt => return fixedFromInt(value),
-            //             inline else => @compileError("Expected type " ++ @typeName(Self) ++ " or " ++ @typeName(Fixed) ++ ", but got type " ++ @typeName(Type)),
-            //         }
-            //     },
-            //     .Vector => |vector| {},
-            // }
-
-            return @splat(F.infer(value));
+                    switch (@typeInfo(vector.child)) {
+                        inline .Int, .ComptimeInt => return intsToVector(value),
+                        inline else => @compileError("Expected type Int or ComptimeInt, but got type " ++ @typeName(Type)),
+                    }
+                },
+                inline else => return @splat(F.infer(value)),
+            }
         }
 
         inline fn fixedCast(f: F.Fixed) F {
@@ -582,9 +457,37 @@ test "magnitude" {
     }
 }
 
-test "projection" {}
+test "projection" {
+    const eq = std.testing.expectEqual;
+    const F32 = fixed.F(16, 16);
+    const V2 = V(2, F32);
 
-test "negation" {}
+    var prng = std.rand.DefaultPrng.init(0);
+    const rand = prng.random();
+
+    for (0..100_000) |_| {
+        const x = rand.int(i8);
+        const y = rand.int(i8);
+        const p1 = V2.init(if (x == 0) 1 else x, if (y == 0) 1 else y);
+
+        try eq(p1, V2.proj(p1, p1));
+    }
+}
+
+test "negation" {
+    const eq = std.testing.expectEqual;
+    const F32 = fixed.F(16, 16);
+    const V2 = V(2, F32);
+
+    var prng = std.rand.DefaultPrng.init(0);
+    const rand = prng.random();
+
+    for (0..100_000) |_| {
+        const x: i16 = rand.int(i8);
+        const y: i16 = rand.int(i8);
+        try eq(V2.init(x, y).neg(), V2.init(-x, -y));
+    }
+}
 
 test "comparison" {
     const F32 = fixed.F(16, 16);
@@ -683,3 +586,115 @@ test "unit_vectors" {
 
     try eq(Vec4{ zero, zero, zero, one }, V4.l().vector);
 }
+
+test "linear_interpolation" {
+    const eq = std.testing.expectEqual;
+    const F32 = fixed.F(16, 16);
+    const V2 = V(2, F32);
+
+    var prng = std.rand.DefaultPrng.init(0);
+    const rand = prng.random();
+
+    for (0..100_000) |_| {
+        const p1 = V2.init(rand.int(i8), rand.int(i8));
+        const p2 = V2.init(rand.int(i8), rand.int(i8));
+
+        try eq(p1, V2.lerp(p1, p2, 0));
+        try eq(p2, V2.lerp(p1, p2, 1));
+    }
+}
+
+test "to_integers" {
+    const eq = std.testing.expectEqual;
+    const F32 = fixed.F(16, 16);
+    const V2 = V(2, F32);
+
+    var prng = std.rand.DefaultPrng.init(0);
+    const rand = prng.random();
+
+    var expected: @Vector(2, i16) = undefined;
+
+    for (0..100_000) |_| {
+        const x = rand.int(i16);
+        const y = rand.int(i16);
+
+        expected[0] = x;
+        expected[1] = y;
+        const computed = V2.init(x, y).toInts();
+
+        try eq(expected, computed);
+    }
+}
+
+test "from_integers" {
+    const eq = std.testing.expectEqual;
+    const F32 = fixed.F(16, 16);
+    const V2 = V(2, F32);
+
+    var prng = std.rand.DefaultPrng.init(0);
+    const rand = prng.random();
+
+    var vector: @Vector(2, i16) = undefined;
+    var array: [2]i16 = undefined;
+
+    for (0..100_000) |_| {
+        const x = rand.int(i16);
+        const y = rand.int(i16);
+
+        vector[0] = x;
+        vector[1] = y;
+        array[0] = x;
+        array[1] = y;
+
+        const expected = V2.init(x, y);
+        const computed_vector = V2.fromInts(vector);
+        const computed_array = V2.fromInts(array);
+
+        try eq(expected, computed_vector);
+        try eq(expected, computed_array);
+    }
+}
+
+test "from_any" {
+    const eq = std.testing.expectEqual;
+    const F32 = fixed.F(16, 16);
+    const V2 = V(2, F32);
+
+    var prng = std.rand.DefaultPrng.init(0);
+    const rand = prng.random();
+
+    var vector: @Vector(2, i16) = undefined;
+    var array: [2]i16 = undefined;
+    var fix: F32 = undefined;
+    var int: F32.Int = undefined;
+
+    for (0..100_000) |_| {
+        const x = rand.int(i16);
+        const y = rand.int(i16);
+        const q = rand.int(i16);
+
+        fix = F32.fromInt(q);
+        int = q;
+
+        const expected_single = V2.init(q, q);
+        const computed_fix = V2.fromAny(fix);
+        const computed_int = V2.fromAny(int);
+        try eq(expected_single, computed_fix);
+        try eq(expected_single, computed_int);
+
+        vector[0] = x;
+        vector[1] = y;
+        array[0] = x;
+        array[1] = y;
+
+        const expected_multiple = V2.init(x, y);
+        const computed_vector = V2.fromAny(vector);
+        const computed_array = V2.fromAny(array);
+        try eq(expected_multiple, computed_vector);
+        try eq(expected_multiple, computed_array);
+    }
+}
+
+test "distance" {}
+
+test "distance_squared" {}

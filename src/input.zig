@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const rl = @import("raylib");
-const fixed = @import("math/fixed.zig");
+const F48_16 = @import("math/fixed.zig").F(48, 16);
 const time = @import("time.zig");
 
 // Directional input.
@@ -34,14 +34,14 @@ pub const DPad = struct {
 pub const A = struct {
     var m_isDown: bool = false;
     var m_wasDown: bool = false;
-    var m_pressTime = fixed.F(48, 16).init(0, 1);
+    var m_pressTime = F48_16{};
 
     // How long the button has been down, in seconds.
-    pub fn duration() fixed.F(48, 16) {
+    pub fn duration() F48_16 {
         if (m_isDown) {
             return time.get().sub(m_pressTime);
         }
-        return fixed.F(48, 16).init(0, 1);
+        return F48_16{};
     }
 
     // Is the button down right now?
@@ -75,14 +75,14 @@ pub const A = struct {
 pub const B = struct {
     var m_isDown: bool = false;
     var m_wasDown: bool = false;
-    var m_pressTime = fixed.F(48, 16).init(0, 1);
+    var m_pressTime = F48_16{};
 
     // How long the button has been down, in seconds.
-    pub fn duration() fixed.F(48, 16) {
+    pub fn duration() F48_16 {
         if (m_isDown) {
             return time.get().sub(m_pressTime);
         }
-        return fixed.F(48, 16).init(0, 1);
+        return F48_16{};
     }
 
     // Is the button down right now?

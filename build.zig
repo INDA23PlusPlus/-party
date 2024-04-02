@@ -24,7 +24,12 @@ pub fn build(b: *std.Build) !void {
     //     return;
     // }
 
-    const exe = b.addExecutable(.{ .name = "++party", .root_source_file = .{ .path = "src/main.zig" }, .optimize = optimize, .target = target });
+    const exe = b.addExecutable(.{
+        .name = "++party",
+        .root_source_file = .{ .path = "src/main.zig" },
+        .optimize = optimize,
+        .target = target,
+    });
 
     rl.link(b, exe, target, optimize);
     exe.root_module.addImport("raylib", raylib);
@@ -42,4 +47,20 @@ pub fn build(b: *std.Build) !void {
     run_server_step.dependOn(&run_server_cmd.step);
 
     b.installArtifact(exe);
+
+    const tests = b.addTest(.{
+        .name = "tests",
+        .root_source_file = .{ .path = "src/test.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+
+    rl.link(b, tests, target, optimize);
+    tests.root_module.addImport("raylib", raylib);
+    tests.root_module.addImport("raylib-math", raylib_math);
+    tests.root_module.addImport("xev", xev.module("xev"));
+
+    const run_tests_cmd = b.addRunArtifact(tests);
+    const run_tests_step = b.step("test", "Run tests");
+    run_tests_step.dependOn(&run_tests_cmd.step);
 }
