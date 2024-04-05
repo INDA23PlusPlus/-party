@@ -6,12 +6,13 @@ const fixed = @import("fixed.zig");
 //  - [ ] div() overflow check, fast int version
 //  - [X] lerp() test
 //  - [X] proj()
-//  - [ ] dist() test
+//  - [X] rej()
+//  - [X] dist() test
 //  - [X] init() refactor
 //  - [ ] swizzle()
 //  - [X] infer() & refactor
-//  - [ ] integerParts()
-//  - [ ] fractionalParts()
+//  - [X] integerParts()
+//  - [X] fractionalParts()
 //  - [X] toInts()
 //  - [X] fromInts()
 //  - [ ] fixedCast()
@@ -36,6 +37,7 @@ pub fn V(comptime dimensions: comptime_int, comptime F: anytype) type {
         const Fixed = F;
         const Vector = @Vector(dimensions, F.Fixed);
         const LargeVector = @Vector(dimensions, F.LargeFixed);
+        const Mask = @Vector(dimensions, F.Mask);
 
         vector: Vector = [_]F.Fixed{0} ** dimensions,
         comptime Fixed: type = F,
@@ -137,12 +139,16 @@ pub fn V(comptime dimensions: comptime_int, comptime F: anytype) type {
 
         /// Performs elementwise division.
         pub inline fn mul(multiplicand: Self, multiplier: anytype) Self {
-            return Self{ .vector = @as(Vector, @truncate((@as(LargeVector, multiplicand.vector) * @as(LargeVector, infer(multiplier))) >> @splat(F.shift))) };
+            return Self{ .vector = @as(Vector, @truncate((@as(LargeVector, multiplicand.vector) * @as(LargeVector, infer(multiplier))) >> @splat(F.fractional_bit_count))) };
         }
 
         /// Performs elementwise division.
         pub inline fn div(dividend: Self, divisor: anytype) Self {
-            return Self{ .vector = @as(Vector, @truncate(@divFloor(@as(LargeVector, dividend.vector) << @splat(F.shift), @as(LargeVector, infer(divisor))))) };
+            const n = @as(LargeVector, dividend.vector) << @splat(F.fractional_bit_count);
+            const d = @as(LargeVector, infer(divisor));
+            const v = @divTrunc(n, d);
+
+            return Self{ .vector = @truncate(v) };
         }
 
         /// Returns a fixed point number representing the largest element,
@@ -181,17 +187,24 @@ pub fn V(comptime dimensions: comptime_int, comptime F: anytype) type {
             return self.mul(vec).reduce(.Add);
         }
 
-        /// Returns additive inverse of a vector.
+        /// Returns the additive inverse of a vector.
         pub inline fn neg(self: Self) Self {
             return self.mul(-1);
         }
 
+        /// Linear interpolation
         pub inline fn lerp(from: Self, to: Self, t: anytype) Self {
             return to.sub(from).mul(t).add(from);
         }
 
+        /// Orthogonal projection.
         pub inline fn proj(self: Self, onto: Self) Self {
             return onto.mul(self.dot(onto).div(mag2(onto)));
+        }
+
+        /// Orthogonal rejection.
+        pub inline fn rej(self: Self, onto: Self) Self {
+            return self.sub(self.proj(onto));
         }
 
         /// Returns the squared distance between two points.
@@ -201,21 +214,48 @@ pub fn V(comptime dimensions: comptime_int, comptime F: anytype) type {
 
         /// Returns the distance between two points.
         pub inline fn dist(from: Self, to: Self) F {
-            return dist(from, to).sqrt();
+            return dist2(from, to).sqrt();
         }
 
         /// Lossy cast to integer vector.
         pub inline fn toInts(self: Self) @Vector(dimensions, F.Int) {
-            return @truncate(self.vector >> @splat(F.shift));
+            return @truncate(self.vector >> @splat(F.fractional_bit_count));
         }
 
         /// Returns the fixed point representation vector of an integer vector or integer array.
         pub inline fn fromInts(ints: @Vector(dimensions, F.Int)) Self {
-            return Self{ .vector = @as(@Vector(dimensions, F.Fixed), ints) << @splat(F.shift) };
+            return Self{ .vector = @as(@Vector(dimensions, F.Fixed), ints) << @splat(F.fractional_bit_count) };
+        }
+
+        pub inline fn integerParts(self: Self) Self {
+            if (F.integer_bit_count == 0) return Self{};
+
+            const bits: Mask = @bitCast(self.vector);
+            const integer_mask: Mask = @splat(F.integer_mask);
+            const integer_parts: Vector = @bitCast(bits & integer_mask);
+
+            const zeroes_mask: Mask = @splat(0);
+            const zeroes_vector: Vector = @splat(0);
+            const fractional_mask: Mask = @splat(F.fractional_mask);
+            const fractionals: Vector = @intFromBool((@as(Mask, @bitCast(self.vector)) & fractional_mask) != zeroes_mask);
+            const negatives: Vector = @intFromBool(self.vector < zeroes_vector);
+            const correction = (fractionals & negatives) << @splat(F.fractional_bit_count);
+
+            return Self{ .vector = @bitCast(integer_parts + correction) };
+        }
+
+        pub inline fn fractionalParts(self: Self) Self {
+            if (F.fractional_bit_count == 0) return Self{};
+            return self.sub(self.integerParts());
+
+            // const bits: @Vector(dimensions, F.Mask) = @bitCast(self.vector);
+            // const mask: @Vector(dimensions, F.Mask) = @splat(F.fractional_mask);
+
+            // return Self{ .vector = @bitCast(bits & mask) };
         }
 
         inline fn intsToVector(ints: anytype) Vector {
-            return @as(Vector, @as(@Vector(dimensions, F.Int), ints)) << @splat(F.shift);
+            return @as(Vector, @as(@Vector(dimensions, F.Int), ints)) << @splat(F.fractional_bit_count);
         }
 
         inline fn infer(value: anytype) Vector {
@@ -393,9 +433,9 @@ test "vector_sum" {
     for (0..std.math.maxInt(F16_16.Int) / 4) |i| {
         const j: i16 = @intCast(i);
         const x = j - 10;
-        const y = @divFloor(j, 3);
+        const y = @divTrunc(j, 3);
         const z = j;
-        const w = @divFloor(j, 2) + 1;
+        const w = @divTrunc(j, 2) + 1;
         const v = V(4, F16_16).init(x, y, z, w);
         try std.testing.expectEqual(F16_16.init(x + y + z + w, 1).bits, v.reduce(.Add).bits);
     }
@@ -465,12 +505,35 @@ test "projection" {
     var prng = std.rand.DefaultPrng.init(0);
     const rand = prng.random();
 
+    try eq(V2{}, V2.i().proj(V2.j()));
+    try eq(V2{}, V2.j().proj(V2.i()));
+
     for (0..100_000) |_| {
         const x = rand.int(i8);
         const y = rand.int(i8);
         const p1 = V2.init(if (x == 0) 1 else x, if (y == 0) 1 else y);
 
         try eq(p1, V2.proj(p1, p1));
+    }
+}
+
+test "rejection" {
+    const eq = std.testing.expectEqual;
+    const F32 = fixed.F(16, 16);
+    const V2 = V(2, F32);
+
+    var prng = std.rand.DefaultPrng.init(0);
+    const rand = prng.random();
+
+    try eq(V2.i(), V2.i().rej(V2.j()));
+    try eq(V2.j(), V2.j().rej(V2.i()));
+
+    for (0..100_000) |_| {
+        const x = rand.int(i8);
+        const y = rand.int(i8);
+        const p = V2.init(if (x == 0) 1 else x, if (y == 0) 1 else y);
+
+        try eq(V2{}, V2.rej(p, p));
     }
 }
 
@@ -695,6 +758,76 @@ test "from_any" {
     }
 }
 
-test "distance" {}
+test "distance" {
+    const eq = std.testing.expectEqual;
+    const F32 = fixed.F(24, 8);
+    const V2 = V(2, F32);
 
-test "distance_squared" {}
+    try eq(F32.one, V2.i().dist(V2{}));
+    try eq(F32.one, V2.j().dist(V2{}));
+    try eq(F32.one.mul(2).sqrt(), V2.i().dist(V2.j()));
+
+    var prng = std.rand.DefaultPrng.init(0);
+    const rand = prng.random();
+
+    for (0..100_000) |_| {
+        const x1 = rand.int(i8);
+        const y1 = rand.int(i8);
+        const p1 = V2.init(if (x1 == 0) 1 else x1, if (y1 == 0) 1 else y1);
+
+        const x2 = rand.int(i8);
+        const y2 = rand.int(i8);
+        const p2 = V2.init(if (x2 == 0) 1 else x2, if (y2 == 0) 1 else y2);
+
+        const dx = p1.x().sub(p2.x());
+        const dy = p1.y().sub(p2.y());
+
+        const expected = dx.sqr().add(dy.sqr()).sqrt();
+        const computed = p1.dist(p2);
+
+        try eq(expected, computed);
+    }
+}
+
+test "distance_squared" {
+    const eq = std.testing.expectEqual;
+    const F32 = fixed.F(24, 8);
+    const V2 = V(2, F32);
+
+    try eq(F32.one, V2.i().dist2(V2{}));
+    try eq(F32.one, V2.j().dist2(V2{}));
+    try eq(F32.one.mul(2), V2.i().dist2(V2.j()));
+
+    var prng = std.rand.DefaultPrng.init(0);
+    const rand = prng.random();
+
+    for (0..100_000) |_| {
+        const x1 = rand.int(i8);
+        const y1 = rand.int(i8);
+        const p1 = V2.init(if (x1 == 0) 1 else x1, if (y1 == 0) 1 else y1);
+
+        const x2 = rand.int(i8);
+        const y2 = rand.int(i8);
+        const p2 = V2.init(if (x2 == 0) 1 else x2, if (y2 == 0) 1 else y2);
+
+        const dx = p1.x().sub(p2.x());
+        const dy = p1.y().sub(p2.y());
+
+        const expected = dx.sqr().add(dy.sqr());
+        const computed = p1.dist2(p2);
+
+        try eq(expected, computed);
+    }
+}
+
+test "integer_parts" {
+    const eq = std.testing.expectEqual;
+    const F32 = fixed.F(16, 16);
+    const V2 = V(2, F32);
+
+    const expected_1 = V2.init(1, -1);
+    const computed_1 = V2.init(3, -3).div([2]i8{ 2, 2 }).integerParts();
+
+    try eq(expected_1.x(), computed_1.x());
+    try eq(expected_1.y(), computed_1.y());
+}

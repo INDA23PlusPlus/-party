@@ -1,5 +1,6 @@
 const std = @import("std");
 const fixed = @import("../math/fixed.zig");
+const linear = @import("../math/linear.zig");
 
 // TODO:
 //  - [X] Implement isAlive()
@@ -13,8 +14,8 @@ const fixed = @import("../math/fixed.zig");
 //  - [ ] Implement spawnEmpty()
 //  - [ ] Implement serialize()
 //  - [ ] Implement deserialize()
-//  - [ ] Implement replace() // kill() then spawn(), faster
-//  - [ ] Implement replaceWith() // kill() then spawnWith(), faster
+//  - [ ] Implement replace() (kill() then spawn(), faster)
+//  - [ ] Implement replaceWith() (kill() then spawnWith(), faster)
 
 // COMPONENTS
 
@@ -23,16 +24,13 @@ pub const Position = struct {
     y: i32 = 0,
 };
 
-const F16_16 = fixed.F(16, 16);
-const F8_24 = fixed.F(8, 24);
+const F32 = fixed.F(16, 16);
+const V2 = linear.V(2, F32);
 
 pub const Mover = struct {
-    subpixel_x: F8_24 = F8_24{},
-    subpixel_y: F8_24 = F8_24{},
-    velocity_x: F16_16 = F16_16{},
-    velocity_y: F16_16 = F16_16{},
-    acceleration_x: F16_16 = F16_16{},
-    acceleration_y: F16_16 = F16_16{},
+    subpixel: V2 = V2{},
+    velocity: V2 = V2{},
+    acceleration: V2 = V2{},
 };
 
 pub const Collider = struct {

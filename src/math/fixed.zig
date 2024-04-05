@@ -12,11 +12,12 @@ const std = @import("std");
 //  - [x] le()
 //  - [x] gt()
 //  - [x] ge()
+//  - [X] truncated division
 
 /// Fixed point number with custom bit sizes.
 /// Use exactly 32 bits for optimal performance.
 pub fn F(comptime integer_bits: comptime_int, comptime fractional_bits: comptime_int) type {
-    // This is the type of the backing integer for the fixed point type.
+    // This is the type of the backing integer of the fixed point type.
     const BackingInteger = std.meta.Int(.signed, integer_bits + fractional_bits);
 
     return packed struct(BackingInteger) {
@@ -24,13 +25,19 @@ pub fn F(comptime integer_bits: comptime_int, comptime fractional_bits: comptime
 
         // Used by vectors.
         pub const Template = F;
-        pub const shift = fractional_bits;
+        pub const integer_bit_count = integer_bits;
+        pub const fractional_bit_count = fractional_bits;
 
         // This is used for casting between fixed point representations.
         pub const Fixed = BackingInteger;
 
         // This is used for casting when performing certain operations.
         pub const LargeFixed = if ((integer_bits + fractional_bits) % 8 == 0) std.meta.Int(.signed, 2 * (integer_bits + fractional_bits)) else std.meta.Int(.signed, 1 + integer_bits + fractional_bits);
+
+        // Masks used for isolating the integer and fractional parts of a fixed point number.
+        pub const Mask = std.meta.Int(.unsigned, integer_bits + fractional_bits);
+        pub const integer_mask: Mask = ((1 << integer_bits) - 1) << fractional_bits;
+        pub const fractional_mask: Mask = ((1 << fractional_bits) - 1);
 
         // This is used for casting when performing certain operations.
         // It represents integer part of the fixed point value.
@@ -48,7 +55,7 @@ pub fn F(comptime integer_bits: comptime_int, comptime fractional_bits: comptime
         });
 
         pub usingnamespace if (integer_bits >= 2) struct {
-            const one = Self{ .bits = 1 << fractional_bits };
+            pub const one = Self{ .bits = 1 << fractional_bits };
         } else struct {};
 
         pub const max_int = switch (@as(Fixed, std.math.maxInt(Int))) {
@@ -82,7 +89,7 @@ pub fn F(comptime integer_bits: comptime_int, comptime fractional_bits: comptime
                 @compileError("Expected type " ++ @typeName(Fixed) ++ ", but got type " ++ @typeName(Denominator));
             };
 
-            return @bitCast(@divFloor(n, d));
+            return @bitCast(@divTrunc(n, d));
         }
 
         /// Returns the sum of two fixed point numbers.
@@ -117,14 +124,54 @@ pub fn F(comptime integer_bits: comptime_int, comptime fractional_bits: comptime
             const info = @typeInfo(Type);
 
             if (Type == Self) {
-                return @bitCast(@as(Fixed, @truncate(@divFloor(@as(LargeFixed, dividend.bits) << fractional_bits, @as(LargeFixed, divisor.bits)))));
+                return @bitCast(@as(Fixed, @truncate(@divTrunc(@as(LargeFixed, dividend.bits) << fractional_bits, @as(LargeFixed, divisor.bits)))));
             }
 
             if (info == .Int or info == .ComptimeInt) {
-                return @bitCast(@divFloor(dividend.bits, @as(Fixed, divisor)));
+                return @bitCast(@divTrunc(dividend.bits, @as(Fixed, divisor)));
             }
 
             @compileError("Expected type " ++ @typeName(Self) ++ " or " ++ @typeName(Fixed) ++ ", but got type " ++ @typeName(Type));
+        }
+
+        /// Returns the integer power of a fixed point number.
+        pub inline fn sqr(self: Self) Self {
+            return self.mul(self);
+        }
+
+        /// Returns the integer power of a fixed point number.
+        pub inline fn pow(self: Self, n: anytype) Self {
+            return self.rep(self, .mul, n);
+        }
+
+        /// Repeats an operation multiple times.
+        pub inline fn rep(self: Self, operand: anytype, comptime op: enum { add, sub, mul, div }, n: anytype) Self {
+            const Type = @TypeOf(n);
+            const info = @typeInfo(Type);
+
+            var result = self;
+
+            switch (info) {
+                inline .Int => for (0..n) |_| {
+                    result = switch (op) {
+                        inline .add => result.add(operand),
+                        inline .sub => result.sub(operand),
+                        inline .mul => result.mul(operand),
+                        inline .div => result.div(operand),
+                    };
+                },
+                inline .ComptimeInt => inline for (0..n) |_| {
+                    result = switch (op) {
+                        inline .add => result.add(operand),
+                        inline .sub => result.sub(operand),
+                        inline .mul => result.mul(operand),
+                        inline .div => result.div(operand),
+                    };
+                },
+                inline else => @compileError("Expected n to be an integer, but got " ++ @typeName(@TypeOf(n))),
+            }
+
+            return result;
         }
 
         /// Returns the absoulute value of a fixed point number.
@@ -184,23 +231,30 @@ pub fn F(comptime integer_bits: comptime_int, comptime fractional_bits: comptime
         }
 
         /// Returns the integer part of a fixed point number.
+        /// TODO: Improve performance.
         pub inline fn integerPart(self: Self) Self {
             if (integer_bits == 0) return Self{};
 
-            const Mask = std.meta.Int(.unsigned, integer_bits + fractional_bits);
-            const mask: Mask = ((1 << integer_bits) - 1) << fractional_bits;
+            const bits: Mask = @bitCast(self.bits);
+            const integer_part: Fixed = @bitCast(bits & integer_mask);
 
-            return @bitCast(@as(Mask, @bitCast(self.bits)) & mask);
+            const fractional = (@as(Mask, @bitCast(self)) & fractional_mask) != 0;
+            const negative = self.bits < 0;
+            const correction = @as(Fixed, @intFromBool(fractional and negative)) << fractional_bits;
+
+            return @bitCast(integer_part + correction);
         }
 
         /// Returns the fractional part of a fixed point number.
+        /// TODO: Make it not depend on integerPart().
         pub inline fn fractionalPart(self: Self) Self {
             if (fractional_bits == 0) return Self{};
+            return self.sub(self.integerPart());
 
-            const Mask = std.meta.Int(.unsigned, integer_bits + fractional_bits);
-            const mask: Mask = ((1 << fractional_bits) - 1);
-
-            return @bitCast(@as(Mask, @bitCast(self.bits)) & mask);
+            // const bits: Mask = @bitCast(self.bits);
+            // const fractional_part: Self = @bitCast(bits & fractional_mask);
+            // const negative: Int = @intFromBool(self.bits < 0);
+            // const sign = (@as(Fixed, negative) << 2) - 1;
         }
 
         /// Converts a fixed point number to a different fixed point representation.
@@ -366,8 +420,8 @@ test "arithmetic" {
         try eq(j - j, f.sub(f).toInt());
         try eq(j * j, f.mul(j).toInt());
         try eq(j * j, f.mul(f).toInt());
-        try eq(@divFloor(j, j), f.div(j).toInt());
-        try eq(@divFloor(j, j), f.div(f).toInt());
+        try eq(@divTrunc(j, j), f.div(j).toInt());
+        try eq(@divTrunc(j, j), f.div(f).toInt());
     }
 }
 
@@ -403,8 +457,8 @@ test "integer_part" {
         while (j < max_int) : (j += 1) {
             const k: FX.Int = @intCast(j);
 
+            const expected = FX.fromInt(@divTrunc(k, max_int));
             const computed = FX.init(k, max_int).integerPart();
-            const expected = FX.fromInt(@divFloor(k, max_int));
 
             try eq(expected, computed);
         }
@@ -412,6 +466,7 @@ test "integer_part" {
 }
 
 test "fractional_part" {
+    @setEvalBranchQuota(2000);
     const eq = std.testing.expectEqual;
     const max_bits = 64;
 
@@ -424,9 +479,9 @@ test "fractional_part" {
         while (j < max_int) : (j += 1) {
             const k: FX.Int = @intCast(j);
 
-            const computed = FX.init(k, max_int).fractionalPart();
-            const a = FX.init(k, max_int);
-            const expected = a.sub(a.integerPart());
+            const tmp = FX.init(k, max_int);
+            const expected = tmp.sub(tmp.integerPart());
+            const computed = tmp.fractionalPart();
 
             try eq(expected, computed);
         }
@@ -487,4 +542,24 @@ test "extreme_values" {
     }
 }
 
-test "parts" {}
+test "repetition" {
+    const one = F(16, 16).one;
+
+    try std.testing.expectEqual(one.mul(16), one.rep(2, .mul, 4));
+    try std.testing.expectEqual(one.bits << 10, one.rep(2, .mul, 10).bits);
+
+    var prng = std.rand.DefaultPrng.init(0);
+    const rand = prng.random();
+    for (0..100_000) |_| {
+        const n: u8 = rand.int(u8);
+
+        var expected = one;
+        for (0..n) |_| {
+            expected = expected.add(one);
+        }
+
+        const computed = one.rep(1, .add, n);
+
+        try std.testing.expectEqual(expected, computed);
+    }
+}
