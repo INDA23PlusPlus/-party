@@ -134,7 +134,7 @@ pub fn F(comptime integer_bits: comptime_int, comptime fractional_bits: comptime
             @compileError("Expected type " ++ @typeName(Self) ++ " or " ++ @typeName(Fixed) ++ ", but got type " ++ @typeName(Type));
         }
 
-        /// Returns the integer power of a fixed point number.
+        /// Returns the integer square of a fixed point number.
         pub inline fn sqr(self: Self) Self {
             return self.mul(self);
         }
