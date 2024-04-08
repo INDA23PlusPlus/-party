@@ -1,1 +1,1 @@
-pub const max_player_count = 1;
+pub const max_player_count = 8;

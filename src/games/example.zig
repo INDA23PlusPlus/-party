@@ -4,7 +4,6 @@ const rl = @import("raylib");
 const ecs = @import("../ecs/ecs.zig");
 const render = @import("../render.zig");
 const assets_manager = @import("../assets_manager.zig");
-const linear = @import("../ecs/linear.zig");
 const input = @import("../input.zig");
 
 const Self = @This();
@@ -26,7 +25,10 @@ fn initFn(ptr: *anyopaque, world: *ecs.World) void {
     _ = self;
 
     test_entity = world.spawnWith(.{
-        ecs.Position{},
+        ecs.Position{
+            .x = -100,
+            .y = -100,
+        },
         render.TextureComponent{
             .texture_hash = assets_manager.pathHash("assets/test.png"),
             .tint = rl.Color.white,
@@ -41,11 +43,6 @@ fn initFn(ptr: *anyopaque, world: *ecs.World) void {
 
 const win: bool = false;
 
-var point_1 = linear.V(16, 16).init(100, 500);
-var point_2 = linear.V(16, 16).init(500, 100);
-var up = false;
-var left = false;
-
 fn update(ptr: *anyopaque, world: *ecs.World) ?u32 {
     const self: *Self = @ptrCast(@alignCast(ptr));
 
@@ -56,23 +53,6 @@ fn update(ptr: *anyopaque, world: *ecs.World) ?u32 {
     pos.x += 1;
     pos.y += 1;
 
-    if (left) {
-        point_1.x = point_1.x.sub(comptime point_1.F.init(3, 2));
-    } else {
-        point_1.x = point_1.x.add(comptime point_1.F.init(3, 2));
-    }
-
-    if (up) {
-        point_2.y = point_2.y.sub(1);
-    } else {
-        point_2.y = point_2.y.add(1);
-    }
-
-    if (point_1.x.toInt() > 960) left = true;
-    if (point_1.x.toInt() <= 0) left = false;
-    if (point_2.y.toInt() > 540) up = true;
-    if (point_2.y.toInt() <= 0) up = false;
-
     var textColor: rl.Color = rl.Color.blue;
     if (input.A.down() and input.B.down()) {
         textColor = rl.Color.pink;
@@ -82,10 +62,6 @@ fn update(ptr: *anyopaque, world: *ecs.World) ?u32 {
         textColor = rl.Color.red;
     }
     rl.drawText("++party! :D", 8, 8, 96, textColor);
-
-    rl.drawLine(point_1.x.toInt(), point_1.y.toInt(), point_2.x.toInt(), point_2.y.toInt(), rl.Color.black);
-
-    // std.debug.print("\ndpad: (dx:{} dy:{})\n", .{ input.DPad.dx(), input.DPad.dy() });
 
     if (win) {
         self.frame_arena.deinit();

@@ -6,9 +6,11 @@ const input = @import("input.zig");
 const render = @import("render.zig");
 const ecs = @import("ecs/ecs.zig");
 const assets_manager = @import("assets_manager.zig");
-const linear = @import("ecs/linear.zig");
 const time = @import("time.zig");
 const networking = @import("networking.zig");
+const linear = @import("math/linear.zig");
+const fixed = @import("math/fixed.zig");
+const simulation = @import("simulation.zig");
 
 // import games and init them
 var example_game = @import("games/example.zig"){};
@@ -94,43 +96,48 @@ pub fn main() !void {
     var assets_manager_system = assets_manager.init(game_allocator);
     defer assets_manager_system.deinit();
 
-    // var game_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    // defer game_arena.deinit();
-    // const game_allocator = game_arena.allocator();
-
     var world_buffer: ecs.Buffer = undefined;
-    var world = ecs.World.init(&world_buffer);
+    var shared_world = ecs.SharedWorld{
+        .rw_lock = .{},
+        .world = ecs.World.init(&world_buffer),
+    };
 
     // TODO: game selection
     var game_i: usize = 0;
-    games[game_i].init(&world);
+    games[game_i].init(&shared_world.world);
 
     // Networking
     if (launch_options.start_as_role == .client) {
-        try networking.startClient();
+        try networking.startClient(&shared_world);
     } else {
-        try networking.startServer();
+        try networking.startServer(&shared_world);
     }
 
     var result: ?u32 = null;
 
     // Game loop
     while (window.running) {
-        rl.clearBackground(BC_COLOR);
-        // Updates game systems
-        time.update();
-        input.preUpdate();
-        window.update();
-        // const collisions = physics.update()
+        // Make sure the main thread controls the world!
+        shared_world.rw_lock.lock();
 
+        // Updates game systems
+        time.update(); // TODO: Move into world.
+        input.preUpdate(); // TODO: Make the input module thread-safe such that the networking threads may access it as well.
+
+        // All code that controls how objects behave over time in our game
+        // should be placed inside of the simulate procedure as the simulate procedure
+        // is called in other places. Not doing so will lead to inconsistencies.
+        try simulation.simulate(&shared_world.world);
+
+        window.update();
         rl.beginDrawing();
+        rl.clearBackground(BC_COLOR);
         // Render -----------------------------
 
-        result = games[game_i].update(&world); // TODO: pass in collisions
-        // current_game.update(res);
+        result = games[game_i].update(&shared_world.world);
 
         // Stop Render -----------------------
-        render.update(&world, &assets_manager_system);
+        render.update(&shared_world.world, &assets_manager_system);
         rl.endDrawing();
 
         input.postUpdate();
@@ -139,15 +146,15 @@ pub fn main() !void {
             // deinit current game
 
             game_i += 1;
-
             if (game_i >= games.len) {
                 break;
             }
 
             // init next game
-            world_buffer = undefined;
-            world = ecs.World.init(&world_buffer);
-            games[game_i].init(&world);
+            games[game_i].init(&shared_world.world);
         }
+
+        // Give the networking threads a chance to manipulate the world.
+        shared_world.rw_lock.unlock();
     }
 }
