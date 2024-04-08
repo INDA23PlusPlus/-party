@@ -16,7 +16,7 @@ const linear = @import("../math/linear.zig");
 //  - [ ] Implement deserialize()
 //  - [ ] Implement replace() (kill() then spawn(), faster)
 //  - [ ] Implement replaceWith() (kill() then spawnWith(), faster)
-//  - [ ] Use indices instead of pointers into the buffer, and move initialization of the buffer into World.
+//  - [ ] Use indices instead of pointers into the buffer, and move the initialization of the buffer into World.
 
 // COMPONENTS
 
