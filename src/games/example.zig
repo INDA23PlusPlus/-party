@@ -64,12 +64,14 @@ fn update(ptr: *anyopaque, world: *ecs.World) ?u32 {
     pos.x += 1;
     pos.y += 1;
 
-    for (input.controllers()) |controller| {
-        if (controller == null) continue;
-        const id: usize = controller.?.id();
+    for (0..input.MAX_CONTROLLERS) |id| {
         var color = playerColors[id];
-        if (controller.?.primary().down()) {
-            color = rl.colorBrightness(color, 0.5);
+        if (input.controller(id) == null) {
+            color = rl.colorAlpha(rl.colorBrightness(color, -0.5), 0.5);
+        } else {
+            if (input.controller(id).?.primary().down()) {
+                color = rl.colorBrightness(color, 0.5);
+            }
         }
         rl.drawText(rl.textFormat("Player %d", .{id}), 8, @intCast(128 + 32 * id), 32, color);
     }
