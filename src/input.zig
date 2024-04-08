@@ -1,5 +1,9 @@
 // God save me
 
+// TODO: Change the constants DPAD, A and B into struct literals and use this file as a struct.
+// TODO: Rename to player_input. Create new file called input that is a struct containing an array sized max_player_count of player_input(s).
+// TODO: After thinking aobut it. Perhaps this could be turned into a sort of queue. More thinking is needed.
+
 const std = @import("std");
 const rl = @import("raylib");
 const F48_16 = @import("math/fixed.zig").F(48, 16);

@@ -8,6 +8,7 @@ const time = @import("time.zig");
 const networking = @import("networking.zig");
 const linear = @import("math/linear.zig");
 const fixed = @import("math/fixed.zig");
+const simulation = @import("simulation.zig");
 
 // Settings
 const BC_COLOR = rl.Color.gray;
@@ -68,23 +69,27 @@ pub fn main() !void {
     const frame_allocator = frame_arena.allocator();
 
     var world_buffer: ecs.Buffer = undefined;
-    var world = ecs.World.init(&world_buffer);
+    var shared_world = ecs.SharedWorld {
+        .rw_lock = .{},
+        .world = ecs.World.init(&world_buffer),
+    };
 
-    var render_system = render.init(game_allocator, &world, BC_COLOR);
+    var render_system = render.init(game_allocator, &shared_world.world, BC_COLOR);
     defer render_system.deinit();
 
+    // TODO: this has probably been removed?
     // var current_game = game.init(game_allocator);
     // defer current_game.deinit();
 
     // Networking
     if (launch_options.start_as_role == .client) {
-        try networking.startClient();
+        try networking.startClient(&shared_world);
     } else {
-        try networking.startServer();
+        try networking.startServer(&shared_world);
     }
 
     // example
-    const thing = try world.spawnWith(.{
+    _ = try shared_world.world.spawnWith(.{
         ecs.Position{},
         render.TextureComponent{
             .texture_hash = try render_system.load_texture("assets/test.png"),
@@ -96,24 +101,27 @@ pub fn main() !void {
 
     // Game loop
     while (window.running) {
+        // Make sure the main thread controls the world!
+        shared_world.rw_lock.lock();
+
         _ = frame_allocator;
         defer _ = frame_arena.reset(std.heap.ArenaAllocator.ResetMode.retain_capacity);
 
         // Updates game systems
-        time.update();
-        input.preUpdate();
-        window.update();
-        // const res = physics.update()
+        time.update(); // TODO: Move into world.
+        input.preUpdate(); // TODO: Make the input module thread-safe such that the networking threads may access it as well.
 
+        // All code that controls how objects behave over time in our game
+        // should be placed inside of the simulate procedure as the simulate procedure
+        // is called in other places. Not doing so will lead to inconsistencies.
+        try simulation.simulate(&shared_world.world);
+
+        window.update();
         rl.beginDrawing();
         // Render -----------------------------
 
         // current_game.update(res);
-
-        const pos = try world.inspect(thing, ecs.Position);
-        pos.x += 1;
-        pos.y += 1;
-
+ 
         rl.drawText("++party! :D", 8, 8, 96, rl.Color.blue);
 
         // Stop Render -----------------------
@@ -121,5 +129,8 @@ pub fn main() !void {
         rl.endDrawing();
 
         input.postUpdate();
+
+        // Give the networking threads a chance to manipulate the world.
+        shared_world.rw_lock.unlock();
     }
 }
