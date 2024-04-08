@@ -43,6 +43,17 @@ fn initFn(ptr: *anyopaque, world: *ecs.World) void {
 
 const win: bool = false;
 
+const playerColors: [input.MAX_CONTROLLERS]rl.Color = .{
+    rl.Color.red,
+    rl.Color.green,
+    rl.Color.blue,
+    rl.Color.yellow,
+    rl.Color.orange,
+    rl.Color.purple,
+    rl.Color.pink,
+    rl.Color.lime,
+};
+
 fn update(ptr: *anyopaque, world: *ecs.World) ?u32 {
     const self: *Self = @ptrCast(@alignCast(ptr));
 
@@ -53,15 +64,17 @@ fn update(ptr: *anyopaque, world: *ecs.World) ?u32 {
     pos.x += 1;
     pos.y += 1;
 
-    var textColor: rl.Color = rl.Color.blue;
-    if (input.A.down() and input.B.down()) {
-        textColor = rl.Color.pink;
-    } else if (input.A.down()) {
-        textColor = rl.Color.green;
-    } else if (input.B.down()) {
-        textColor = rl.Color.red;
+    for (input.controllers()) |controller| {
+        if (controller == null) continue;
+        const id: usize = controller.?.id();
+        var color = playerColors[id];
+        if (controller.?.primary().down()) {
+            color = rl.colorBrightness(color, 0.5);
+        }
+        rl.drawText(rl.textFormat("Player %d", .{id}), 8, @intCast(128 + 32 * id), 32, color);
     }
-    rl.drawText("++party! :D", 8, 8, 96, textColor);
+
+    rl.drawText("++party! :D", 8, 8, 96, rl.Color.blue);
 
     if (win) {
         self.frame_arena.deinit();

@@ -122,7 +122,7 @@ pub fn main() !void {
 
         // Updates game systems
         time.update(); // TODO: Move into world.
-        input.preUpdate(); // TODO: Make the input module thread-safe such that the networking threads may access it as well.
+        input.poll(); // TODO: Make the input module thread-safe such that the networking threads may access it as well.
 
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure
@@ -140,7 +140,7 @@ pub fn main() !void {
         render.update(&shared_world.world, &assets_manager_system);
         rl.endDrawing();
 
-        input.postUpdate();
+        input.post();
 
         if (result) |_| {
             // deinit current game

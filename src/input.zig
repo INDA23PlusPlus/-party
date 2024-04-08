@@ -1,127 +1,189 @@
-// God save me
-
-// TODO: Change the constants DPAD, A and B into struct literals and use this file as a struct.
-// TODO: Rename to player_input. Create new file called input that is a struct containing an array sized max_player_count of player_input(s).
-// TODO: After thinking aobut it. Perhaps this could be turned into a sort of queue. More thinking is needed.
-
 const std = @import("std");
 const rl = @import("raylib");
 const time = @import("time.zig");
 
-// Directional input.
-pub const DPad = struct {
-    var left: bool = false;
-    var right: bool = false;
-    var up: bool = false;
-    var down: bool = false;
+pub const MAX_CONTROLLERS = 8;
+var m_controllers: [MAX_CONTROLLERS]?Controller = .{ null, null, null, null, null, null, null, null }; // there has to be a better way to do this
 
-    // Digital horizontal delta; either -1 (Left) or 1 (Right).
-    pub fn dx() i32 {
-        return @as(i32, @intFromBool(right)) - @as(i32, @intFromBool(left));
-    }
-
-    // Digital vertical delta; either -1 (Down) or 1 (Up).
-    pub fn dy() i32 {
-        return @as(i32, @intFromBool(up)) - @as(i32, @intFromBool(down));
-    }
-
-    fn update() void {
-        left = rl.isKeyDown(rl.KeyboardKey.key_left) or rl.isKeyDown(rl.KeyboardKey.key_a) or rl.isGamepadButtonDown(0, rl.GamepadButton.gamepad_button_left_face_left);
-        right = rl.isKeyDown(rl.KeyboardKey.key_right) or rl.isKeyDown(rl.KeyboardKey.key_d) or rl.isGamepadButtonDown(0, rl.GamepadButton.gamepad_button_left_face_right);
-        up = rl.isKeyDown(rl.KeyboardKey.key_up) or rl.isKeyDown(rl.KeyboardKey.key_w) or rl.isGamepadButtonDown(0, rl.GamepadButton.gamepad_button_left_face_up);
-        down = rl.isKeyDown(rl.KeyboardKey.key_down) or rl.isKeyDown(rl.KeyboardKey.key_s) or rl.isGamepadButtonDown(0, rl.GamepadButton.gamepad_button_left_face_down);
-    }
+const Controls = struct {
+    primary: *const fn () bool,
+    secondary: *const fn () bool,
+    up: *const fn () bool,
+    down: *const fn () bool,
+    left: *const fn () bool,
+    right: *const fn () bool,
 };
 
-// Primary button input.
-pub const A = struct {
-    var m_isDown: bool = false;
-    var m_wasDown: bool = false;
-    var m_pressTime: u64 = 0;
+pub fn controller(id: usize) ?Controller {
+    return m_controllers[id];
+}
 
-    // How long the button has been down, in frames.
-    pub fn duration() u64 {
-        if (m_isDown) {
-            return time.get().sub(m_pressTime);
+pub fn controllers() [MAX_CONTROLLERS]?Controller {
+    return m_controllers;
+}
+
+pub fn poll() void {
+    for (0..MAX_CONTROLLERS) |id| {
+        if (rl.isGamepadAvailable(@intCast(id)) and m_controllers[id] == null) {
+            m_controllers[id] = Controller.init(id);
+            std.debug.print("\ncontroller {} connected\n", .{id});
+        }
+
+        if (!rl.isGamepadAvailable(@intCast(id)) and m_controllers[id] != null) {
+            m_controllers[id] = null;
+            std.debug.print("\ncontroller {} disconnected\n", .{id});
+        }
+
+        if (m_controllers[id] != null) {
+            m_controllers[id].?.poll();
+        }
+    }
+}
+
+pub fn post() void {
+    for (0..MAX_CONTROLLERS) |id| {
+        if (m_controllers[id] != null) {
+            m_controllers[id].?.post();
+        }
+    }
+}
+
+pub const Button = struct {
+    const Self = @This();
+
+    m_isDown: bool,
+    m_wasDown: bool,
+    m_pressTime: u64,
+
+    fn init() Button {
+        return .{
+            .m_isDown = false,
+            .m_wasDown = false,
+            .m_pressTime = 0,
+        };
+    }
+
+    pub fn down(self: *const Self) bool {
+        return self.m_isDown;
+    }
+
+    pub fn pressed(self: *const Self) bool {
+        return self.m_isDown and !self.m_wasDown;
+    }
+
+    pub fn released(self: *const Self) bool {
+        return !self.m_isDown and self.m_wasDown;
+    }
+
+    pub fn duration(self: *const Self) u64 {
+        if (self.down()) {
+            return time.get() - self.m_pressTime;
         }
         return 0;
     }
 
-    // Is the button down right now?
-    pub fn down() bool {
-        return m_isDown;
-    }
-
-    // Was the button pressed this frame?
-    pub fn pressed() bool {
-        return m_isDown and !m_wasDown;
-    }
-
-    // Was the button released this frame?
-    pub fn released() bool {
-        return !m_isDown and m_wasDown;
-    }
-
-    fn preUpdate() void {
-        m_isDown = rl.isKeyDown(rl.KeyboardKey.key_x) or rl.isGamepadButtonDown(0, rl.GamepadButton.gamepad_button_right_face_down);
-        if (pressed()) {
-            m_pressTime = time.get();
+    fn poll(self: *Self, isDown: bool) void {
+        self.m_isDown = isDown;
+        if (self.pressed()) {
+            self.m_pressTime = time.get();
         }
     }
 
-    fn postUpdate() void {
-        m_wasDown = m_isDown;
+    fn post(self: *Self) void {
+        self.m_wasDown = self.m_isDown;
     }
 };
 
-// Secondary button input.
-pub const B = struct {
-    var m_isDown: bool = false;
-    var m_wasDown: bool = false;
-    var m_pressTime: u64 = 0;
+pub const Controller = struct {
+    const Self = @This();
 
-    // How long the button has been down, in frames.
-    pub fn duration() u64 {
-        if (m_isDown) {
-            return time.get().sub(m_pressTime);
-        }
-        return 0;
+    m_id: usize,
+    m_primary: Button,
+    m_secondary: Button,
+    m_up: Button,
+    m_down: Button,
+    m_left: Button,
+    m_right: Button,
+
+    fn init(m_id: usize) Controller {
+        return .{
+            .m_id = m_id,
+            .m_primary = Button.init(),
+            .m_secondary = Button.init(),
+            .m_up = Button.init(),
+            .m_down = Button.init(),
+            .m_left = Button.init(),
+            .m_right = Button.init(),
+        };
     }
 
-    // Is the button down right now?
-    pub fn down() bool {
-        return m_isDown;
+    // Controller ID.
+    pub fn id(self: *const Self) usize {
+        return self.m_id;
     }
 
-    // Was the button pressed this frame?
-    pub fn pressed() bool {
-        return m_isDown and !m_wasDown;
+    // Primary button input.
+    pub fn primary(self: *const Self) Button {
+        return self.m_primary;
     }
 
-    // Was the button released this frame?
-    pub fn released() bool {
-        return !m_isDown and m_wasDown;
+    // Secondary button input.
+    pub fn secondary(self: *const Self) Button {
+        return self.m_secondary;
     }
 
-    fn preUpdate() void {
-        m_isDown = rl.isKeyDown(rl.KeyboardKey.key_z) or rl.isGamepadButtonDown(0, rl.GamepadButton.gamepad_button_right_face_right);
-        if (pressed()) {
-            m_pressTime = time.get();
-        }
+    // Directional up input.
+    pub fn up(self: *const Self) Button {
+        return self.m_up;
     }
 
-    fn postUpdate() void {
-        m_wasDown = m_isDown;
+    // Directional down input.
+    pub fn down(self: *const Self) Button {
+        return self.m_down;
+    }
+
+    // Directional left input.
+    pub fn left(self: *const Self) Button {
+        return self.m_left;
+    }
+
+    // Directional right input.
+    pub fn right(self: *const Self) Button {
+        return self.m_right;
+    }
+
+    // Horizontal direction delta; digital. Left = -1, Neutral = 0, Right = 1.
+    pub fn horizontal(self: *const Self) i32 {
+        return @as(i32, @intFromBool(self.right().down())) - @as(i32, @intFromBool(self.left().down()));
+    }
+
+    // Vertical direction delta; digital. Down = -1, Neutral = 0, Up = 1.
+    pub fn vertical(self: *const Self) i32 {
+        return @as(i32, @intFromBool(self.up().down())) - @as(i32, @intFromBool(self.down().down()));
+    }
+
+    fn poll(self: *Self) void {
+        // No keyboard input for now
+        // self.m_primary.poll(rl.isKeyDown(self.m_keymap.primary) or rl.isGamepadButtonDown(@intCast(self.m_id), rl.GamepadButton.gamepad_button_right_face_down));
+        // self.m_secondary.poll(rl.isKeyDown(rl.KeyboardKey.key_z) or rl.isGamepadButtonDown(@intCast(self.m_id), rl.GamepadButton.gamepad_button_right_face_right));
+        // self.m_down.poll(rl.isKeyDown(rl.KeyboardKey.key_down) or rl.isKeyDown(rl.KeyboardKey.key_s) or rl.isGamepadButtonDown(@intCast(self.m_id), rl.GamepadButton.gamepad_button_left_face_down));
+        // self.m_left.poll(rl.isKeyDown(rl.KeyboardKey.key_left) or rl.isKeyDown(rl.KeyboardKey.key_a) or rl.isGamepadButtonDown(@intCast(self.m_id), rl.GamepadButton.gamepad_button_left_face_left));
+        // self.m_right.poll(rl.isKeyDown(rl.KeyboardKey.key_right) or rl.isKeyDown(rl.KeyboardKey.key_d) or rl.isGamepadButtonDown(@intCast(self.m_id), rl.GamepadButton.gamepad_button_left_face_right));
+        // self.m_up.poll(rl.isKeyDown(rl.KeyboardKey.key_up) or rl.isKeyDown(rl.KeyboardKey.key_w) or rl.isGamepadButtonDown(@intCast(self.m_id), rl.GamepadButton.gamepad_button_left_face_up));
+        self.m_primary.poll(rl.isGamepadButtonDown(@intCast(self.m_id), rl.GamepadButton.gamepad_button_right_face_down));
+        self.m_secondary.poll(rl.isGamepadButtonDown(@intCast(self.m_id), rl.GamepadButton.gamepad_button_right_face_right));
+        self.m_down.poll(rl.isGamepadButtonDown(@intCast(self.m_id), rl.GamepadButton.gamepad_button_left_face_down));
+        self.m_left.poll(rl.isGamepadButtonDown(@intCast(self.m_id), rl.GamepadButton.gamepad_button_left_face_left));
+        self.m_right.poll(rl.isGamepadButtonDown(@intCast(self.m_id), rl.GamepadButton.gamepad_button_left_face_right));
+        self.m_up.poll(rl.isGamepadButtonDown(@intCast(self.m_id), rl.GamepadButton.gamepad_button_left_face_up));
+    }
+
+    fn post(self: *Self) void {
+        self.m_primary.post();
+        self.m_secondary.post();
+        self.m_down.post();
+        self.m_left.post();
+        self.m_right.post();
+        self.m_up.post();
     }
 };
-
-pub fn preUpdate() void {
-    A.preUpdate();
-    B.preUpdate();
-    DPad.update();
-}
-
-pub fn postUpdate() void {
-    A.postUpdate();
-    B.postUpdate();
-}
