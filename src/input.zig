@@ -5,14 +5,15 @@ const time = @import("time.zig");
 pub const MAX_CONTROLLERS = 8;
 var m_controllers: [MAX_CONTROLLERS]?Controller = .{ null, null, null, null, null, null, null, null }; // there has to be a better way to do this
 
-const Controls = struct {
-    primary: *const fn () bool,
-    secondary: *const fn () bool,
-    up: *const fn () bool,
-    down: *const fn () bool,
-    left: *const fn () bool,
-    right: *const fn () bool,
-};
+// Maybe?
+// const Controls = struct {
+//     primary: *const fn () bool,
+//     secondary: *const fn () bool,
+//     up: *const fn () bool,
+//     down: *const fn () bool,
+//     left: *const fn () bool,
+//     right: *const fn () bool,
+// };
 
 pub fn controller(id: usize) ?Controller {
     return m_controllers[id];
