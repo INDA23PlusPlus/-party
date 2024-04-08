@@ -16,6 +16,7 @@ const linear = @import("../math/linear.zig");
 //  - [ ] Implement deserialize()
 //  - [ ] Implement replace() (kill() then spawn(), faster)
 //  - [ ] Implement replaceWith() (kill() then spawnWith(), faster)
+//  - [ ] Use indices instead of pointers into the buffer, and move initialization of the buffer into World.
 
 // COMPONENTS
 
@@ -247,6 +248,7 @@ pub const World = struct {
     }
 
     /// TODO
+    /// Adds components to an entity. Components should be passed as a struct.
     pub fn promoteWith(self: *Self, entity: Entity, Components: anytype) void {
         _ = self;
         _ = entity;
@@ -254,6 +256,7 @@ pub const World = struct {
     }
 
     /// TODO
+    /// Removes all components and then readds default initialized components to an entity.
     pub fn respawn(self: *Self, entity: Entity, comptime Components: []const type) !void {
         _ = self;
         _ = entity;
@@ -261,6 +264,7 @@ pub const World = struct {
     }
 
     /// TODO
+    /// Removes all components and then readds components passed as a struct to an entity.
     pub fn respawnWith(self: *Self, entity: Entity, Components: anytype) !void {
         _ = self;
         _ = entity;
@@ -268,11 +272,13 @@ pub const World = struct {
     }
 
     /// TODO
+    /// Creates a new entity without any components.
     pub fn spawnEmpty(self: *Self) !Entity {
         _ = self;
     }
 
     /// TODO
+    /// Removes all components from an entity.
     pub fn respawnEmpty(self: *Self, entity: Entity) !void {
         _ = self;
         _ = entity;

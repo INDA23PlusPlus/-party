@@ -1,9 +1,0 @@
-Bugfixes:
-  * Retrieving the integer part of a fixed point number now works correctly for negative values.
-  * Retrieving the fractional part of a fixed point number now works correctly for negative values.
-  * Fixed point numbers and vectors now correctly use truncated division instead of floored division.
-
-Features:
-  * Integer parts can now be retrieved from fixed point vectors.
-  * Fractional parts can now be retrieved from fixed point vectors.
-  * Added sqr(), pow(), and rep() methods to fixed point numbers.
