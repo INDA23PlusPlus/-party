@@ -5,7 +5,7 @@ const win = @import("window.zig");
 const input = @import("input.zig");
 const render = @import("render.zig");
 const ecs = @import("ecs/ecs.zig");
-const assets_manager = @import("assets_manager.zig");
+const AssetManager = @import("AssetManager.zig");
 const time = @import("time.zig");
 const networking = @import("networking.zig");
 const linear = @import("math/linear.zig");
@@ -68,15 +68,10 @@ pub fn main() !void {
     const game_allocator = game_arena.allocator();
     defer game_arena.deinit();
 
-    var assets_manager_system = assets_manager.init(game_allocator);
-    defer assets_manager_system.deinit();
+    var assets = AssetManager.init(game_allocator);
+    defer assets.deinit();
 
-    var shared_world = simulation.SharedSimulation{
-        .rw_lock = .{},
-        .sim = .{
-            .world = ecs.world.World{},
-        }
-    };
+    var shared_world = simulation.SharedSimulation{ .rw_lock = .{}, .sim = .{} };
 
     // Networking
     if (launch_options.start_as_role == .client) {
@@ -103,7 +98,7 @@ pub fn main() !void {
         window.update();
         rl.beginDrawing();
         rl.clearBackground(BC_COLOR);
-        render.update(&shared_world.sim.world, &assets_manager_system);
+        render.update(&shared_world.sim.world, &assets);
 
         // Stop Render -----------------------
         rl.endDrawing();

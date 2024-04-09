@@ -12,7 +12,7 @@ pub const Metadata = struct {
 };
 
 pub const Simulation = struct {
-    world: ecs.world.World,
+    world: ecs.world.World = .{},
     meta: Metadata = .{},
 };
 
@@ -40,8 +40,7 @@ pub fn simulate(minigames_list: []const minigame.Minigame, sim: *Simulation) !vo
     var pos_query = sim.world.query(&.{ecs.component.Pos}, &.{});
     while (pos_query.next()) |_| {
         const pos = try pos_query.get(ecs.component.Pos);
-        pos.x += 1;
-        pos.y += 1;
+        pos.vec += @splat(1);
     }
 
     // Handles transitions between minigames.
@@ -54,5 +53,4 @@ pub fn simulate(minigames_list: []const minigame.Minigame, sim: *Simulation) !vo
         // TODO: Clear the world?
         try minigames_list[sim.meta.minigame_id].init(sim);
     }
-
 }

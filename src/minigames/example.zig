@@ -4,7 +4,7 @@ const rl = @import("raylib");
 const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
 const render = @import("../render.zig");
-const assets_manager = @import("../assets_manager.zig");
+const AssetManager = @import("../AssetManager.zig");
 const input = @import("../input.zig");
 
 //var frame_arena: std.heap.ArenaAllocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -12,12 +12,9 @@ const input = @import("../input.zig");
 
 pub fn init(sim: *simulation.Simulation) !void {
     _ = try sim.world.spawnWith(.{
-        ecs.component.Pos{
-            .x = -100,
-            .y = -100,
-        },
-        ecs.component.Tex {
-            .texture_hash = assets_manager.pathHash("assets/test.png"),
+        ecs.component.Pos{ .vec = @splat(-100) },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/test.png"),
         },
     });
 }
@@ -41,10 +38,9 @@ pub fn update(sim: *simulation.Simulation) !void {
     var pos_query = sim.world.query(&.{ecs.component.Pos}, &.{});
     while (pos_query.next()) |_| {
         const pos = try pos_query.get(ecs.component.Pos);
-        pos.x += 1;
-        pos.y += 1;
+        pos.vec += @splat(1);
     }
- 
+
     for (0..input.MAX_CONTROLLERS) |id| {
         var color = playerColors[id];
         // TODO: Doing rendering code in the update() is not well advised. Preferrably the renderer should be able

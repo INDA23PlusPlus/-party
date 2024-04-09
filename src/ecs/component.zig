@@ -16,8 +16,7 @@ pub const components: []const type = &.{
 
 /// Entities with this component are positionable.
 pub const Pos = struct {
-    x: i32 = 0,
-    y: i32 = 0,
+    vec: @Vector(2, i32) = .{0, 0},
 };
 
 /// Entities with this component are movable.
