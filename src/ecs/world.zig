@@ -167,7 +167,6 @@ pub const World = struct {
     entities: Entities = Entities.initEmpty(),
     generations: [N]Generation = [_]Generation{0} ** N,
     signatures: [N]Signature = [_]Signature{Signature.initEmpty()} ** N,
-
     buffer: [buffer_size]u8 align(buffer_alignment) = undefined,
 
     /// Removes all entities from the world.
