@@ -1,9 +1,9 @@
 comptime {
-    _ = @import("ecs/ecs.zig");
+    _ = @import("ecs/test.zig");
     _ = @import("math/fixed.zig");
     _ = @import("math/linear.zig");
 }
 
 test {
-    @import("std").testing.refAllDecls(@This());
+    @import("std").testing.refAllDeclsRecursive(@This());
 }

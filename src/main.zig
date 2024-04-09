@@ -4,7 +4,7 @@ const rl = @import("raylib");
 const win = @import("window.zig");
 const input = @import("input.zig");
 const render = @import("render.zig");
-const ecs = @import("ecs/world.zig");
+const ecs = @import("ecs/ecs.zig");
 const assets_manager = @import("assets_manager.zig");
 const time = @import("time.zig");
 const networking = @import("networking.zig");
@@ -28,16 +28,16 @@ const BC_COLOR = rl.Color.gray;
 pub const Game = struct {
     ptr: *anyopaque,
 
-    initFn: *const fn (ptr: *anyopaque, world: *ecs.World) void,
+    initFn: *const fn (ptr: *anyopaque, world: *ecs.world.World) void,
     // TODO: pass in collisions
     /// returns score if game is over
-    updateFn: *const fn (ptr: *anyopaque, world: *ecs.World) ?u32,
+    updateFn: *const fn (ptr: *anyopaque, world: *ecs.world.World) ?u32,
 
-    pub fn init(self: *Game, world: *ecs.World) void {
+    pub fn init(self: *Game, world: *ecs.world.World) void {
         return self.initFn(self.ptr, world);
     }
 
-    pub fn update(self: *Game, world: *ecs.World) ?u32 {
+    pub fn update(self: *Game, world: *ecs.world.World) ?u32 {
         return self.updateFn(self.ptr, world);
     }
 };
@@ -96,11 +96,7 @@ pub fn main() !void {
     var assets_manager_system = assets_manager.init(game_allocator);
     defer assets_manager_system.deinit();
 
-    // var world_buffer: ecs.Buffer = undefined;
-    var shared_world = ecs.SharedWorld{
-        .rw_lock = .{},
-        .world = ecs.World{},
-    };
+    var shared_world = ecs.world.SharedWorld{};
 
     // TODO: game selection
     var game_i: usize = 0;

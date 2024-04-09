@@ -1,6 +1,8 @@
 const std = @import("std");
 const fixed = @import("../math/fixed.zig");
 const linear = @import("../math/linear.zig");
+const cps = @import("component.zig");
+const ent = @import("entity.zig");
 
 // TODO:
 //  - [X] Implement isAlive()
@@ -16,94 +18,22 @@ const linear = @import("../math/linear.zig");
 //  - [ ] Implement deserialize()
 //  - [ ] Implement replace() (kill() then spawn(), faster)
 //  - [ ] Implement replaceWith() (kill() then spawnWith(), faster)
-//  - [ ] Use indices instead of pointers into the buffer, and move the initialization of the buffer into World.
-
-// COMPONENTS
-
-pub const Position = struct {
-    x: i32 = 0,
-    y: i32 = 0,
-};
-
-const F32 = fixed.F(16, 16);
-const V2 = linear.V(2, F32);
-
-pub const Mover = struct {
-    subpixel: V2 = V2{},
-    velocity: V2 = V2{},
-    acceleration: V2 = V2{},
-};
-
-pub const Collider = struct {
-    w: i32 = 0,
-    h: i32 = 0,
-    collided: ?[]Entity = null,
-};
-
-// pub const Texture = struct {
-//     file: []const u8 = "",
-//     texture: ?*anyopaque = null,
-//     src_x: i32 = 0,
-//     src_y: i32 = 0,
-//     src_w: i32 = 0,
-//     src_h: i32 = 0,
-//     dst_x: i32 = 0, // Useful for positioning a texture more accurately
-//     dst_y: i32 = 0, // Useful for positioning a texture more accurately
-//     dst_w: i32 = 0,
-//     dst_h: i32 = 0,
-// };
-
-pub const Text = struct {
-    string: []const u8 = "",
-};
+//  - [X] Use indices instead of pointers into the buffer, and move the initialization of the buffer into World.
 
 // WORLD
 
 /// Determines the maximum number of entities a World supports.
-pub const N: usize = 512;
+pub const N: usize = 128;
+pub const Cs = cps.components;
 
-const TextureComponent = @import("../render.zig").TextureComponent;
-
-/// Determines which components a World supports.
-pub const Cs: []const type = &.{
-    Position,
-    Mover,
-    Collider,
-    TextureComponent,
-    Text,
-};
-
-pub const Identifier = u32;
-pub const Generation = u32;
+pub const Entities = std.bit_set.ArrayBitSet(u64, N);
 pub const Signature = std.bit_set.IntegerBitSet(Cs.len);
 
-pub const Entity = packed struct {
-    const Self = @This();
-    const Bits = @typeInfo(Self).Struct.backing_integer.?;
+const Entity = ent.Entity;
+const Identifier = ent.Identifier;
+const Generation = ent.Generation;
 
-    identifier: Identifier = 0,
-    generation: Generation = 0,
-
-    pub inline fn toBits(self: Self) Bits {
-        return @bitCast(self);
-    }
-
-    pub inline fn fromBits(bits: Bits) Self {
-        return @bitCast(bits);
-    }
-
-    pub inline fn eq(a: Self, b: Self) bool {
-        return a.toBits() == b.toBits();
-    }
-
-    pub inline fn ne(a: Self, b: Self) bool {
-        return a.toBits() != b.toBits();
-    }
-};
-
-const Entities = std.bit_set.ArrayBitSet(u64, N);
-
-// TODO: make fit all data exactly.
+// TODO: fit all data exactly.
 const buffer_size = blk: {
     var size = 0;
     for (Cs) |C| {
@@ -326,8 +256,8 @@ pub const World = struct {
 /// OBS: This does not automatically make procedures inside
 /// of World thread-safe. The rw_lock must be properly used first.
 pub const SharedWorld = struct {
-    rw_lock: std.Thread.RwLock,
-    world: World,
+    rw_lock: std.Thread.RwLock = std.Thread.RwLock{},
+    world: World = World{},
 };
 
 // QUERY
@@ -419,75 +349,5 @@ fn componentSignature(comptime Components: []const type) Signature {
             mask.setUnion(componentTag(c));
         }
         return mask;
-    }
-}
-
-// TESTS
-
-test "spawn_promote_demote_kill" {
-    var world = World{};
-    const entity = try world.spawn(&.{Position});
-
-    try std.testing.expect(entity.identifier == 0 and entity.generation == 0);
-
-    world.promote(entity, &.{Mover});
-    world.demote(entity, &.{Mover});
-    world.kill(entity);
-}
-
-test "spawn_limit" {
-    var world = World{};
-
-    for (0..N) |_| {
-        _ = try world.spawn(&.{});
-    }
-
-    try std.testing.expect(world.spawn(&.{}) == WorldError.SpawnLimitExceeded);
-}
-
-test "reset" {
-    var world = World{};
-
-    for (0..N) |_| {
-        _ = try world.spawn(&.{ Position, Mover });
-    }
-
-    var query1 = world.query(&.{Position}, &.{});
-    while (query1.next()) |_| {
-        const pos = try query1.get(Position);
-        if (!(pos.x == 0 and pos.y == 0)) {
-            unreachable;
-        }
-    }
-
-    // try accelerate(&world);
-    // try move(&world);
-
-    world.reset();
-
-    for (0..N / 2) |_| {
-        _ = try world.spawn(&.{ Position, Mover });
-    }
-
-    var query2 = world.query(&.{Position}, &.{});
-    while (query2.next()) |_| {
-        const pos = try query2.get(Position);
-        if (!(pos.x == 0 and pos.y == 0)) {
-            unreachable;
-        }
-    }
-
-    // try accelerate(&world);
-    // try move(&world);
-}
-
-test "build entities" {
-    var world = World{};
-
-    for (0..N) |i| {
-        const j: i32 = @intCast(i);
-        const col = Collider{};
-        const pos = Position{ .x = j, .y = j };
-        _ = try world.spawnWith(.{ pos, col });
     }
 }

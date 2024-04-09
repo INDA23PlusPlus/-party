@@ -1,7 +1,8 @@
 const std = @import("std");
 const root = @import("root");
 const rl = @import("raylib");
-const ecs = @import("../ecs/world.zig");
+const ecs = @import("../ecs/ecs.zig");
+const F32 = @import("../math/fixed.zig").F32;
 const render = @import("../render.zig");
 const assets_manager = @import("../assets_manager.zig");
 const input = @import("../input.zig");
@@ -18,22 +19,19 @@ pub fn Game(self: *Self) root.Game {
 
 var frame_arena: std.heap.ArenaAllocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 var frame_allocator: *std.mem.Allocator = &frame_arena.allocator();
-var test_entity: ecs.Entity = undefined;
+var test_entity: ecs.entity.Entity = undefined;
 
-fn initFn(ptr: *anyopaque, world: *ecs.World) void {
+fn initFn(ptr: *anyopaque, world: *ecs.world.World) void {
     const self: *Self = @ptrCast(@alignCast(ptr));
     _ = self;
 
     test_entity = world.spawnWith(.{
-        ecs.Position{
+        ecs.component.Pos{
             .x = -100,
             .y = -100,
         },
-        render.TextureComponent{
+        ecs.component.Tex{
             .texture_hash = assets_manager.pathHash("assets/test.png"),
-            .tint = rl.Color.white,
-            .scale = 1.0,
-            .rotation = 0.0,
         },
     }) catch @panic("failed to spawn test entity");
 
@@ -54,13 +52,13 @@ const playerColors: [input.MAX_CONTROLLERS]rl.Color = .{
     rl.Color.lime,
 };
 
-fn update(ptr: *anyopaque, world: *ecs.World) ?u32 {
+fn update(ptr: *anyopaque, world: *ecs.world.World) ?u32 {
     const self: *Self = @ptrCast(@alignCast(ptr));
 
     // example of using a frame allocator
     defer _ = frame_arena.reset(std.heap.ArenaAllocator.ResetMode.retain_capacity);
 
-    const pos = world.inspect(test_entity, ecs.Position) catch return 0;
+    const pos = world.inspect(test_entity, ecs.component.Pos) catch return 0;
     pos.x += 1;
     pos.y += 1;
 
