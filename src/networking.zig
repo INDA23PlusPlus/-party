@@ -7,7 +7,7 @@ const std = @import("std");
 const constants = @import("constants.zig");
 const xev = @import("xev");
 
-const ecs = @import("ecs/ecs.zig");
+const ecs = @import("ecs/world.zig");
 
 const NetData = struct {
     // Any common data.
@@ -30,7 +30,7 @@ const NetServerData = struct {
     listener: xev.TCP = undefined,
 
     fn reservSlot(self: *NetServerData) ?usize {
-        for(self.slot_occupied, 0..) |occupied, i| {
+        for (self.slot_occupied, 0..) |occupied, i| {
             if (!occupied) {
                 self.slot_occupied[i] = true;
                 return i;
@@ -69,14 +69,12 @@ fn clientMessage(client_index: ?*ConnectedClientIndex, l: *xev.Loop, _: *xev.Com
 
     const packet = read_buffer.slice[0..packet_size];
 
-    std.debug.print("message from ({d}): {s}\n", .{fromClientIndex(client_index),packet});
+    std.debug.print("message from ({d}): {s}\n", .{ fromClientIndex(client_index), packet });
 
-    const write_buffer: xev.WriteBuffer = .{
-        .array = .{
-            .array = [2]u8{'h', 'i'} ** 16,
-            .len = 2,
-        }
-    };
+    const write_buffer: xev.WriteBuffer = .{ .array = .{
+        .array = [2]u8{ 'h', 'i' } ** 16,
+        .len = 2,
+    } };
     s.write(l, &client.write_completion, write_buffer, void, null, writeNoop);
 
     return .rearm;
@@ -118,7 +116,7 @@ fn clientConnected(_: ?*void, l: *xev.Loop, _: *xev.Completion, r: xev.TCP.Accep
 }
 
 fn serverThread(rendered_world: *ecs.SharedWorld) !void {
-    var server_data = NetServerData{.loop = undefined};
+    var server_data = NetServerData{ .loop = undefined };
     server_data.loop = try xev.Loop.init(.{ .entries = 128 });
     defer server_data.loop.deinit();
 
@@ -131,7 +129,7 @@ fn serverThread(rendered_world: *ecs.SharedWorld) !void {
     // TODO: Create a server world which will be copied to the rendered_world.
 
     //try server_data.loop.run(.until_done);
-    while(true) {
+    while (true) {
         // TODO: Take clock timestamp
         try server_data.loop.run(.once);
         // TODO: Copy the local input and treat any changes the same way as remote input changes.
@@ -165,7 +163,7 @@ fn clientThread(predicted_world: *ecs.SharedWorld) !void {
     _ = try stream.write("hi");
 
     //std.time.sleep(std.time.ns_per_s * 1);
-    while(true) {
+    while (true) {
         var packet_buf: [1024]u8 = undefined;
         std.debug.print("begin read\n", .{});
         const packet_len = try stream.read(&packet_buf);
@@ -186,4 +184,3 @@ fn clientThread(predicted_world: *ecs.SharedWorld) !void {
 pub fn startClient(predicted_world: *ecs.SharedWorld) !void {
     _ = try std.Thread.spawn(.{}, clientThread, .{predicted_world});
 }
-

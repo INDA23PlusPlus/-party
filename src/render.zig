@@ -1,6 +1,6 @@
 const rl = @import("raylib");
 const std = @import("std");
-const ecs = @import("ecs/ecs.zig");
+const ecs = @import("ecs/world.zig");
 const assets_manager = @import("assets_manager.zig");
 
 /// ecs component that will render a texture
@@ -23,6 +23,6 @@ pub fn update(world: *ecs.World, am: *assets_manager) void {
         // TODO: error handling
         const texture = am.hashmap.get(c.texture_hash) orelse @panic("Texture not found");
 
-        rl.drawTextureEx(texture, pos, c.scale, c.rotation, c.tint);
+        rl.drawTextureEx(texture, pos, c.rotation, c.scale, c.tint);
     }
 }

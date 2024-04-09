@@ -103,6 +103,7 @@ pub const Entity = packed struct {
 
 const Entities = std.bit_set.ArrayBitSet(u64, N);
 
+// TODO: make fit all data exactly.
 const buffer_size = blk: {
     var size = 0;
     for (Cs) |C| {
@@ -110,6 +111,8 @@ const buffer_size = blk: {
     }
     break :blk size;
 };
+
+const buffer_alignment = if (Cs.len > 0) @alignOf(Cs[0]) else 0;
 
 const component_sizes = blk: {
     var sizes: [Cs.len]usize = undefined;
@@ -127,15 +130,31 @@ const component_alignments = blk: {
     break :blk alignments;
 };
 
+// Maps component identifiers to their corresponding buffer index.
+const component_handles = blk: {
+    var components: [Cs.len]usize = undefined;
+    var cursor: usize = 0;
+
+    for (0..Cs.len) |i| {
+        const size = component_sizes[i];
+        const alignment = component_alignments[i];
+        const remainder = cursor % alignment;
+
+        if (remainder != 0) cursor += alignment - remainder;
+
+        components[i] = cursor;
+        cursor = cursor + N * size;
+    }
+
+    break :blk components;
+};
+
 pub const WorldError = error{
     SpawnLimitExceeded,
     NullQuery,
     DeadInspection,
     InvalidInspection,
 };
-
-// This can be moved into World.init() when Zig gets pinned structs.
-pub const Buffer = [buffer_size]u8;
 
 /// Stores and manipulates entities and their corresponding components.
 pub const World = struct {
@@ -148,30 +167,8 @@ pub const World = struct {
     entities: Entities = Entities.initEmpty(),
     generations: [N]Generation = [_]Generation{0} ** N,
     signatures: [N]Signature = [_]Signature{Signature.initEmpty()} ** N,
-    buffer: *[buffer_size]u8,
-    components: [Cs.len]*anyopaque,
 
-    /// Creates a new world.
-    pub fn init(buffer: *Buffer) Self {
-        var components: [Cs.len]*anyopaque = undefined;
-        var cursor: usize = 0;
-        for (0..Cs.len) |i| {
-            const size = component_sizes[i];
-            const alignment = component_alignments[i];
-
-            const remainder = @intFromPtr(buffer[cursor..].ptr) % alignment;
-            if (remainder != 0) cursor += alignment - remainder;
-
-            components[i] = @ptrCast(@alignCast(buffer[cursor..]));
-
-            cursor = cursor + N * size;
-        }
-
-        return Self{
-            .buffer = buffer,
-            .components = components,
-        };
-    }
+    buffer: [buffer_size]u8 align(buffer_alignment) = undefined,
 
     /// Removes all entities from the world.
     pub fn reset(self: *Self) void {
@@ -317,10 +314,11 @@ pub const World = struct {
     }
 
     fn componentArray(self: *Self, comptime Component: type) *[N]Component {
-        const index = comptime componentIndex(Component);
-        const component = self.components[index];
+        const identifier = comptime componentIdentifier(Component);
+        const handle = comptime component_handles[identifier];
+        const ptr: *anyopaque = self.buffer[handle..];
 
-        return @ptrCast(@alignCast(component));
+        return @ptrCast(@alignCast(ptr));
     }
 };
 
@@ -378,24 +376,20 @@ fn Query(comptime Include: []const type, comptime Exclude: []const type) type {
         pub fn get(self: *@This(), comptime C: type) !*C {
             const cursor = self.cursor orelse return WorldError.NullQuery;
 
-            const index = comptime for (Include) |c| {
-                if (c == C) {
-                    break componentIndex(c);
-                }
+            comptime for (Include) |c| {
+                if (c == C) break;
             } else {
                 @compileError("invalid component: " ++ @typeName(C));
             };
 
-            const array: *[N]C = @ptrCast(@alignCast(self.world.components[index]));
-
-            return &array[cursor];
+            return &self.world.componentArray(C)[cursor];
         }
     };
 }
 
 // HELPERS
 
-fn componentIndex(comptime Component: type) usize {
+fn componentIdentifier(comptime Component: type) usize {
     comptime {
         for (Cs, 0..) |c, i| {
             if (c == Component) {
@@ -432,9 +426,7 @@ fn componentSignature(comptime Components: []const type) Signature {
 // TESTS
 
 test "spawn_promote_demote_kill" {
-    var buffer: Buffer = undefined;
-    var world = World.init(&buffer);
-
+    var world = World{};
     const entity = try world.spawn(&.{Position});
 
     try std.testing.expect(entity.identifier == 0 and entity.generation == 0);
@@ -445,8 +437,7 @@ test "spawn_promote_demote_kill" {
 }
 
 test "spawn_limit" {
-    var buffer: Buffer = undefined;
-    var world = World.init(&buffer);
+    var world = World{};
 
     for (0..N) |_| {
         _ = try world.spawn(&.{});
@@ -456,8 +447,7 @@ test "spawn_limit" {
 }
 
 test "reset" {
-    var buffer: Buffer = undefined;
-    var world = World.init(&buffer);
+    var world = World{};
 
     for (0..N) |_| {
         _ = try world.spawn(&.{ Position, Mover });
@@ -493,8 +483,7 @@ test "reset" {
 }
 
 test "build entities" {
-    var buffer: Buffer = undefined;
-    var world = World.init(&buffer);
+    var world = World{};
 
     for (0..N) |i| {
         const j: i32 = @intCast(i);
