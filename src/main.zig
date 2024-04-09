@@ -11,36 +11,11 @@ const networking = @import("networking.zig");
 const linear = @import("math/linear.zig");
 const fixed = @import("math/fixed.zig");
 const simulation = @import("simulation.zig");
-
-// import games and init them
-var example_game = @import("games/example.zig"){};
-
-// create list of Game instances
-var games = [_]Game{
-    example_game.Game(),
-};
+const minigames = @import("minigames/list.zig");
 
 // Settings
 // TODO: move to settings file
 const BC_COLOR = rl.Color.gray;
-
-/// interface for a mini game look at games/example.zig for a reference implementation
-pub const Game = struct {
-    ptr: *anyopaque,
-
-    initFn: *const fn (ptr: *anyopaque, world: *ecs.World) void,
-    // TODO: pass in collisions
-    /// returns score if game is over
-    updateFn: *const fn (ptr: *anyopaque, world: *ecs.World) ?u32,
-
-    pub fn init(self: *Game, world: *ecs.World) void {
-        return self.initFn(self.ptr, world);
-    }
-
-    pub fn update(self: *Game, world: *ecs.World) ?u32 {
-        return self.updateFn(self.ptr, world);
-    }
-};
 
 const StartNetRole = enum {
     client,
@@ -96,15 +71,12 @@ pub fn main() !void {
     var assets_manager_system = assets_manager.init(game_allocator);
     defer assets_manager_system.deinit();
 
-    // var world_buffer: ecs.Buffer = undefined;
-    var shared_world = ecs.SharedWorld{
+    var shared_world = simulation.SharedSimulation{
         .rw_lock = .{},
-        .world = ecs.World{},
+        .sim = .{
+            .world = ecs.World{},
+        }
     };
-
-    // TODO: game selection
-    var game_i: usize = 0;
-    games[game_i].init(&shared_world.world);
 
     // Networking
     if (launch_options.start_as_role == .client) {
@@ -112,8 +84,6 @@ pub fn main() !void {
     } else {
         try networking.startServer(&shared_world);
     }
-
-    var result: ?u32 = null;
 
     // Game loop
     while (window.running) {
@@ -127,32 +97,18 @@ pub fn main() !void {
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure
         // is called in other places. Not doing so will lead to inconsistencies.
-        try simulation.simulate(&shared_world.world);
+        try simulation.simulate(&minigames.list, &shared_world.sim);
 
+        // Render -----------------------------
         window.update();
         rl.beginDrawing();
         rl.clearBackground(BC_COLOR);
-        // Render -----------------------------
-
-        result = games[game_i].update(&shared_world.world);
+        render.update(&shared_world.sim.world, &assets_manager_system);
 
         // Stop Render -----------------------
-        render.update(&shared_world.world, &assets_manager_system);
         rl.endDrawing();
 
         input.post();
-
-        if (result) |_| {
-            // deinit current game
-
-            game_i += 1;
-            if (game_i >= games.len) {
-                break;
-            }
-
-            // init next game
-            games[game_i].init(&shared_world.world);
-        }
 
         // Give the networking threads a chance to manipulate the world.
         shared_world.rw_lock.unlock();

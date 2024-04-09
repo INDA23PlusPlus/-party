@@ -7,6 +7,7 @@ const std = @import("std");
 const constants = @import("constants.zig");
 const xev = @import("xev");
 
+const sim = @import("simulation.zig");
 const ecs = @import("ecs/world.zig");
 
 const NetData = struct {
@@ -115,7 +116,7 @@ fn clientConnected(_: ?*void, l: *xev.Loop, _: *xev.Completion, r: xev.TCP.Accep
     }
 }
 
-fn serverThread(rendered_world: *ecs.SharedWorld) !void {
+fn serverThread(rendered_simulation: *sim.SharedSimulation) !void {
     var server_data = NetServerData{ .loop = undefined };
     server_data.loop = try xev.Loop.init(.{ .entries = 128 });
     defer server_data.loop.deinit();
@@ -134,10 +135,10 @@ fn serverThread(rendered_world: *ecs.SharedWorld) !void {
         try server_data.loop.run(.once);
         // TODO: Copy the local input and treat any changes the same way as remote input changes.
 
-        rendered_world.rw_lock.lock();
+        rendered_simulation.rw_lock.lock();
         // Perform the required re-simulations.
         // TODO: Copy the real world to the rendered world.
-        rendered_world.rw_lock.unlock();
+        rendered_simulation.rw_lock.unlock();
         //
         // TODO: Take clock timestamp
         // TODO: Compare these then sleep a bit to lock the ticks per second.
@@ -145,15 +146,15 @@ fn serverThread(rendered_world: *ecs.SharedWorld) !void {
     }
 }
 
-pub fn startServer(rendered_world: *ecs.SharedWorld) !void {
-    _ = try std.Thread.spawn(.{}, serverThread, .{rendered_world});
+pub fn startServer(rendered_simulation: *sim.SharedSimulation) !void {
+    _ = try std.Thread.spawn(.{}, serverThread, .{rendered_simulation});
 }
 
 const NetClientData = struct {
     common: NetData,
 };
 
-fn clientThread(predicted_world: *ecs.SharedWorld) !void {
+fn clientThread(predicted_simulation: *sim.SharedSimulation) !void {
     // The client doesn't currently do evented IO. I don't think it will be necessary.
 
     var mem: [1024]u8 = undefined;
@@ -172,15 +173,15 @@ fn clientThread(predicted_world: *ecs.SharedWorld) !void {
         _ = try stream.write("hi");
 
         // TODO: Parse the new world.
-        predicted_world.rw_lock.lock();
-        // TODO: Get the current tick number from predicted_world.
-        // TODO: Copy the new world to the predicted world.
-        // TODO: Simulate the world up to the same point (if it isn't too far off).
-        // TODO: Copy the newly simulated_world to the predicted_world.
-        predicted_world.rw_lock.unlock();
+        predicted_simulation.rw_lock.lock();
+        // TODO: Get the current tick number from predicted_simulation.
+        // TODO: Copy the new simulation to the predicted simulation.
+        // TODO: Simulate the simulation up to the same point (if it isn't too far off).
+        // TODO: Copy the newly simulated simulation to the predicted_simulation.
+        predicted_simulation.rw_lock.unlock();
     }
 }
 
-pub fn startClient(predicted_world: *ecs.SharedWorld) !void {
-    _ = try std.Thread.spawn(.{}, clientThread, .{predicted_world});
+pub fn startClient(predicted_simulation: *sim.SharedSimulation) !void {
+    _ = try std.Thread.spawn(.{}, clientThread, .{predicted_simulation});
 }
