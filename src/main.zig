@@ -4,7 +4,7 @@ const rl = @import("raylib");
 const win = @import("window.zig");
 const input = @import("input.zig");
 const render = @import("render.zig");
-const ecs = @import("ecs/world.zig");
+const ecs = @import("ecs/ecs.zig");
 const assets_manager = @import("assets_manager.zig");
 const time = @import("time.zig");
 const networking = @import("networking.zig");
@@ -74,7 +74,7 @@ pub fn main() !void {
     var shared_world = simulation.SharedSimulation{
         .rw_lock = .{},
         .sim = .{
-            .world = ecs.World{},
+            .world = ecs.world.World{},
         }
     };
 

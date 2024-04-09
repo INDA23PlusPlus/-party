@@ -1,28 +1,23 @@
 const std = @import("std");
 const root = @import("root");
 const rl = @import("raylib");
-const ecs = @import("../ecs/world.zig");
+const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
 const render = @import("../render.zig");
 const assets_manager = @import("../assets_manager.zig");
 const input = @import("../input.zig");
-
-const Self = @This();
 
 //var frame_arena: std.heap.ArenaAllocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 //var frame_allocator: *std.mem.Allocator = &frame_arena.allocator();
 
 pub fn init(sim: *simulation.Simulation) !void {
     _ = try sim.world.spawnWith(.{
-        ecs.Position{
+        ecs.component.Pos{
             .x = -100,
             .y = -100,
         },
-        render.TextureComponent{
+        ecs.component.Tex {
             .texture_hash = assets_manager.pathHash("assets/test.png"),
-            .tint = rl.Color.white,
-            .scale = 1.0,
-            .rotation = 0.0,
         },
     });
 }
@@ -43,10 +38,9 @@ const playerColors: [input.MAX_CONTROLLERS]rl.Color = .{
 pub fn update(sim: *simulation.Simulation) !void {
     // example of using a frame allocator
     //defer _ = frame_arena.reset(std.heap.ArenaAllocator.ResetMode.retain_capacity);
-
-    var pos_query = sim.world.query(&.{ecs.Position}, &.{});
+    var pos_query = sim.world.query(&.{ecs.component.Pos}, &.{});
     while (pos_query.next()) |_| {
-        const pos = try pos_query.get(ecs.Position);
+        const pos = try pos_query.get(ecs.component.Pos);
         pos.x += 1;
         pos.y += 1;
     }

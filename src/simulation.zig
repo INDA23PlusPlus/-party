@@ -1,4 +1,4 @@
-const ecs = @import("ecs/world.zig");
+const ecs = @import("ecs/ecs.zig");
 const constants = @import("constants.zig");
 const std = @import("std");
 const minigame = @import("minigames/interface.zig");
@@ -12,7 +12,7 @@ pub const Metadata = struct {
 };
 
 pub const Simulation = struct {
-    world: ecs.World,
+    world: ecs.world.World,
     meta: Metadata = .{},
 };
 
@@ -26,7 +26,7 @@ pub const SharedSimulation = struct {
 };
 
 /// All the errors that may happen during simulation.
-pub const SimulationError = ecs.WorldError;
+pub const SimulationError = ecs.world.WorldError;
 
 /// Simulate one tick in the game world.
 /// All generic game code will be called from this function and should not
@@ -37,9 +37,9 @@ pub fn simulate(minigames_list: []const minigame.Minigame, sim: *Simulation) !vo
 
     // TODO: Add input as an argument.
 
-    var pos_query = sim.world.query(&.{ecs.Position}, &.{});
+    var pos_query = sim.world.query(&.{ecs.component.Pos}, &.{});
     while (pos_query.next()) |_| {
-        const pos = try pos_query.get(ecs.Position);
+        const pos = try pos_query.get(ecs.component.Pos);
         pos.x += 1;
         pos.y += 1;
     }

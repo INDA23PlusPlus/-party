@@ -14,6 +14,9 @@ const std = @import("std");
 //  - [x] ge()
 //  - [X] truncated division
 
+/// The preferred fixed point type.
+pub const F32 = F(16, 16);
+
 /// Fixed point number with custom bit sizes.
 /// Use exactly 32 bits for optimal performance.
 pub fn F(comptime integer_bits: comptime_int, comptime fractional_bits: comptime_int) type {
@@ -408,7 +411,6 @@ test "cast" {
 
 test "arithmetic" {
     const eq = std.testing.expectEqual;
-    const F32 = F(16, 16);
 
     for (1..100) |i| {
         const j: i16 = @intCast(i);
@@ -489,7 +491,6 @@ test "fractional_part" {
 }
 
 test "comparisons" {
-    const F32 = F(16, 16);
     var prng = std.rand.DefaultPrng.init(0);
     const rand = prng.random();
     for (0..100_000) |_| {
