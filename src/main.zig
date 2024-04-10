@@ -89,6 +89,7 @@ pub fn main() !void {
 
     // Temp
     var view = render.View.init(100, 100);
+    defer view.deinit();
 
     // Game loop
     while (window.running) {
@@ -96,6 +97,10 @@ pub fn main() !void {
         shared_simulation.rw_lock.lock();
 
         // Updates game systems
+        if (rl.isKeyDown(rl.KeyboardKey.key_left)) view.dst.x -= 5;
+        if (rl.isKeyDown(rl.KeyboardKey.key_right)) view.dst.x += 5;
+        if (rl.isKeyDown(rl.KeyboardKey.key_up)) view.dst.y -= 5;
+        if (rl.isKeyDown(rl.KeyboardKey.key_down)) view.dst.y += 5;
         time.update(); // TODO: Move into world.
         input.poll(); // TODO: Make the input module thread-safe such that the networking threads may access it as well.
 
@@ -109,7 +114,7 @@ pub fn main() !void {
         rl.beginDrawing();
         rl.clearBackground(BC_COLOR);
         render.update(&shared_simulation.sim.world, &assets);
-        view.draw(&shared_simulation.sim.world, &assets);
+        view.draw(&shared_simulation.sim.world, &assets); // Temp
 
         // Stop Render -----------------------
         rl.endDrawing();

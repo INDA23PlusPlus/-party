@@ -28,7 +28,7 @@ pub const View = struct {
     const Self = @This();
 
     const width = 640; // TODO: Move elsewhere
-    const height = 320; // TODO: MOve elsewhere
+    const height = 320; // TODO: Move elsewhere
 
     dst: rl.Rectangle,
     src: rl.Rectangle,
@@ -53,6 +53,7 @@ pub const View = struct {
     pub fn draw(view: *Self, world: *ecs.world.World, assets: *AssetManager) void {
         rl.beginTextureMode(view.tex);
         rl.clearBackground(rl.Color.black);
+        rl.drawText("MINIGAME WINDOW", 0, 0, 2, rl.Color.gold);
 
         var query = world.query(&.{ ecs.component.Pos, ecs.component.Tex }, &.{});
         while (query.next()) |_| {
@@ -66,6 +67,9 @@ pub const View = struct {
 
             rl.drawTextureEx(texture, position, rotation, scale, tint);
         }
+
+        // Temp
+        rl.drawText("MINIGAME WINDOW", 0, 0, 2, rl.Color.gold);
 
         rl.endTextureMode();
 

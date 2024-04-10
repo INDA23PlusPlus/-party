@@ -40,7 +40,7 @@ pub fn simulate(minigames_list: []const minigame.Minigame, sim: *Simulation) !vo
     var pos_query = sim.world.query(&.{ecs.component.Pos}, &.{});
     while (pos_query.next()) |_| {
         const pos = try pos_query.get(ecs.component.Pos);
-        pos.vec += @splat(1);
+        _ = pos;
     }
 
     // Handles transitions between minigames.

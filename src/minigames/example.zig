@@ -38,7 +38,13 @@ pub fn update(sim: *simulation.Simulation) !void {
     var pos_query = sim.world.query(&.{ecs.component.Pos}, &.{});
     while (pos_query.next()) |_| {
         const pos = try pos_query.get(ecs.component.Pos);
-        pos.vec += @splat(1);
+
+        // Temp
+        // Note, inputs should not be handled like this.
+        if (rl.isKeyDown(rl.KeyboardKey.key_a)) pos.vec[0] -= 5;
+        if (rl.isKeyDown(rl.KeyboardKey.key_d)) pos.vec[0] += 5;
+        if (rl.isKeyDown(rl.KeyboardKey.key_w)) pos.vec[1] -= 5;
+        if (rl.isKeyDown(rl.KeyboardKey.key_s)) pos.vec[1] += 5;
     }
 
     for (0..input.MAX_CONTROLLERS) |id| {
