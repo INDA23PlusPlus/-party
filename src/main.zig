@@ -87,6 +87,9 @@ pub fn main() !void {
         try networking.startServer(&shared_simulation);
     }
 
+    // Temp
+    var view = render.View.init(100, 100);
+
     // Game loop
     while (window.running) {
         // Make sure the main thread controls the world!
@@ -106,6 +109,7 @@ pub fn main() !void {
         rl.beginDrawing();
         rl.clearBackground(BC_COLOR);
         render.update(&shared_simulation.sim.world, &assets);
+        view.draw(&shared_simulation.sim.world, &assets);
 
         // Stop Render -----------------------
         rl.endDrawing();

@@ -4,8 +4,9 @@ const ecs = @import("ecs/ecs.zig");
 const AssetManager = @import("AssetManager.zig");
 
 pub fn update(world: *ecs.world.World, am: *AssetManager) void {
-    const view = View.init(100, 200);
-    view.render(world, am);
+    // var view = View.init(100, 100);
+    // view.render(world, am);
+    // view.deinit();
 
     var query = world.query(&.{ ecs.component.Pos, ecs.component.Tex }, &.{});
 
@@ -22,36 +23,44 @@ pub fn update(world: *ecs.world.World, am: *AssetManager) void {
     }
 }
 
-/// Just experimenting.
-/// Represents a subsection of the window where entities can be rendered too.
-const View = struct {
-    x: i32,
-    y: i32,
-    texture: rl.RenderTexture2D,
+/// Represents a section of a window for rendering a world.
+pub const View = struct {
+    const Self = @This();
 
-    pub fn init(x: i32, y: i32) @This() {
-        const texture = rl.loadRenderTexture(640, 320);
-        return .{
-            .x = x,
-            .y = y,
-            .texture = texture,
+    const width = 640; // TODO: Move elsewhere
+    const height = 320; // TODO: MOve elsewhere
+
+    dst: rl.Rectangle,
+    src: rl.Rectangle,
+    tex: rl.RenderTexture2D,
+
+    pub fn init(x: f32, y: f32) Self {
+        const dst = rl.Rectangle.init(x, y, width, height);
+        const src = rl.Rectangle.init(0.0, 0.0, width, -height);
+        const tex = rl.loadRenderTexture(width, height);
+
+        return Self{
+            .dst = dst,
+            .src = src,
+            .tex = tex,
         };
     }
 
-    pub fn render(view: @This(), world: *ecs.world.World, assets: *AssetManager) void {
-        rl.drawRectangle(view.x, view.y, view.texture.texture.width, view.texture.texture.height, rl.Color.blue);
-        rl.beginTextureMode(view.texture);
+    pub fn deinit(self: *Self) void {
+        rl.unloadRenderTexture(self.tex);
+    }
+
+    pub fn draw(view: *Self, world: *ecs.world.World, assets: *AssetManager) void {
+        rl.beginTextureMode(view.tex);
+        rl.clearBackground(rl.Color.black);
 
         var query = world.query(&.{ ecs.component.Pos, ecs.component.Tex }, &.{});
         while (query.next()) |_| {
             const pos = query.get(ecs.component.Pos) catch unreachable;
             const tex = query.get(ecs.component.Tex) catch unreachable;
 
-            const position = rl.Vector2.init(
-                @floatFromInt(pos.vec[0] + view.x),
-                @floatFromInt(pos.vec[1] + view.y),
-            );
             const texture = assets.hashmap.get(tex.texture_hash) orelse @panic("Texture not found");
+            const position = toVector2(pos);
             const rotation, const scale = transform(tex);
             const tint = tex.tint;
 
@@ -59,19 +68,32 @@ const View = struct {
         }
 
         rl.endTextureMode();
-        rl.drawTexture(view.texture.texture, view.x, view.y, rl.Color.white);
+
+        const origin = rl.Vector2.init(0.0, 0.0);
+        const rotation = 0.0;
+
+        rl.drawTexturePro(view.tex.texture, view.src, view.dst, origin, rotation, rl.Color.white);
     }
 
-    pub fn transform(texture: *ecs.component.Tex) struct { f32, f32 } {
-        const rotation: f32 = switch (texture.rotate) {
+    inline fn transform(tex: *ecs.component.Tex) struct { f32, f32 } {
+        const rotation: f32 = switch (tex.rotate) {
             .R0 => 0.0,
             .R90 => 90.0,
             .R180 => 180.0,
             .R270 => 270.0,
         };
 
-        const scale: f32 = @floatCast(texture.scale.toFloat());
+        const mirror: f32 = if (tex.mirror) -1.0 else 1.0;
 
-        return .{ rotation, scale };
+        const scale: f32 = @floatCast(tex.scale.toFloat());
+
+        return .{ rotation, scale * mirror };
+    }
+
+    inline fn toVector2(pos: *ecs.component.Pos) rl.Vector2 {
+        return rl.Vector2.init(
+            @as(f32, @floatFromInt(pos.vec[0])),
+            @as(f32, @floatFromInt(pos.vec[1])),
+        );
     }
 };
