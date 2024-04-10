@@ -16,7 +16,7 @@ pub const components: []const type = &.{
 
 /// Entities with this component are positionable.
 pub const Pos = struct {
-    vec: @Vector(2, i32) = .{0, 0},
+    vec: @Vector(2, i32) = .{ 0, 0 },
 };
 
 /// Entities with this component are movable.
@@ -26,7 +26,7 @@ pub const Mov = struct {
     acceleration: Vec2 = Vec2{},
 };
 
-/// Entities with this component are able collidable.
+/// Entities with this component are collidable.
 pub const Col = struct {
     w: i32 = 0,
     h: i32 = 0,
@@ -35,7 +35,7 @@ pub const Col = struct {
 
 /// Entities with this component have associated text.
 pub const Txt = struct {
-    string: []const u8 = "", // TODO: use hash like textures below.
+    string: []const u8 = "", // TODO: use hash instead of slice
 };
 
 /// Entities with this component have an associated texture.

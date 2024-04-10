@@ -71,19 +71,26 @@ pub fn main() !void {
     var assets = AssetManager.init(game_allocator);
     defer assets.deinit();
 
-    var shared_world = simulation.SharedSimulation{ .rw_lock = .{}, .sim = .{} };
+    var shared_simulation = simulation.SharedSimulation{ .rw_lock = .{}, .sim = .{} };
+
+    _ = try shared_simulation.sim.world.spawnWith(.{
+        ecs.component.Pos{},
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/test.png"),
+        },
+    });
 
     // Networking
     if (launch_options.start_as_role == .client) {
-        try networking.startClient(&shared_world);
+        try networking.startClient(&shared_simulation);
     } else {
-        try networking.startServer(&shared_world);
+        try networking.startServer(&shared_simulation);
     }
 
     // Game loop
     while (window.running) {
         // Make sure the main thread controls the world!
-        shared_world.rw_lock.lock();
+        shared_simulation.rw_lock.lock();
 
         // Updates game systems
         time.update(); // TODO: Move into world.
@@ -92,13 +99,13 @@ pub fn main() !void {
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure
         // is called in other places. Not doing so will lead to inconsistencies.
-        try simulation.simulate(&minigames.list, &shared_world.sim);
+        try simulation.simulate(&minigames.list, &shared_simulation.sim);
 
         // Render -----------------------------
         window.update();
         rl.beginDrawing();
         rl.clearBackground(BC_COLOR);
-        render.update(&shared_world.sim.world, &assets);
+        render.update(&shared_simulation.sim.world, &assets);
 
         // Stop Render -----------------------
         rl.endDrawing();
@@ -106,6 +113,6 @@ pub fn main() !void {
         input.post();
 
         // Give the networking threads a chance to manipulate the world.
-        shared_world.rw_lock.unlock();
+        shared_simulation.rw_lock.unlock();
     }
 }
