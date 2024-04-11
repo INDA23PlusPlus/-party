@@ -49,6 +49,6 @@ pub const Tex = struct {
 };
 
 /// Entities with this component are associated with a controller.
-pub const Ctl = struct {
+pub const Ctl = struct { // TODO(alex): I suggest it be renamed to Avt (Avatar) in order to not be confused with physical controllers.
     id: usize,
 };

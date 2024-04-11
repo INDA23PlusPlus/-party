@@ -1,113 +1,63 @@
-const std = @import("std");
-const rl = @import("raylib");
-const time = @import("time.zig");
-
-var states: [8]InputState = .{ .{}, .{}, .{}, .{}, .{}, .{}, .{}, .{} };
-
-// Gets an input struct from a controller ID. The ID should be obtained from the controller component.
-pub fn get(id: usize) InputState {
-    return states[id];
-}
-
-// Polls the state of all input devices at the current time.
-pub fn poll() void {
-    poll_keyboard1(&states[0]);
-    poll_keyboard2(&states[1]);
-    poll_gamepad(0, &states[2]);
-    poll_gamepad(1, &states[3]);
-    poll_gamepad(2, &states[4]);
-    poll_gamepad(3, &states[5]);
-    poll_gamepad(4, &states[6]);
-    poll_gamepad(5, &states[7]);
-}
-
-const InputState = struct {
-    isLocal: bool = false,
-    isConnected: bool = false,
-    A: ButtonState = .{},
-    B: ButtonState = .{},
-    up: ButtonState = .{},
-    down: ButtonState = .{},
-    left: ButtonState = .{},
-    right: ButtonState = .{},
-
-    pub fn horizontal(self: *const InputState) i32 {
-        return self.right.cmp(self.left);
-    }
-
-    pub fn vertical(self: *const InputState) i32 {
-        return self.down.cmp(self.up);
-    }
-};
+const constants = @import("constants.zig");
 
 const ButtonState = struct {
-    isDown: bool = false,
-    wasDown: bool = false,
-    pressTime: u64 = 0,
+    is_down: bool = false,
+    was_down: bool = false,
+    press_tick: u64 = 0,
 
-    pub fn duration(self: *const ButtonState) u64 {
-        if (self.isDown) {
-            return time.get() - self.pressTime;
+    pub fn duration(self: *const ButtonState, current_tick: usize) u64 {
+        if (self.is_down) {
+            return current_tick - self.press_tick;
         }
         return 0;
     }
 
     pub fn pressed(self: *const ButtonState) bool {
-        return self.isDown and !self.wasDown;
+        return self.is_down and !self.was_down;
     }
 
     pub fn released(self: *const ButtonState) bool {
-        return !self.isDown and self.wasDown;
+        return !self.is_down and self.was_down;
     }
 
-    pub fn set(self: *ButtonState, value: bool) void {
-        self.wasDown = self.isDown;
-        self.isDown = value;
-        if (self.pressed()) {
-            self.pressTime = time.get();
+    pub fn set(self: *ButtonState, value: bool, current_tick: usize) void {
+        self.was_down = self.is_down;
+        self.is_down = value;
+        if (self.pressed()) { // TODO: Shouldn't this just be isDown? Won't it be pressed for one extra tick as it is?
+            self.press_tick = current_tick;
         }
     }
 
     pub fn cmp(self: *const ButtonState, other: ButtonState) i32 {
-        if (self.isDown and !other.isDown) {
+        if (self.is_down and !other.is_down) {
             return 1;
         }
-        if (!self.isDown and other.isDown) {
+        if (!self.is_down and other.is_down) {
             return -1;
         }
         return 0;
     }
 };
 
-fn poll_keyboard1(state: *InputState) void {
-    state.isLocal = true;
-    state.isConnected = true;
-    state.A.set(rl.isKeyDown(rl.KeyboardKey.key_x));
-    state.B.set(rl.isKeyDown(rl.KeyboardKey.key_z));
-    state.up.set(rl.isKeyDown(rl.KeyboardKey.key_w));
-    state.down.set(rl.isKeyDown(rl.KeyboardKey.key_s));
-    state.left.set(rl.isKeyDown(rl.KeyboardKey.key_a));
-    state.right.set(rl.isKeyDown(rl.KeyboardKey.key_d));
-}
+pub const PlayerInputState = struct {
+    is_local: bool = false,
+    is_connected: bool = false,
+    a: ButtonState = .{},
+    b: ButtonState = .{},
+    up: ButtonState = .{},
+    down: ButtonState = .{},
+    left: ButtonState = .{},
+    right: ButtonState = .{},
 
-fn poll_keyboard2(state: *InputState) void {
-    state.isLocal = true;
-    state.isConnected = true;
-    state.A.set(rl.isKeyDown(rl.KeyboardKey.key_n));
-    state.B.set(rl.isKeyDown(rl.KeyboardKey.key_m));
-    state.up.set(rl.isKeyDown(rl.KeyboardKey.key_i));
-    state.down.set(rl.isKeyDown(rl.KeyboardKey.key_k));
-    state.left.set(rl.isKeyDown(rl.KeyboardKey.key_j));
-    state.right.set(rl.isKeyDown(rl.KeyboardKey.key_l));
-}
+    pub fn horizontal(self: *const PlayerInputState) i32 {
+        return self.right.cmp(self.left);
+    }
 
-fn poll_gamepad(gamepad: i32, state: *InputState) void {
-    state.isLocal = true;
-    state.isConnected = rl.isGamepadAvailable(gamepad);
-    state.A.set(rl.isGamepadButtonDown(gamepad, rl.GamepadButton.gamepad_button_right_face_down));
-    state.B.set(rl.isGamepadButtonDown(gamepad, rl.GamepadButton.gamepad_button_right_face_right));
-    state.up.set(rl.isGamepadButtonDown(gamepad, rl.GamepadButton.gamepad_button_left_face_up));
-    state.down.set(rl.isGamepadButtonDown(gamepad, rl.GamepadButton.gamepad_button_left_face_down));
-    state.left.set(rl.isGamepadButtonDown(gamepad, rl.GamepadButton.gamepad_button_left_face_left));
-    state.right.set(rl.isGamepadButtonDown(gamepad, rl.GamepadButton.gamepad_button_left_face_right));
-}
+    pub fn vertical(self: *const PlayerInputState) i32 {
+        return self.down.cmp(self.up);
+    }
+};
+
+pub const InputState = [constants.max_player_count]PlayerInputState;
+
+pub const DefaultInputState: InputState = [_]PlayerInputState{.{}} ** constants.max_player_count;

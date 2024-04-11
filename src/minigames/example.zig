@@ -42,7 +42,7 @@ const playerColors: [8]rl.Color = .{
     rl.Color.lime,
 };
 
-pub fn update(sim: *simulation.Simulation) !void {
+pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState) !void {
     // example of using a frame allocator
     //defer _ = frame_arena.reset(std.heap.ArenaAllocator.ResetMode.retain_capacity);
 
@@ -51,8 +51,9 @@ pub fn update(sim: *simulation.Simulation) !void {
     while (controllable.next()) |_| {
         const position = try controllable.get(ecs.component.Pos);
         const controller = try controllable.get(ecs.component.Ctl);
-        const state = input.get(controller.id);
-        if (state.isConnected) {
+        const state = inputs[controller.id];
+        if (state.is_connected) {
+            std.debug.print("moving\n", .{});
             position.vec[0] += 5 * state.horizontal();
             position.vec[1] += 5 * state.vertical();
         }

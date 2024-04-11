@@ -2,6 +2,7 @@ const ecs = @import("ecs/ecs.zig");
 const constants = @import("constants.zig");
 const std = @import("std");
 const minigame = @import("minigames/interface.zig");
+const input = @import("input.zig");
 
 /// Data that is kept between minigames (such as seed, scores, etc)
 pub const Metadata = struct {
@@ -37,7 +38,7 @@ pub fn init(minigames_list: []const minigame.Minigame, sim: *Simulation) !void {
 /// All generic game code will be called from this function and should not
 /// use anything outside of the world or the input frame. Failing to do so
 /// will lead to inconsistencies.
-pub fn simulate(minigames_list: []const minigame.Minigame, sim: *Simulation) !void {
+pub fn simulate(minigames_list: []const minigame.Minigame, sim: *Simulation, input_state: *const input.InputState) !void {
     const frame_start_minigame = sim.meta.minigame_id;
 
     // TODO: Add input as an argument.
@@ -49,7 +50,7 @@ pub fn simulate(minigames_list: []const minigame.Minigame, sim: *Simulation) !vo
     }
 
     // Handles transitions between minigames.
-    try minigames_list[sim.meta.minigame_id].update(sim);
+    try minigames_list[sim.meta.minigame_id].update(sim, input_state);
 
     // TODO: game selection
     // We could select the game randomly by first switching to a "game select minigame" with ID 0 maybe?

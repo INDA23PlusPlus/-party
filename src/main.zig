@@ -5,13 +5,15 @@ const win = @import("window.zig");
 const input = @import("input.zig");
 const render = @import("render.zig");
 const ecs = @import("ecs/ecs.zig");
-const AssetManager = @import("AssetManager.zig");
-const time = @import("time.zig");
 const networking = @import("networking.zig");
 const linear = @import("math/linear.zig");
 const fixed = @import("math/fixed.zig");
 const simulation = @import("simulation.zig");
 const minigames = @import("minigames/list.zig");
+
+const AssetManager = @import("AssetManager.zig");
+const Controller = @import("controller.zig");
+const InputTimeline = @import("input_timeline.zig");
 
 // Settings
 // TODO: move to settings file
@@ -73,12 +75,11 @@ pub fn main() !void {
 
     var shared_simulation = simulation.SharedSimulation{ .rw_lock = .{}, .sim = .{} };
 
-    // _ = try shared_simulation.sim.world.spawnWith(.{
-    //     ecs.component.Pos{},
-    //     ecs.component.Tex{
-    //         .texture_hash = AssetManager.pathHash("assets/test.png"),
-    //     },
-    // });
+    var shared_input_timeline = InputTimeline{};
+
+    var controllers = Controller.DefaultControllers;
+    controllers[0].input_index = 0; // TODO: This is temporary.
+    controllers[1].input_index = 1;
 
     // Networking
     if (launch_options.start_as_role == .client) {
@@ -98,19 +99,25 @@ pub fn main() !void {
         // Make sure the main thread controls the world!
         shared_simulation.rw_lock.lock();
 
+        // Fetch input.
+        shared_input_timeline.rw_lock.lock();
+        const tick = shared_simulation.sim.meta.ticks_elapsed;
+        const frame_input: input.InputState = shared_input_timeline.localUpdate(&controllers, tick).*;
+        shared_input_timeline.rw_lock.unlock();
+
+
         // Updates game systems
         if (rl.isKeyDown(rl.KeyboardKey.key_left)) view.dst.x -= 5;
         if (rl.isKeyDown(rl.KeyboardKey.key_right)) view.dst.x += 5;
         if (rl.isKeyDown(rl.KeyboardKey.key_up)) view.dst.y -= 5;
         if (rl.isKeyDown(rl.KeyboardKey.key_down)) view.dst.y += 5;
 
-        time.update(); // TODO: Move into world.
-        input.poll(); // TODO: Make the input module thread-safe such that the networking threads may access it as well.
+        //input.poll(); // TODO: Make the input module thread-safe such that the networking threads may access it as well.
 
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure
         // is called in other places. Not doing so will lead to inconsistencies.
-        try simulation.simulate(&minigames.list, &shared_simulation.sim);
+        try simulation.simulate(&minigames.list, &shared_simulation.sim, &frame_input);
 
         // Render -----------------------------
         window.update();

@@ -25,8 +25,8 @@ const ConnectedClient = struct {
 const NetServerData = struct {
     common: NetData = NetData{},
     loop: xev.Loop,
-    conns_list: [constants.max_player_count]ConnectedClient = undefined,
-    slot_occupied: [constants.max_player_count]bool = [_]bool{false} ** constants.max_player_count,
+    conns_list: [constants.max_connected_count]ConnectedClient = undefined,
+    slot_occupied: [constants.max_connected_count]bool = [_]bool{false} ** constants.max_connected_count,
     accept_completion: xev.Completion = undefined,
     listener: xev.TCP = undefined,
 
