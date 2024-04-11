@@ -2,6 +2,7 @@ const rl = @import("raylib");
 
 const F32 = @import("../math/fixed.zig").F(16, 16);
 const Vec2 = @import("../math/linear.zig").V(2, F32);
+const Animation = @import("../animation/animations.zig").Animation;
 
 /// Components the ECS supports.
 /// All components MUST be default initializable.
@@ -13,6 +14,7 @@ pub const components: []const type = &.{
     Tex,
     Txt,
     Ctl,
+    Anm,
 };
 
 /// Entities with this component are positionable.
@@ -52,5 +54,13 @@ pub const Tex = struct {
 
 /// Entities with this component are associated with a controller.
 pub const Ctl = struct {
-    id: usize,
+    id: usize = 0,
+};
+
+/// Entities with this component are animated.
+pub const Anm = struct {
+    animation: Animation = Animation.KattisIdle,
+    subframe: usize = 0,
+    interval: usize = 1,
+    looping: bool = true,
 };

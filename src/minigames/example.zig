@@ -6,6 +6,8 @@ const simulation = @import("../simulation.zig");
 const render = @import("../render.zig");
 const AssetManager = @import("../AssetManager.zig");
 const input = @import("../input.zig");
+const Animation = @import("../animation/animations.zig").Animation;
+const animator = @import("../animation/animator.zig");
 
 //var frame_arena: std.heap.ArenaAllocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 //var frame_allocator: *std.mem.Allocator = &frame_arena.allocator();
@@ -18,38 +20,38 @@ pub fn init(sim: *simulation.Simulation) !void {
             .tint = rl.Color.white,
         },
         ecs.component.Ctl{ .id = 0 },
+        ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
     });
 }
 
 const win: bool = false;
-
-const playerColors: [8]rl.Color = .{
-    rl.Color.red,
-    rl.Color.green,
-    rl.Color.blue,
-    rl.Color.yellow,
-    rl.Color.orange,
-    rl.Color.purple,
-    rl.Color.pink,
-    rl.Color.lime,
-};
 
 pub fn update(sim: *simulation.Simulation) !void {
     // example of using a frame allocator
     //defer _ = frame_arena.reset(std.heap.ArenaAllocator.ResetMode.retain_capacity);
 
     // Move all player controllers
-    var controllable = sim.world.query(&.{ ecs.component.Pos, ecs.component.Ctl }, &.{});
-    while (controllable.next()) |_| {
-        const position = try controllable.get(ecs.component.Pos);
-        const controller = try controllable.get(ecs.component.Ctl);
-        const state = input.get(controller.id);
+    var query = sim.world.query(&.{ ecs.component.Pos, ecs.component.Ctl, ecs.component.Anm }, &.{});
+    while (query.next()) |_| {
+        const pos = try query.get(ecs.component.Pos);
+        const ctl = try query.get(ecs.component.Ctl);
+        const state = input.get(ctl.id);
         if (state.isConnected) {
-            position.vec[0] += 5 * state.horizontal();
-            position.vec[1] += 5 * state.vertical();
+            pos.vec[0] += 5 * state.horizontal();
+            pos.vec[1] += 5 * state.vertical();
+            const anm = try query.get(ecs.component.Anm);
+            if (state.horizontal() + state.vertical() != 0) {
+                anm.animation = Animation.KattisRun;
+                anm.interval = 8;
+            } else {
+                anm.animation = Animation.KattisIdle;
+                anm.interval = 16;
+            }
         }
     }
 
+    animator.update(&sim.world); // I don't think this should be here
+
     // Draw debug text (should not be here)
-    rl.drawText("++party! :D", 8, 8, 96, rl.Color.blue);
+    rl.drawText("++party :3", 64, 8, 32, rl.Color.blue);
 }
