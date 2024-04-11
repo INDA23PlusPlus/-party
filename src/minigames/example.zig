@@ -22,6 +22,15 @@ pub fn init(sim: *simulation.Simulation) !void {
         ecs.component.Ctl{ .id = 0 },
         ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
     });
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Pos{ .vec = .{ 32, 64 } },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/kattis.png"),
+            .tint = rl.Color.red,
+        },
+        ecs.component.Ctl{ .id = 1 },
+        ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
+    });
 }
 
 const win: bool = false;
