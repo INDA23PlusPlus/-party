@@ -28,6 +28,11 @@ pub const SharedSimulation = struct {
 /// All the errors that may happen during simulation.
 pub const SimulationError = ecs.world.WorldError;
 
+/// Should this be here?
+pub fn init(minigames_list: []const minigame.Minigame, sim: *Simulation) !void {
+    try minigames_list[sim.meta.minigame_id].init(sim);
+}
+
 /// Simulate one tick in the game world.
 /// All generic game code will be called from this function and should not
 /// use anything outside of the world or the input frame. Failing to do so

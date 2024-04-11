@@ -12,6 +12,7 @@ pub const components: []const type = &.{
     Col,
     Tex,
     Txt,
+    Ctl,
 };
 
 /// Entities with this component are positionable.
@@ -45,4 +46,9 @@ pub const Tex = struct {
     scale: F32 = F32.fromInt(1),
     rotate: enum { R0, R90, R180, R270 } = .R0,
     mirror: bool = false,
+};
+
+/// Entities with this component are associated with a controller.
+pub const Ctl = struct {
+    id: usize,
 };

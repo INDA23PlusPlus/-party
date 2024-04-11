@@ -12,16 +12,26 @@ const input = @import("../input.zig");
 
 pub fn init(sim: *simulation.Simulation) !void {
     _ = try sim.world.spawnWith(.{
-        ecs.component.Pos{ .vec = @splat(-100) },
+        ecs.component.Pos{ .vec = .{ 0, 0 } },
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/test.png"),
+            .tint = rl.Color.blue,
         },
+        ecs.component.Ctl{ .id = 0 },
+    });
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Pos{ .vec = .{ 0, 0 } },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/test.png"),
+            .tint = rl.Color.red,
+        },
+        ecs.component.Ctl{ .id = 1 },
     });
 }
 
 const win: bool = false;
 
-const playerColors: [input.MAX_CONTROLLERS]rl.Color = .{
+const playerColors: [8]rl.Color = .{
     rl.Color.red,
     rl.Color.green,
     rl.Color.blue,
@@ -35,31 +45,19 @@ const playerColors: [input.MAX_CONTROLLERS]rl.Color = .{
 pub fn update(sim: *simulation.Simulation) !void {
     // example of using a frame allocator
     //defer _ = frame_arena.reset(std.heap.ArenaAllocator.ResetMode.retain_capacity);
-    var pos_query = sim.world.query(&.{ecs.component.Pos}, &.{});
-    while (pos_query.next()) |_| {
-        const pos = try pos_query.get(ecs.component.Pos);
 
-        // Temp
-        // Note, inputs should not be handled like this.
-        if (rl.isKeyDown(rl.KeyboardKey.key_a)) pos.vec[0] -= 5;
-        if (rl.isKeyDown(rl.KeyboardKey.key_d)) pos.vec[0] += 5;
-        if (rl.isKeyDown(rl.KeyboardKey.key_w)) pos.vec[1] -= 5;
-        if (rl.isKeyDown(rl.KeyboardKey.key_s)) pos.vec[1] += 5;
-    }
-
-    for (0..input.MAX_CONTROLLERS) |id| {
-        var color = playerColors[id];
-        // TODO: Doing rendering code in the update() is not well advised. Preferrably the renderer should be able
-        // to draw everything that we want it to. If not, then perhaps a render() callback could be added to the interface.
-        if (input.controller(id) == null) {
-            color = rl.colorAlpha(rl.colorBrightness(color, -0.5), 0.5);
-        } else {
-            if (input.controller(id).?.primary().down()) {
-                color = rl.colorBrightness(color, 0.5);
-            }
+    // Move all player controllers
+    var controllable = sim.world.query(&.{ ecs.component.Pos, ecs.component.Ctl }, &.{});
+    while (controllable.next()) |_| {
+        const position = try controllable.get(ecs.component.Pos);
+        const controller = try controllable.get(ecs.component.Ctl);
+        const state = input.get(controller.id);
+        if (state.isConnected) {
+            position.vec[0] += 5 * state.horizontal();
+            position.vec[1] += 5 * state.vertical();
         }
-        rl.drawText(rl.textFormat("Player %d", .{id}), 8, @intCast(128 + 32 * id), 32, color);
     }
 
+    // Draw debug text (should not be here)
     rl.drawText("++party! :D", 8, 8, 96, rl.Color.blue);
 }

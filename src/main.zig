@@ -15,7 +15,7 @@ const minigames = @import("minigames/list.zig");
 
 // Settings
 // TODO: move to settings file
-const BC_COLOR = rl.Color.gray;
+const BC_COLOR = rl.Color.white;
 
 const StartNetRole = enum {
     client,
@@ -73,12 +73,12 @@ pub fn main() !void {
 
     var shared_simulation = simulation.SharedSimulation{ .rw_lock = .{}, .sim = .{} };
 
-    _ = try shared_simulation.sim.world.spawnWith(.{
-        ecs.component.Pos{},
-        ecs.component.Tex{
-            .texture_hash = AssetManager.pathHash("assets/test.png"),
-        },
-    });
+    // _ = try shared_simulation.sim.world.spawnWith(.{
+    //     ecs.component.Pos{},
+    //     ecs.component.Tex{
+    //         .texture_hash = AssetManager.pathHash("assets/test.png"),
+    //     },
+    // });
 
     // Networking
     if (launch_options.start_as_role == .client) {
@@ -91,6 +91,8 @@ pub fn main() !void {
     var view = render.View.init(100, 100);
     defer view.deinit();
 
+    try simulation.init(&minigames.list, &shared_simulation.sim);
+
     // Game loop
     while (window.running) {
         // Make sure the main thread controls the world!
@@ -101,6 +103,7 @@ pub fn main() !void {
         if (rl.isKeyDown(rl.KeyboardKey.key_right)) view.dst.x += 5;
         if (rl.isKeyDown(rl.KeyboardKey.key_up)) view.dst.y -= 5;
         if (rl.isKeyDown(rl.KeyboardKey.key_down)) view.dst.y += 5;
+
         time.update(); // TODO: Move into world.
         input.poll(); // TODO: Make the input module thread-safe such that the networking threads may access it as well.
 
@@ -118,8 +121,6 @@ pub fn main() !void {
 
         // Stop Render -----------------------
         rl.endDrawing();
-
-        input.post();
 
         // Give the networking threads a chance to manipulate the world.
         shared_simulation.rw_lock.unlock();

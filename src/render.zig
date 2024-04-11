@@ -18,7 +18,6 @@ pub fn update(world: *ecs.world.World, am: *AssetManager) void {
 
         // TODO: error handling
         const texture = am.hashmap.get(c.texture_hash) orelse @panic("Texture not found");
-
         rl.drawTextureEx(texture, pos, 0, @floatCast(c.scale.toFloat()), c.tint);
     }
 }
