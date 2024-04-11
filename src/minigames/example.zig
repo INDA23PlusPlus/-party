@@ -14,18 +14,10 @@ pub fn init(sim: *simulation.Simulation) !void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{ .vec = .{ 0, 0 } },
         ecs.component.Tex{
-            .texture_hash = AssetManager.pathHash("assets/test.png"),
-            .tint = rl.Color.blue,
+            .texture_hash = AssetManager.pathHash("assets/kattis.png"),
+            .tint = rl.Color.white,
         },
         ecs.component.Ctl{ .id = 0 },
-    });
-    _ = try sim.world.spawnWith(.{
-        ecs.component.Pos{ .vec = .{ 0, 0 } },
-        ecs.component.Tex{
-            .texture_hash = AssetManager.pathHash("assets/test.png"),
-            .tint = rl.Color.red,
-        },
-        ecs.component.Ctl{ .id = 1 },
     });
 }
 

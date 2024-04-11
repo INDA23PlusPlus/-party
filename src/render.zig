@@ -2,6 +2,7 @@ const rl = @import("raylib");
 const std = @import("std");
 const ecs = @import("ecs/ecs.zig");
 const AssetManager = @import("AssetManager.zig");
+const constants = @import("constants.zig");
 
 pub fn update(world: *ecs.world.World, am: *AssetManager) void {
     // var view = View.init(100, 100);
@@ -12,13 +13,32 @@ pub fn update(world: *ecs.world.World, am: *AssetManager) void {
 
     while (query.next()) |_| {
         const pos_component = query.get(ecs.component.Pos) catch unreachable;
-        const c = query.get(ecs.component.Tex) catch unreachable;
+        const tex_component = query.get(ecs.component.Tex) catch unreachable;
 
         const pos = rl.Vector2{ .x = @floatFromInt(pos_component.vec[0]), .y = @floatFromInt(pos_component.vec[1]) };
 
         // TODO: error handling
-        const texture = am.hashmap.get(c.texture_hash) orelse @panic("Texture not found");
-        rl.drawTextureEx(texture, pos, 0, @floatCast(c.scale.toFloat()), c.tint);
+
+        const tex = am.hashmap.get(tex_component.texture_hash) orelse @panic("Texture not found");
+
+        const src = rl.Rectangle{
+            .x = @floatFromInt(tex_component.u * constants.asset_resolution),
+            .y = @floatFromInt(tex_component.v * constants.asset_resolution),
+            .width = @floatFromInt(constants.asset_resolution),
+            .height = @floatFromInt(constants.asset_resolution),
+        };
+
+        const dst = rl.Rectangle{
+            .x = pos.x,
+            .y = pos.y,
+            .width = constants.asset_resolution * 4,
+            .height = constants.asset_resolution * 4,
+        };
+
+        // ! rotation unused
+        rl.drawTexturePro(tex, src, dst, rl.Vector2.init(0, 0), 0.0, tex_component.tint);
+
+        // rl.drawTextureEx(texture, pos, 0, @floatCast(c.scale.toFloat()), c.tint);
     }
 }
 

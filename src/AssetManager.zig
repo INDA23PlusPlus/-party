@@ -30,6 +30,7 @@ const map_type = std.HashMap(
 
 const paths = [_][:0]const u8{
     "assets/test.png",
+    "assets/kattis.png",
 };
 
 hashmap: map_type,
