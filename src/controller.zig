@@ -49,7 +49,7 @@ pub fn poll(controllers: []Controller, state: *input.InputState, current_tick: u
         poll_keyboard1(&state[controller1], current_tick);
     }
 
-    const controller2 = controllers[2].input_index;
+    const controller2 = controllers[1].input_index;
     if (controller2 < state.len) {
         poll_keyboard2(&state[controller2], current_tick);
     }

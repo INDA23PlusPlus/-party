@@ -105,28 +105,25 @@ pub fn main() !void {
         const frame_input: input.InputState = shared_input_timeline.localUpdate(&controllers, tick).*;
         shared_input_timeline.rw_lock.unlock();
 
-
         // Updates game systems
         if (rl.isKeyDown(rl.KeyboardKey.key_left)) view.dst.x -= 5;
         if (rl.isKeyDown(rl.KeyboardKey.key_right)) view.dst.x += 5;
         if (rl.isKeyDown(rl.KeyboardKey.key_up)) view.dst.y -= 5;
         if (rl.isKeyDown(rl.KeyboardKey.key_down)) view.dst.y += 5;
 
-        //input.poll(); // TODO: Make the input module thread-safe such that the networking threads may access it as well.
-
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure
         // is called in other places. Not doing so will lead to inconsistencies.
         try simulation.simulate(&minigames.list, &shared_simulation.sim, &frame_input);
 
-        // Render -----------------------------
+        // Begin rendering.
         window.update();
         rl.beginDrawing();
         rl.clearBackground(BC_COLOR);
         render.update(&shared_simulation.sim.world, &assets);
         view.draw(&shared_simulation.sim.world, &assets); // Temp
 
-        // Stop Render -----------------------
+        // Stop rendering.
         rl.endDrawing();
 
         // Give the networking threads a chance to manipulate the world.
