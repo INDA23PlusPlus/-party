@@ -92,7 +92,7 @@ pub fn main() !void {
     var view = render.View.init(100, 100);
     defer view.deinit();
 
-    try simulation.init(&minigames.list, &shared_simulation.sim);
+    try simulation.init(&shared_simulation.sim);
 
     // Game loop
     while (window.running) {
@@ -114,7 +114,7 @@ pub fn main() !void {
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure
         // is called in other places. Not doing so will lead to inconsistencies.
-        try simulation.simulate(&minigames.list, &shared_simulation.sim, &frame_input);
+        try simulation.simulate(&shared_simulation.sim, &frame_input);
 
         // Begin rendering.
         window.update();

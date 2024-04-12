@@ -46,6 +46,13 @@ pub fn build(b: *std.Build) !void {
     const run_server_step = b.step("run-server", "Run ++party in server/host mode");
     run_server_step.dependOn(&run_server_cmd.step);
 
+    const minigame = b.option([]const u8, "minigame", "Run a specific minigame using the name specified in list.zig") orelse ""; //++ minigames_string ++ ")") orelse "";
+
+    const options = b.addOptions();
+    options.addOption([]const u8, "minigame", minigame);
+
+    exe.root_module.addOptions("config", options);
+
     b.installArtifact(exe);
 
     const tests = b.addTest(.{

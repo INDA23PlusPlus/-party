@@ -3,13 +3,25 @@ const constants = @import("constants.zig");
 const std = @import("std");
 const minigame = @import("minigames/interface.zig");
 const input = @import("input.zig");
+const config = @import("config");
+const minigames_list = @import("minigames/list.zig").list;
+
+const starting_minigame_id = blk: {
+    for (minigames_list, 0..minigames_list.len) |mg, i| {
+        if (std.mem.eql(u8, mg.name, config.minigame)) {
+            break :blk i;
+        }
+    }
+
+    break :blk 0;
+};
 
 /// Data that is kept between minigames (such as seed, scores, etc)
 pub const Metadata = struct {
     score: [constants.max_player_count]u32 = [_]u32{0} ** constants.max_player_count,
     seed: usize = 555,
     ticks_elapsed: usize = 0,
-    minigame_id: usize = 0,
+    minigame_id: usize = starting_minigame_id,
 };
 
 pub const Simulation = struct {
@@ -30,7 +42,7 @@ pub const SharedSimulation = struct {
 pub const SimulationError = ecs.world.WorldError;
 
 /// Should this be here?
-pub fn init(minigames_list: []const minigame.Minigame, sim: *Simulation) !void {
+pub fn init(sim: *Simulation) !void {
     try minigames_list[sim.meta.minigame_id].init(sim);
 }
 
@@ -38,7 +50,7 @@ pub fn init(minigames_list: []const minigame.Minigame, sim: *Simulation) !void {
 /// All generic game code will be called from this function and should not
 /// use anything outside of the world or the input frame. Failing to do so
 /// will lead to inconsistencies.
-pub fn simulate(minigames_list: []const minigame.Minigame, sim: *Simulation, input_state: *const input.InputState) !void {
+pub fn simulate(sim: *Simulation, input_state: *const input.InputState) !void {
     const frame_start_minigame = sim.meta.minigame_id;
 
     // TODO: Add input as an argument.
