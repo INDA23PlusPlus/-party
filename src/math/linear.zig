@@ -127,6 +127,11 @@ pub fn V(comptime dimensions: comptime_int, comptime F: anytype) type {
             inline else => unreachable,
         };
 
+        /// Sets self to value.
+        pub inline fn set(self: *Self, value: anytype) void {
+            self.vector = infer(value);
+        }
+
         /// Performs elementwise addition.
         pub inline fn add(augend: Self, addend: anytype) Self {
             return Self{ .vector = augend.vector + infer(addend) };

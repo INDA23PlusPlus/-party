@@ -11,21 +11,21 @@ const animator = @import("../animation/animator.zig");
 
 pub fn init(sim: *simulation.Simulation) !void {
     _ = try sim.world.spawnWith(.{
-        ecs.component.Pos{ .vec = .{ 0, 0 } },
+        ecs.component.Pos{},
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/kattis.png"),
             .tint = rl.Color.white,
         },
-        ecs.component.Ctl{ .id = 0 },
+        ecs.component.Plr{ .id = 0 },
         ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
     });
     _ = try sim.world.spawnWith(.{
-        ecs.component.Pos{ .vec = .{ 32, 64 } },
+        ecs.component.Pos{ .pos = @Vector(2, i32){ 32, 64 } },
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/kattis.png"),
             .tint = rl.Color.red,
         },
-        ecs.component.Ctl{ .id = 1 },
+        ecs.component.Plr{ .id = 1 },
         ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
     });
 }
@@ -34,14 +34,14 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState) !voi
     // TODO: Possible pass in a frame_allocator.
 
     // Move all player controllers
-    var query = sim.world.query(&.{ ecs.component.Pos, ecs.component.Ctl, ecs.component.Anm }, &.{});
+    var query = sim.world.query(&.{ ecs.component.Pos, ecs.component.Plr, ecs.component.Anm }, &.{});
     while (query.next()) |_| {
         const pos = try query.get(ecs.component.Pos);
-        const ctl = try query.get(ecs.component.Ctl);
-        const state = inputs[ctl.id];
+        const plr = try query.get(ecs.component.Plr);
+        const state = inputs[plr.id];
         if (state.is_connected) {
-            pos.vec[0] += 5 * state.horizontal();
-            pos.vec[1] += 5 * state.vertical();
+            pos.pos[0] += 5 * state.horizontal();
+            pos.pos[1] += 5 * state.vertical();
             const anm = try query.get(ecs.component.Anm);
             if (state.horizontal() + state.vertical() != 0) {
                 anm.animation = Animation.KattisRun;

@@ -15,7 +15,7 @@ pub fn update(world: *ecs.world.World, am: *AssetManager) void {
         const pos_component = query.get(ecs.component.Pos) catch unreachable;
         const tex_component = query.get(ecs.component.Tex) catch unreachable;
 
-        const pos = rl.Vector2{ .x = @floatFromInt(pos_component.vec[0]), .y = @floatFromInt(pos_component.vec[1]) };
+        const pos = rl.Vector2{ .x = @floatFromInt(pos_component.pos[0]), .y = @floatFromInt(pos_component.pos[1]) };
 
         // TODO: error handling
 
@@ -115,8 +115,8 @@ pub const View = struct {
 
     inline fn toVector2(pos: *ecs.component.Pos) rl.Vector2 {
         return rl.Vector2.init(
-            @as(f32, @floatFromInt(pos.vec[0])),
-            @as(f32, @floatFromInt(pos.vec[1])),
+            @as(f32, @floatFromInt(pos.pos[0])),
+            @as(f32, @floatFromInt(pos.pos[1])),
         );
     }
 };

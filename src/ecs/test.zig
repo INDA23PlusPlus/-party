@@ -32,7 +32,7 @@ test "reset" {
     var query1 = world.query(&.{ecs.component.Pos}, &.{});
     while (query1.next()) |_| {
         const pos = try query1.get(ecs.component.Pos);
-        if (!(pos.vec[0] == 0 and pos.vec[1] == 0)) {
+        if (!(pos.pos[0] == 0 and pos.pos[1] == 0)) {
             unreachable;
         }
     }
@@ -49,7 +49,7 @@ test "reset" {
     var query2 = world.query(&.{ecs.component.Pos}, &.{});
     while (query2.next()) |_| {
         const pos = try query2.get(ecs.component.Pos);
-        if (!(pos.vec[0] == 0 and pos.vec[1] == 0)) {
+        if (!(pos.pos[0] == 0 and pos.pos[1] == 0)) {
             unreachable;
         }
     }
@@ -64,7 +64,7 @@ test "build entities" {
     for (0..ecs.world.N) |i| {
         const j: i32 = @intCast(i);
         const col = ecs.component.Col{};
-        const pos = ecs.component.Pos{ .vec = @splat(j) };
+        const pos = ecs.component.Pos{ .pos = @splat(j) };
         _ = try world.spawnWith(.{ pos, col });
     }
 }

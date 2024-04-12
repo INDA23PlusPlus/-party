@@ -23,7 +23,7 @@ const ent = @import("entity.zig");
 // WORLD
 
 /// Determines the maximum number of entities a World supports.
-pub const N: usize = 128;
+pub const N: usize = 256;
 pub const Cs = cps.components;
 
 pub const Entities = std.bit_set.ArrayBitSet(u64, N);
@@ -272,7 +272,7 @@ fn Query(comptime Include: []const type, comptime Exclude: []const type) type {
         cursor: ?usize = null,
         iterator: Entities.Iterator(.{}),
 
-        pub fn init(world: *World) @This() {
+        fn init(world: *World) @This() {
             return @This(){ .world = world, .iterator = world.entities.iterator(.{}) };
         }
 
@@ -283,7 +283,8 @@ fn Query(comptime Include: []const type, comptime Exclude: []const type) type {
 
             while (self.iterator.next()) |i| {
                 const signature = self.world.signatures[i];
-                if (signature.intersectWith(include).differenceWith(exclude).mask != 0) {
+
+                if (signature.intersectWith(include).xorWith(signature.intersectWith(exclude)).eql(include)) {
                     self.cursor = i;
                     return Entity{ .identifier = @intCast(i), .generation = self.world.generations[i] };
                 }
