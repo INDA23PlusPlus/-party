@@ -222,6 +222,7 @@ pub fn F(comptime integer_bits: comptime_int, comptime fractional_bits: comptime
         }
 
         /// Lossy cast to integer.
+        /// The returned value is floored.
         pub inline fn toInt(self: Self) Int {
             if (integer_bits == 0) return 0;
             return @truncate(self.bits >> fractional_bits);

@@ -72,6 +72,10 @@ pub fn checkDynamicOpenCollisionAABB(col_a: *Col, pos_a: *Pos, col_b: *Col, pos_
     return x and y;
 }
 
+// TODO:
+//  - [X] Make collision system simd-based.
+//  - [ ] Make CollisionQueue not suck.
+
 /// Moves entities with Pos, Mov, and Col components.
 /// If a collision occurs, it is added to the collision queue.
 pub fn movementSystem(world: *ecs.world.World, collisions: *CollisionQueue) !void {
@@ -87,86 +91,45 @@ pub fn movementSystem(world: *ecs.world.World, collisions: *CollisionQueue) !voi
         const mov = query.get(ecs.component.Mov) catch unreachable;
 
         mov.subpixel = mov.subpixel.add(mov.velocity);
-        const movee: @Vector(2, i16) = mov.subpixel.integerParts().toInts();
+        const move_i16: @Vector(2, i16) = mov.subpixel.integerParts().toInts();
 
-        if (@reduce(.And, movee == @Vector(2, i32){ 0, 0 })) {
+        if (@reduce(.And, move_i16 == @Vector(2, i32){ 0, 0 })) {
             continue;
         }
 
-        mov.subpixel = mov.subpixel.sub(movee);
+        mov.subpixel = mov.subpixel.sub(move_i16);
 
-        var move: @Vector(2, i32) = movee;
+        var move: @Vector(2, i32) = move_i16;
 
-        // Move in the x-axis and the y-axis.
-        while (@reduce(.And, move != @Vector(2, i32){ 0, 0 })) {
+        while (@reduce(.Or, move != @Vector(2, i32){ 0, 0 })) {
             const u: @Vector(2, i32) = @intFromBool(move > @Vector(2, i32){ 0, 0 });
             const v: @Vector(2, i32) = @intFromBool(move < @Vector(2, i32){ 0, 0 });
             const velocity = u - v;
 
-            std.debug.print("xy: {} {}\n", .{ velocity[0], velocity[1] });
-
-            if (try collisionSystem(
+            const collide = try collisionSystem(
                 entity,
                 pos,
                 col,
                 velocity,
                 world,
                 collisions,
-            )) {
-                break;
+            );
+
+            if (collide.xy) {
+                move *= [_]i32{
+                    @intFromBool(!collide.x),
+                    @intFromBool(!collide.y),
+                };
+                move *= @splat(@intFromBool(!(collide.x and collide.y)));
             } else {
                 pos.pos += velocity;
                 move -= velocity;
             }
         }
-
-        // Move in the x-axis.
-        if (move[0] != 0) {
-            const velocity: @Vector(2, i32) = .{ (@as(i32, @intFromBool(move[0] > 0)) << 1) - 1, 0 };
-            std.debug.print("x: {} {}\n", .{ velocity[0], velocity[1] });
-            while (move[0] != 0) {
-                if (try collisionSystem(
-                    entity,
-                    pos,
-                    col,
-                    velocity,
-                    world,
-                    collisions,
-                )) {
-                    move[0] = 0;
-                    break;
-                } else {
-                    pos.pos += velocity;
-                    move -= velocity;
-                }
-            }
-        }
-
-        // Move in the y-axis.
-        if (move[1] != 0) {
-            const velocity: @Vector(2, i32) = .{ 0, (@as(i32, @intFromBool(move[1] > 0)) << 1) - 1 };
-            std.debug.print("y: {} {}\n", .{ velocity[0], velocity[1] });
-            while (move[1] != 0) {
-                if (try collisionSystem(
-                    entity,
-                    pos,
-                    col,
-                    velocity,
-                    world,
-                    collisions,
-                )) {
-                    move[1] = 0;
-                    break;
-                } else {
-                    pos.pos += velocity;
-                    move -= velocity;
-                }
-            }
-        }
     }
 }
 
-pub const max_collisions = ecs.world.N * (ecs.world.N - 1) / 2;
+// pub const max_collisions = ecs.world.N * (ecs.world.N - 1) / 2;
 
 pub const CollisionQueue = struct {
     const Self = @This();
@@ -183,6 +146,10 @@ pub const CollisionQueue = struct {
         try self.collisions.put(pair, {});
     }
 
+    pub fn clear(self: *Self) void {
+        self.collisions.clearRetainingCapacity();
+    }
+
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{ .collisions = Set.init(allocator) };
     }
@@ -192,6 +159,17 @@ pub const CollisionQueue = struct {
     }
 };
 
+const CollisionMask = packed struct(u3) {
+    /// There was a collision.
+    xy: bool = false,
+
+    /// The collision was caused by a movement in the x-axis.
+    x: bool = false,
+
+    /// The collision was caused by a movement in the y-axis.
+    y: bool = false,
+};
+
 fn collisionSystem(
     ent1: ecs.entity.Entity,
     pos1: *ecs.component.Pos,
@@ -199,13 +177,13 @@ fn collisionSystem(
     velocity: @Vector(2, i32),
     world: *ecs.world.World,
     collisions: *CollisionQueue,
-) !bool {
+) !CollisionMask {
     var query = world.query(&.{
         ecs.component.Pos,
         ecs.component.Col,
     }, &.{});
 
-    var collided = false;
+    var collided = CollisionMask{};
 
     while (query.next()) |ent2| {
         if (ent1.eq(ent2)) {
@@ -215,12 +193,34 @@ fn collisionSystem(
         const pos2 = query.get(ecs.component.Pos) catch unreachable;
         const col2 = query.get(ecs.component.Col) catch unreachable;
 
-        const a = @reduce(.And, pos1.pos + col1.dim + velocity > pos2.pos);
-        const b = @reduce(.And, pos2.pos + col2.dim > pos1.pos + velocity);
+        if (col1.layer.intersectsNot(col2.layer)) {
+            continue;
+        }
 
-        if (a and b) {
+        const a = @intFromBool(pos1.pos + col1.dim + velocity > pos2.pos);
+        const b = @intFromBool(pos2.pos + col2.dim > pos1.pos + velocity);
+        const c = (a & b) != [_]u1{ 0, 0 };
+        const d = @reduce(.And, c);
+
+        if (d) {
+            collided.xy = true;
             try collisions.put(.{ ent1, ent2 });
-            collided = true;
+
+            const x_velocity = velocity & [_]i32{ ~@as(i32, 0), 0 };
+            const x_a = @intFromBool(pos1.pos + col1.dim + x_velocity > pos2.pos);
+            const x_b = @intFromBool(pos2.pos + col2.dim > pos1.pos + x_velocity);
+            const x_c = (x_a & x_b) != [_]u1{ 0, 0 };
+            const x_d = @reduce(.And, x_c);
+
+            if (x_d) collided.x = true;
+
+            const y_velocity = velocity & [_]i32{ 0, ~@as(i32, 0) };
+            const y_a = @intFromBool(pos1.pos + col1.dim + y_velocity > pos2.pos);
+            const y_b = @intFromBool(pos2.pos + col2.dim > pos1.pos + y_velocity);
+            const y_c = (y_a & y_b) != [_]u1{ 0, 0 };
+            const y_d = @reduce(.And, y_c);
+
+            if (y_d) collided.y = true;
         }
     }
 

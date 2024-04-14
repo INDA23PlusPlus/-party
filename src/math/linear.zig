@@ -223,6 +223,7 @@ pub fn V(comptime dimensions: comptime_int, comptime F: anytype) type {
         }
 
         /// Lossy cast to integer vector.
+        /// The returned value is floored.
         pub inline fn toInts(self: Self) @Vector(dimensions, F.Int) {
             return @truncate(self.vector >> @splat(F.fractional_bit_count));
         }
@@ -688,7 +689,7 @@ test "to_integers" {
 
         expected[0] = x;
         expected[1] = y;
-        const computed = V2.init(x, y).toInts();
+        const computed = V2.init(x, y).toIntsLossy();
 
         try eq(expected, computed);
     }

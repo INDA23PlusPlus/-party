@@ -21,18 +21,23 @@ pub fn update(world: *ecs.world.World, am: *AssetManager) void {
 
         const tex = am.hashmap.get(tex_component.texture_hash) orelse @panic("Texture not found");
 
+        const u: f32 = @floatFromInt(tex_component.u * constants.asset_resolution);
+        const v: f32 = @floatFromInt(tex_component.v * constants.asset_resolution);
+        const w: f32 = @floatFromInt(tex_component.tiles_x * constants.asset_resolution);
+        const h: f32 = @floatFromInt(tex_component.tiles_y * constants.asset_resolution);
+
         const src = rl.Rectangle{
-            .x = @floatFromInt(tex_component.u * constants.asset_resolution),
-            .y = @floatFromInt(tex_component.v * constants.asset_resolution),
-            .width = @floatFromInt(constants.asset_resolution),
-            .height = @floatFromInt(constants.asset_resolution),
+            .x = u,
+            .y = v,
+            .width = w,
+            .height = h,
         };
 
         const dst = rl.Rectangle{
-            .x = pos.x,
-            .y = pos.y,
-            .width = constants.asset_resolution * 4,
-            .height = constants.asset_resolution * 4,
+            .x = pos.x * 1.5,
+            .y = pos.y * 1.5,
+            .width = w * 1.5,
+            .height = h * 1.5,
         };
 
         // ! rotation unused
@@ -46,8 +51,8 @@ pub fn update(world: *ecs.world.World, am: *AssetManager) void {
 pub const View = struct {
     const Self = @This();
 
-    const width = 640; // TODO: Move elsewhere
-    const height = 320; // TODO: Move elsewhere
+    const width = 512; // TODO: Move elsewhere
+    const height = 288; // TODO: Move elsewhere
 
     dst: rl.Rectangle,
     src: rl.Rectangle,

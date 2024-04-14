@@ -5,8 +5,8 @@ const input_state = @import("../input.zig");
 pub const Minigame = struct {
     name: []const u8,
 
-    init: *const fn (simulation: *simulation.Simulation) simulation.SimulationError!void,
+    init: *const fn (sim: *simulation.Simulation) simulation.SimulationError!void,
 
     // TODO: pass in collisions
-    update: *const fn (world: *simulation.Simulation, input: *const input_state.InputState) simulation.SimulationError!void,
+    update: *const fn (sim: *simulation.Simulation, input: *const input_state.InputState) simulation.SimulationError!void,
 };

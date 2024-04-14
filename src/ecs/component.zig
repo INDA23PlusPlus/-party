@@ -35,8 +35,25 @@ pub const Mov = struct {
 
 /// Bitmask for collisions.
 pub const Layer = packed struct {
-    base: bool = false,
-    // Add game specific layers here.
+    const Self = @This();
+    const Bits = @typeInfo(Self).Struct.backing_integer.?;
+
+    pub inline fn intersects(self: Self, other: Self) bool {
+        const a: Bits = @bitCast(self);
+        const b: Bits = @bitCast(other);
+
+        return a & b != 0;
+    }
+
+    pub inline fn intersectsNot(self: Self, other: Self) bool {
+        const a: Bits = @bitCast(self);
+        const b: Bits = @bitCast(other);
+
+        return a & b == 0;
+    }
+
+    base: bool = true,
+    // Add more game specific layers here.
 };
 
 /// Entities with this component are collidable.
@@ -75,13 +92,15 @@ pub const Txt = struct {
 
 /// Entities with this component have an associated texture.
 pub const Tex = struct {
+    u: usize = 0,
+    v: usize = 0,
+    tiles_x: usize = 1,
+    tiles_y: usize = 1,
     texture_hash: u64 = 0, // TODO: add default texture to renderer?
     tint: rl.Color = rl.Color.white, // TODO: does this work for serialization?
     scale: F32 = F32.fromInt(1),
     rotate: enum { R0, R90, R180, R270 } = .R0,
     mirror: bool = false,
-    u: usize = 0,
-    v: usize = 0,
 };
 
 /// Entities with this component are animated.
