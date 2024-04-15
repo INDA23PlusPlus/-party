@@ -116,11 +116,14 @@ pub fn movementSystem(world: *ecs.world.World, collisions: *CollisionQueue) !voi
             );
 
             if (collide.xy) {
-                move *= [_]i32{
-                    @intFromBool(!collide.x),
-                    @intFromBool(!collide.y),
-                };
-                move *= @splat(@intFromBool(!(collide.x and collide.y)));
+                const cause: @Vector(2, i32) = [_]i32{ @intFromBool(!collide.x), @intFromBool(!collide.y) };
+                const corner: @Vector(2, i32) = @splat(@intFromBool(collide.x or collide.y));
+
+                const swapped = @shuffle(i32, move, undefined, @Vector(2, i32){ 1, 0 });
+                const largest = @intFromBool(move > swapped);
+                std.debug.print("{} {} {}\n", .{ cause, corner, largest });
+
+                move *= cause & (corner | largest);
             } else {
                 pos.pos += velocity;
                 move -= velocity;
@@ -133,7 +136,7 @@ pub fn movementSystem(world: *ecs.world.World, collisions: *CollisionQueue) !voi
 
 pub const CollisionQueue = struct {
     const Self = @This();
-    const Key = struct { ecs.entity.Entity, ecs.entity.Entity };
+    const Key = struct { a: ecs.entity.Entity, b: ecs.entity.Entity };
     const Set = std.AutoArrayHashMap(Key, void);
 
     collisions: Set,
@@ -204,7 +207,7 @@ fn collisionSystem(
 
         if (d) {
             collided.xy = true;
-            try collisions.put(.{ ent1, ent2 });
+            try collisions.put(.{ .a = ent1, .b = ent2 });
 
             const x_velocity = velocity & [_]i32{ ~@as(i32, 0), 0 };
             const x_a = @intFromBool(pos1.pos + col1.dim + x_velocity > pos2.pos);

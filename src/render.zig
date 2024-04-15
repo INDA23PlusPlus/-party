@@ -5,10 +5,6 @@ const AssetManager = @import("AssetManager.zig");
 const constants = @import("constants.zig");
 
 pub fn update(world: *ecs.world.World, am: *AssetManager) void {
-    // var view = View.init(100, 100);
-    // view.render(world, am);
-    // view.deinit();
-
     var query = world.query(&.{ ecs.component.Pos, ecs.component.Tex }, &.{});
 
     while (query.next()) |_| {

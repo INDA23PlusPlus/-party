@@ -88,10 +88,6 @@ pub fn main() !void {
         try networking.startServer(&shared_simulation);
     }
 
-    // Temp
-    var view = render.View.init(100, 100);
-    defer view.deinit();
-
     try simulation.init(&shared_simulation.sim);
 
     // Game loop
@@ -105,12 +101,6 @@ pub fn main() !void {
         const frame_input: input.InputState = shared_input_timeline.localUpdate(&controllers, tick).*;
         shared_input_timeline.rw_lock.unlock();
 
-        // Updates game systems
-        if (rl.isKeyDown(rl.KeyboardKey.key_left)) view.dst.x -= 5;
-        if (rl.isKeyDown(rl.KeyboardKey.key_right)) view.dst.x += 5;
-        if (rl.isKeyDown(rl.KeyboardKey.key_up)) view.dst.y -= 5;
-        if (rl.isKeyDown(rl.KeyboardKey.key_down)) view.dst.y += 5;
-
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure
         // is called in other places. Not doing so will lead to inconsistencies.
@@ -121,7 +111,6 @@ pub fn main() !void {
         rl.beginDrawing();
         rl.clearBackground(BC_COLOR);
         render.update(&shared_simulation.sim.world, &assets);
-        view.draw(&shared_simulation.sim.world, &assets); // Temp
 
         // Stop rendering.
         rl.endDrawing();

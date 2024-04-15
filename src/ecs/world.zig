@@ -226,6 +226,21 @@ pub const World = struct {
         return entity.generation == self.generations[entity.identifier];
     }
 
+    /// TODO: Test
+    /// DO not use this yet.
+    pub fn checkSignature(self: *Self, entity: Entity, comptime Include: []const type, comptime Exclude: []const type) bool {
+        if (!self.entities.isSet(entity.identifier)) {
+            return false;
+        }
+
+        const include = comptime componentSignature(Include);
+        const exclude = comptime componentSignature(Exclude);
+
+        const signature = self.world.signatures[entity.identifier];
+
+        return signature.intersectWith(include).xorWith(signature.intersectWith(exclude)).eql(include);
+    }
+
     /// Retrieves a component from an entity. Prefer using query().
     pub fn inspect(self: *Self, entity: Entity, comptime C: type) !*C {
         if (!isAlive(self, entity)) return WorldError.DeadInspection;
