@@ -3,7 +3,7 @@ const rl = @import("raylib");
 const Entity = @import("entity.zig").Entity;
 const entity_count = @import("world.zig").N;
 
-const F32 = @import("../math/fixed.zig").F(16, 16);
+pub const F32 = @import("../math/fixed.zig").F(16, 16);
 pub const Vec2 = @import("../math/linear.zig").V(2, F32);
 const Animation = @import("../animation/animations.zig").Animation;
 
