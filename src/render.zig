@@ -47,8 +47,8 @@ pub fn update(world: *ecs.world.World, am: *AssetManager) void {
 pub const View = struct {
     const Self = @This();
 
-    const width = 512; // TODO: Move elsewhere
-    const height = 288; // TODO: Move elsewhere
+    const width = constants.world_width;
+    const height = constants.world_height;
 
     dst: rl.Rectangle,
     src: rl.Rectangle,
