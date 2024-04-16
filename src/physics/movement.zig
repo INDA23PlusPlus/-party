@@ -22,7 +22,8 @@ pub fn updateIncorporeal(world: *ecs.world.World) !void {
     while (query.next()) |_| {
         const pos = query.get(ecs.component.Pos) catch unreachable;
         const mov = query.get(ecs.component.Mov) catch unreachable;
-
+        mov.velocity = mov.velocity.add(mov.acceleration);
+        mov.acceleration = ecs.component.Vec2.init(0, 0);
         mov.subpixel = mov.subpixel.add(mov.velocity);
         const reposition = mov.subpixel.integerParts().toInts();
         pos.pos += reposition;
@@ -42,6 +43,8 @@ pub fn updateCorporeal(world: *ecs.world.World, collisions: *collision.Collision
         const col = query.get(ecs.component.Col) catch unreachable;
         const mov = query.get(ecs.component.Mov) catch unreachable;
 
+        mov.velocity = mov.velocity.add(mov.acceleration);
+        mov.acceleration = ecs.component.Vec2.init(0, 0);
         mov.subpixel = mov.subpixel.add(mov.velocity);
         const reposition_i16: @Vector(2, i16) = mov.subpixel.integerParts().toInts();
 
