@@ -689,7 +689,7 @@ test "to_integers" {
 
         expected[0] = x;
         expected[1] = y;
-        const computed = V2.init(x, y).toIntsLossy();
+        const computed = V2.init(x, y).toInts();
 
         try eq(expected, computed);
     }

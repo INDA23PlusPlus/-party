@@ -13,7 +13,7 @@ const minigames = @import("minigames/list.zig");
 
 const AssetManager = @import("AssetManager.zig");
 const Controller = @import("controller.zig");
-const InputTimeline = @import("input_timeline.zig");
+const InputTimeline = @import("InputTimeline.zig");
 
 // Settings
 // TODO: move to settings file

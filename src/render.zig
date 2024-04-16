@@ -30,10 +30,10 @@ pub fn update(world: *ecs.world.World, am: *AssetManager) void {
         };
 
         const dst = rl.Rectangle{
-            .x = pos.x * 1.5,
-            .y = pos.y * 1.5,
-            .width = w * 1.5,
-            .height = h * 1.5,
+            .x = pos.x * 1.875,
+            .y = pos.y * 1.875,
+            .width = w * 1.875,
+            .height = h * 1.875,
         };
 
         // ! rotation unused

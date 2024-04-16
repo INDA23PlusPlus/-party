@@ -11,6 +11,7 @@ const Animation = @import("../animation/animations.zig").Animation;
 /// All components MUST be default initializable.
 /// All components MUST have a documented purpose.
 pub const components: []const type = &.{
+    SnakeHead,
     Plr,
     Pos,
     Mov,
@@ -61,6 +62,8 @@ pub const Col = struct {
     dim: @Vector(2, i32) = .{ 0, 0 }, // w, h
     layer: Layer = Layer{},
 };
+
+pub const SnakeHead = struct {};
 
 /// Entities with component have a direction they point too.
 pub const Dir = struct {
