@@ -23,7 +23,7 @@ pub const list = [_]minigame.Minigame{
         .init = tron.init,
     },
     .{
-        .name = "hot_n_steamy",
+        .name = "hns",
         .update = hot_n_steamy.update,
         .init = hot_n_steamy.init,
     },
