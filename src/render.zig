@@ -30,10 +30,10 @@ pub fn update(world: *ecs.world.World, am: *AssetManager) void {
         };
 
         const dst = rl.Rectangle{
-            .x = pos.x * 1.5,
-            .y = pos.y * 1.5,
-            .width = w * 1.5,
-            .height = h * 1.5,
+            .x = pos.x * 1.875,
+            .y = pos.y * 1.875,
+            .width = w * 1.875,
+            .height = h * 1.875,
         };
 
         // ! rotation unused
@@ -47,8 +47,8 @@ pub fn update(world: *ecs.world.World, am: *AssetManager) void {
 pub const View = struct {
     const Self = @This();
 
-    const width = 512; // TODO: Move elsewhere
-    const height = 288; // TODO: Move elsewhere
+    const width = constants.world_width;
+    const height = constants.world_height;
 
     dst: rl.Rectangle,
     src: rl.Rectangle,
