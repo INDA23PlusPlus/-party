@@ -70,7 +70,11 @@ pub fn checkCollisions(
         const pos2 = query.get(ecs.component.Pos) catch unreachable;
         const col2 = query.get(ecs.component.Col) catch unreachable;
 
-        if (col1.layer.intersectsNot(col2.layer)) {
+        if (!col1.include.intersects(col2.include)) {
+            continue;
+        }
+
+        if (col1.exclude.intersects(col2.include) or col2.exclude.intersects(col1.include)) {
             continue;
         }
 

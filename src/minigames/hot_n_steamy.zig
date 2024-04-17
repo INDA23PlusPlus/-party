@@ -20,12 +20,7 @@ const boost = ecs.component.Vec2.init(0, ecs.component.F32.init(-1, 4));
 pub fn init(sim: *simulation.Simulation) !void {
     for (0..constants.max_player_count) |id| {
         _ = try sim.world.spawnWith(.{
-            ecs.component.Plr{ .id = id },
-            ecs.component.Pos{ .pos = .{ 8, 0 } },
-            ecs.component.Mov{
-                .velocity = ecs.component.Vec2.init(0, 0),
-                .acceleration = gravity,
-            },
+            ecs.component.Plr{ .id = id }, ecs.component.Pos{ .pos = .{ 8, 0 } }, ecs.component.Mov{ .acceleration = gravity },
             ecs.component.Tex{
                 .texture_hash = AssetManager.pathHash("assets/kattis.png"),
                 .tint = constants.player_colors[id],
