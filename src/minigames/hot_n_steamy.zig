@@ -15,17 +15,17 @@ const collision = @import("../physics/collision.zig");
 // TODO: Spawn and collide with obstacles
 //
 const gravity = ecs.component.Vec2.init(0, ecs.component.F32.init(1, 10));
-const boost = ecs.component.Vec2.init(0, ecs.component.F32.init(1, 4));
-
-var collisions: collision.CollisionQueue = undefined;
+const boost = ecs.component.Vec2.init(0, ecs.component.F32.init(-1, 4));
 
 pub fn init(sim: *simulation.Simulation) !void {
-    collisions = collision.CollisionQueue.init(std.heap.page_allocator);
     for (0..constants.max_player_count) |id| {
         _ = try sim.world.spawnWith(.{
             ecs.component.Plr{ .id = id },
             ecs.component.Pos{ .pos = .{ 8, 0 } },
-            ecs.component.Mov{ .velocity = ecs.component.Vec2.init(0, 0) },
+            ecs.component.Mov{
+                .velocity = ecs.component.Vec2.init(0, 0),
+                .acceleration = gravity,
+            },
             ecs.component.Tex{
                 .texture_hash = AssetManager.pathHash("assets/kattis.png"),
                 .tint = constants.player_colors[id],
@@ -35,12 +35,13 @@ pub fn init(sim: *simulation.Simulation) !void {
     }
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState) !void {
-    try gravitySystem(&sim.world);
+pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, arena: std.mem.Allocator) !void {
+    var collisions = collision.CollisionQueue.init(arena) catch @panic("could not initialize collision queue");
+
+    // try gravitySystem(&sim.world);
     try jetpackSystem(&sim.world, inputs);
-    movement.update(&sim.world, &collisions) catch @panic("movement system failed");
+    movement.update(&sim.world, &collisions, arena) catch @panic("movement system failed");
     try deathSystem(&sim.world);
-    collisions.clear();
     animator.update(&sim.world);
 }
 
@@ -60,7 +61,7 @@ fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void
         const state = inputs[plr.id];
         if (state.is_connected) {
             if (state.up.is_down) {
-                mov.acceleration = mov.acceleration.sub(boost);
+                mov.velocity = mov.velocity.add(boost);
             }
         }
     }
@@ -73,7 +74,7 @@ fn deathSystem(world: *ecs.world.World) !void {
         const y = pos.pos[1];
         if (y > constants.world_height + 16 or y < 0 - 16) {
             world.kill(entity);
-            std.debug.print("died\n", .{});
+            std.debug.print("entity {} died\n", .{entity.identifier});
         }
     }
 }

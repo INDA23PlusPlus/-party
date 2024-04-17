@@ -11,7 +11,6 @@ const Animation = @import("../animation/animations.zig").Animation;
 /// All components MUST be default initializable.
 /// All components MUST have a documented purpose.
 pub const components: []const type = &.{
-    SnakeHead,
     Plr,
     Pos,
     Mov,
@@ -20,6 +19,7 @@ pub const components: []const type = &.{
     Tex,
     Txt,
     Anm,
+    Lnk,
 };
 
 /// Entities with this component are positionable.
@@ -63,9 +63,12 @@ pub const Col = struct {
     layer: Layer = Layer{},
 };
 
-pub const SnakeHead = struct {};
+/// Entities with this component may be linked to other entities.
+pub const Lnk = struct {
+    child: ?Entity = null,
+};
 
-/// Entities with component have a direction they point too.
+/// Entities with component point in a direction.
 pub const Dir = struct {
     // Do not add a None, value to this enum.
     // If an entity does not have a facing,

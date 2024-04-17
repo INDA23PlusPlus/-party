@@ -13,16 +13,17 @@ pub fn init(sim: *simulation.Simulation) !void {
     // på tavlan har vi den dynamiska morse code tabellen.
     for (0..constants.max_player_count) |id| {
         _ = try sim.world.spawnWith(.{
-            ecs.component.Plr{.id = id},
-            ecs.component.Txt{.string = "Player x"},
-            ecs.component.Pos{.pos = .{4, 4}},
-            ecs.component.Mov{.velocity = ecs.component.Vec2.init(0, 0)},
+            ecs.component.Plr{ .id = id },
+            ecs.component.Txt{ .string = "Player x" },
+            ecs.component.Pos{ .pos = .{ 4, 4 } },
+            ecs.component.Mov{ .velocity = ecs.component.Vec2.init(0, 0) },
             // animations för spelarna?
         });
     }
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState) !void {
+pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, arena: std.mem.Allocator) !void {
+    _ = arena;
     rl.drawText("This is a new minigame", 64, 8, 32, rl.Color.blue);
     _ = inputs;
     _ = sim;

@@ -10,28 +10,28 @@ const ecs = @import("../ecs/ecs.zig");
 pub const CollisionQueue = struct {
     const Self = @This();
     const Key = struct { a: ecs.entity.Entity, b: ecs.entity.Entity };
-    const Set = std.AutoArrayHashMap(Key, void);
+    const Set = std.AutoArrayHashMapUnmanaged(Key, void);
 
     collisions: Set,
+
+    pub fn init(allocator: std.mem.Allocator) !Self {
+        const collisions = try Set.init(allocator, &.{}, &.{});
+
+        return Self{
+            .collisions = collisions,
+        };
+    }
 
     pub fn pop(self: *Self) Key {
         return self.collisions.pop().key;
     }
 
-    pub fn put(self: *Self, pair: Key) !void {
-        try self.collisions.put(pair, {});
+    pub fn put(self: *Self, allocator: std.mem.Allocator, pair: Key) !void {
+        try self.collisions.put(allocator, pair, {});
     }
 
     pub fn clear(self: *Self) void {
         self.collisions.clearRetainingCapacity();
-    }
-
-    pub fn init(allocator: std.mem.Allocator) Self {
-        return Self{ .collisions = Set.init(allocator) };
-    }
-
-    pub fn deinit(self: *Self) void {
-        self.collisions.deinit();
     }
 };
 
@@ -53,6 +53,7 @@ pub fn checkCollisions(
     velocity: @Vector(2, i32),
     world: *ecs.world.World,
     collisions: *CollisionQueue,
+    allocator: std.mem.Allocator,
 ) !CollisionMask {
     var query = world.query(&.{
         ecs.component.Pos,
@@ -80,7 +81,7 @@ pub fn checkCollisions(
 
         if (d) {
             collided.xy = true;
-            try collisions.put(.{ .a = ent1, .b = ent2 });
+            try collisions.put(allocator, .{ .a = ent1, .b = ent2 });
 
             const x_velocity = velocity & [_]i32{ ~@as(i32, 0), 0 };
             const x_a = @intFromBool(pos1.pos + col1.dim + x_velocity > pos2.pos);

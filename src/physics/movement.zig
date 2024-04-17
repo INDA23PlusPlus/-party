@@ -6,9 +6,21 @@ const collision = @import("collision.zig");
 /// Entities with Pos and Mov components, and lacking a Col component, are moved without collision detection.
 /// Entities with Pos, Mov, and Col components are moved so they never overlap; if a collision occurs, it is added to the collision queue.
 /// Collidable entities occypying the same space are unable to move.
-pub fn update(world: *ecs.world.World, collisions: *collision.CollisionQueue) !void {
+pub fn update(world: *ecs.world.World, collisions: *collision.CollisionQueue, allocator: std.mem.Allocator) !void {
+    try updateVelocity(world);
     try updateIncorporeal(world);
-    try updateCorporeal(world, collisions);
+    try updateCorporeal(world, collisions, allocator);
+}
+
+pub fn updateVelocity(world: *ecs.world.World) !void {
+    var query = world.query(&.{ecs.component.Mov}, &.{});
+
+    while (query.next()) |_| {
+        const mov = query.get(ecs.component.Mov) catch unreachable;
+        mov.velocity = mov.velocity.add(mov.acceleration);
+        // We should not reset acceleration.
+        // Instantaneous movements should be handled using velocities.
+    }
 }
 
 pub fn updateIncorporeal(world: *ecs.world.World) !void {
@@ -22,16 +34,17 @@ pub fn updateIncorporeal(world: *ecs.world.World) !void {
     while (query.next()) |_| {
         const pos = query.get(ecs.component.Pos) catch unreachable;
         const mov = query.get(ecs.component.Mov) catch unreachable;
-        mov.velocity = mov.velocity.add(mov.acceleration);
-        mov.acceleration = ecs.component.Vec2.init(0, 0);
+
         mov.subpixel = mov.subpixel.add(mov.velocity);
+
         const reposition = mov.subpixel.integerParts().toInts();
+
         pos.pos += reposition;
         mov.subpixel = mov.subpixel.sub(reposition);
     }
 }
 
-pub fn updateCorporeal(world: *ecs.world.World, collisions: *collision.CollisionQueue) !void {
+pub fn updateCorporeal(world: *ecs.world.World, collisions: *collision.CollisionQueue, allocator: std.mem.Allocator) !void {
     var query = world.query(&.{
         ecs.component.Pos,
         ecs.component.Col,
@@ -43,9 +56,8 @@ pub fn updateCorporeal(world: *ecs.world.World, collisions: *collision.Collision
         const col = query.get(ecs.component.Col) catch unreachable;
         const mov = query.get(ecs.component.Mov) catch unreachable;
 
-        mov.velocity = mov.velocity.add(mov.acceleration);
-        mov.acceleration = ecs.component.Vec2.init(0, 0);
         mov.subpixel = mov.subpixel.add(mov.velocity);
+
         const reposition_i16: @Vector(2, i16) = mov.subpixel.integerParts().toInts();
 
         if (@reduce(.And, reposition_i16 == @Vector(2, i32){ 0, 0 })) {
@@ -68,6 +80,7 @@ pub fn updateCorporeal(world: *ecs.world.World, collisions: *collision.Collision
                 velocity,
                 world,
                 collisions,
+                allocator,
             );
 
             if (collide.xy) {
@@ -85,60 +98,3 @@ pub fn updateCorporeal(world: *ecs.world.World, collisions: *collision.Collision
         }
     }
 }
-
-// const Benchmarker = struct {
-//     const Self = @This();
-
-//     time: u64,
-//     laps: u64,
-//     timer: ?std.time.Timer,
-
-//     pub fn init() Self {
-//         return Self{
-//             .time = 0,
-//             .laps = 0,
-//             .timer = null,
-//         };
-//     }
-
-//     pub fn start(self: *Self) !void {
-//         self.timer = try std.time.Timer.start();
-//     }
-
-//     pub fn reset(self: *Self) !void {
-//         var timer = &self.timer orelse return error{};
-
-//         self.time = 0;
-//         self.laps = 0;
-//         timer.reset();
-//     }
-
-//     pub fn lap(self: *Self) !void {
-//         var timer = &self.timer orelse return error{};
-
-//         self.time += timer.lap();
-//         self.laps += 1;
-//     }
-
-//     pub fn write(self: *Self) !void {
-//         if (self.laps == 0) return error{};
-
-//         var out = std.io.getStdOut();
-//         var writer = out.writer();
-
-//         const ns_per_lap = self.time / self.laps;
-//         const ms_per_lap = ns_per_lap / std.time.ns_per_ms;
-//         try writer.print("{d:>.4}G ms/lap \n", .{ms_per_lap});
-
-//         const laps_per_ns = self.laps / self.time;
-//         const laps_per_ms = laps_per_ns * std.time.ns_per_ms;
-//         try writer.print("{d:>.4}G laps/ms \n", .{laps_per_ms});
-
-//         const frames_per_lap = ms_per_lap / 17.0;
-//         try writer.print("{d:>.4}G frames/lap \n", .{frames_per_lap});
-
-//         const laps_per_frame = laps_per_ms * 17.0;
-
-//         try writer.print("{d:>.4}G laps/frame \n", .{laps_per_frame});
-//     }
-// };

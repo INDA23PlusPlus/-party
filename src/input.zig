@@ -1,9 +1,10 @@
 const constants = @import("constants.zig");
 
 const ButtonState = struct {
+    press_tick: u64 = 0,
+    release_tick: u64 = 0,
     is_down: bool = false,
     was_down: bool = false,
-    press_tick: u64 = 0,
 
     pub fn duration(self: *const ButtonState, current_tick: usize) u64 {
         if (self.is_down) {
@@ -26,6 +27,9 @@ const ButtonState = struct {
         if (self.pressed()) { // TODO: Shouldn't this just be isDown? Won't it be pressed for one extra tick as it is?
             self.press_tick = current_tick;
         }
+        if (self.released()) {
+            self.release_tick = current_tick;
+        }
     }
 
     pub fn cmp(self: *const ButtonState, other: ButtonState) i32 {
@@ -36,6 +40,14 @@ const ButtonState = struct {
             return -1;
         }
         return 0;
+    }
+
+    // Possibly more/less performant depending on the compiler.
+    pub inline fn cmp_branchless(self: ButtonState, other: ButtonState) i32 {
+        const a = @intFromBool(self.is_down) > @intFromBool(other.is_down);
+        const b = @intFromBool(self.is_down) < @intFromBool(other.is_down);
+
+        return @intFromBool(a) - @intFromBool(b);
     }
 };
 

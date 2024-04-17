@@ -90,6 +90,11 @@ pub fn main() !void {
 
     try simulation.init(&shared_simulation.sim);
 
+    var time: u64 = 0;
+    var laps: u64 = 0;
+    var out = std.io.getStdOut();
+    var writer = out.writer();
+
     // Game loop
     while (window.running) {
         // Make sure the main thread controls the world!
@@ -97,14 +102,38 @@ pub fn main() !void {
 
         // Fetch input.
         shared_input_timeline.rw_lock.lock();
-        const tick = shared_simulation.sim.meta.ticks_elapsed;
+        const tick = shared_simulation.sim.meta.ticks_elapsed; // WILL ALWAYS BE ZERO
         const frame_input: input.InputState = shared_input_timeline.localUpdate(&controllers, tick).*;
         shared_input_timeline.rw_lock.unlock();
 
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure
         // is called in other places. Not doing so will lead to inconsistencies.
-        try simulation.simulate(&shared_simulation.sim, &frame_input);
+        var timer = try std.time.Timer.start();
+        try simulation.simulate(&shared_simulation.sim, &frame_input, game_allocator);
+        time += timer.lap();
+        laps += 1;
+        if (laps % 360 == 0) {
+            const t: f64 = @floatFromInt(time);
+            const l: f64 = @floatFromInt(laps);
+
+            const ns_per_lap = t / l;
+            const ms_per_lap = ns_per_lap / std.time.ns_per_ms;
+            try writer.print("{d:>.4} ms/lap \n", .{ms_per_lap});
+
+            const laps_per_ns = l / t;
+            const laps_per_ms = laps_per_ns * std.time.ns_per_ms;
+            try writer.print("{d:>.4} laps/ms \n", .{laps_per_ms});
+
+            const frames_per_lap = ms_per_lap / 17.0;
+            try writer.print("{d:>.4} frames/lap \n", .{frames_per_lap});
+
+            const laps_per_frame = laps_per_ms * 17.0;
+
+            try writer.print("{d:>.4} laps/frame \n", .{laps_per_frame});
+
+            try writer.print("allocated bytes: {}", .{game_arena.queryCapacity()});
+        }
 
         // Begin rendering.
         window.update();
