@@ -14,10 +14,10 @@ pub fn init(sim: *simulation.Simulation) !void {
     // på tavlan har vi den dynamiska morse code tabellen.
     for (0..constants.max_player_count) |id| {
         _ = try sim.world.spawnWith(.{
-            ecs.component.Plr{.id = id},
-            ecs.component.Txt{.string = "Player x"},
-            ecs.component.Pos{.pos = .{@intCast(64 * (id % 4) + 100), @intCast(64 * (id / 4) + 100)}},
-            ecs.component.Mov{.velocity = ecs.component.Vec2.init(0, 0)},
+            ecs.component.Plr{ .id = id},
+            ecs.component.Txt{ .string = "Player x" },
+            ecs.component.Pos{ .pos = .{@intCast(64 * (id % 4) + 100), @intCast(64 * (id / 4) + 100)} },
+            ecs.component.Mov{ .velocity = ecs.component.Vec2.init(0, 0) },
             ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis.png") },
             // animations för spelarna?
         });

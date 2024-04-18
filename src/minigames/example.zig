@@ -30,8 +30,8 @@ pub fn init(sim: *simulation.Simulation) !void {
     });
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState) !void {
-    // TODO: Possible pass in a frame_allocator.
+pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, arena: std.mem.Allocator) !void {
+    _ = arena;
 
     // Move all player controllers
     var query = sim.world.query(&.{ ecs.component.Pos, ecs.component.Plr, ecs.component.Anm }, &.{});

@@ -90,6 +90,14 @@ pub fn main() !void {
 
     try simulation.init(&shared_simulation.sim);
 
+    // var timer = try std.time.Timer.start();
+    // var time: u64 = 0;
+    // var laps: u64 = 0;
+    // var out = std.io.getStdOut();
+    // var writer = out.writer();
+
+    var benchmarker = try @import("Benchmarker.zig").init("Simulation");
+
     // Game loop
     while (window.running) {
         // Make sure the main thread controls the world!
@@ -97,14 +105,20 @@ pub fn main() !void {
 
         // Fetch input.
         shared_input_timeline.rw_lock.lock();
-        const tick = shared_simulation.sim.meta.ticks_elapsed;
+        const tick = shared_simulation.sim.meta.ticks_elapsed; // WILL ALWAYS BE ZERO
         const frame_input: input.InputState = shared_input_timeline.localUpdate(&controllers, tick).*;
         shared_input_timeline.rw_lock.unlock();
 
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure
         // is called in other places. Not doing so will lead to inconsistencies.
-        try simulation.simulate(&shared_simulation.sim, &frame_input);
+        benchmarker.start();
+        try simulation.simulate(&shared_simulation.sim, &frame_input, game_allocator);
+        benchmarker.stop();
+        if (benchmarker.laps % 360 == 0) {
+            try benchmarker.write();
+            benchmarker.reset();
+        }
 
         // Begin rendering.
         window.update();

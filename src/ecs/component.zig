@@ -11,7 +11,6 @@ const Animation = @import("../animation/animations.zig").Animation;
 /// All components MUST be default initializable.
 /// All components MUST have a documented purpose.
 pub const components: []const type = &.{
-    SnakeHead,
     Plr,
     Pos,
     Mov,
@@ -20,6 +19,7 @@ pub const components: []const type = &.{
     Tex,
     Txt,
     Anm,
+    Lnk,
 };
 
 /// Entities with this component are positionable.
@@ -39,6 +39,16 @@ pub const Layer = packed struct {
     const Self = @This();
     const Bits = @typeInfo(Self).Struct.backing_integer.?;
 
+    base: bool = true,
+    player: bool = false,
+    // Add more layers here and set their default to false.
+
+    pub inline fn complement(self: Self) Self {
+        const bits: Bits = @bitCast(self);
+
+        return @bitCast(~bits);
+    }
+
     pub inline fn intersects(self: Self, other: Self) bool {
         const a: Bits = @bitCast(self);
         const b: Bits = @bitCast(other);
@@ -46,26 +56,27 @@ pub const Layer = packed struct {
         return a & b != 0;
     }
 
-    pub inline fn intersectsNot(self: Self, other: Self) bool {
+    pub inline fn coincides(self: Self, other: Self) bool {
         const a: Bits = @bitCast(self);
         const b: Bits = @bitCast(other);
 
-        return a & b == 0;
+        return a == b;
     }
-
-    base: bool = true,
-    // Add more game specific layers here.
 };
 
 /// Entities with this component are collidable.
 pub const Col = struct {
     dim: @Vector(2, i32) = .{ 0, 0 }, // w, h
-    layer: Layer = Layer{},
+    include: Layer = Layer{},
+    exclude: Layer = (Layer{}).complement(),
 };
 
-pub const SnakeHead = struct {};
+/// Entities with this component may be linked to other entities.
+pub const Lnk = struct {
+    child: ?Entity = null,
+};
 
-/// Entities with component have a direction they point too.
+/// Entities with component point in a direction.
 pub const Dir = struct {
     // Do not add a None, value to this enum.
     // If an entity does not have a facing,

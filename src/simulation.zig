@@ -50,19 +50,17 @@ pub fn init(sim: *Simulation) !void {
 /// All generic game code will be called from this function and should not
 /// use anything outside of the world or the input frame. Failing to do so
 /// will lead to inconsistencies.
-pub fn simulate(sim: *Simulation, input_state: *const input.InputState) !void {
+pub fn simulate(sim: *Simulation, input_state: *const input.InputState, allocator: std.mem.Allocator) !void {
     const frame_start_minigame = sim.meta.minigame_id;
 
-    // TODO: Add input as an argument.
+    // Allocator for a single frame.
+    var arena_state = std.heap.ArenaAllocator.init(allocator);
+    defer arena_state.deinit();
 
-    var pos_query = sim.world.query(&.{ecs.component.Pos}, &.{});
-    while (pos_query.next()) |_| {
-        const pos = try pos_query.get(ecs.component.Pos);
-        _ = pos;
-    }
+    const arena = arena_state.allocator();
 
     // Handles transitions between minigames.
-    try minigames_list[sim.meta.minigame_id].update(sim, input_state);
+    try minigames_list[sim.meta.minigame_id].update(sim, input_state, arena);
 
     // TODO: game selection
     // We could select the game randomly by first switching to a "game select minigame" with ID 0 maybe?
