@@ -67,8 +67,8 @@ pub const Layer = packed struct {
 /// Entities with this component are collidable.
 pub const Col = struct {
     dim: @Vector(2, i32) = .{ 0, 0 }, // w, h
-    include: Layer = Layer{},
-    exclude: Layer = (Layer{}).complement(),
+    layer: Layer = Layer{}, // Determines what entities collide with this entity.
+    mask: Layer = Layer{}, // Determines what entities this entity collides with.
 };
 
 /// Entities with this component may be linked to other entities.

@@ -105,7 +105,7 @@ pub fn main() !void {
 
         // Fetch input.
         shared_input_timeline.rw_lock.lock();
-        const tick = shared_simulation.sim.meta.ticks_elapsed; // WILL ALWAYS BE ZERO
+        const tick = shared_simulation.sim.meta.ticks_elapsed; // WILL ALWAYS BE ZERO!!!
         const frame_input: input.InputState = shared_input_timeline.localUpdate(&controllers, tick).*;
         shared_input_timeline.rw_lock.unlock();
 
