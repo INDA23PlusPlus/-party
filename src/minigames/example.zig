@@ -21,7 +21,8 @@ pub fn init(sim: *simulation.Simulation) !void {
         ecs.component.Mov{},
         ecs.component.Col{
             .dim = [_]i32{ 16, 16 },
-            .layer = ecs.component.Layer{ .base = true, .player = true },
+            .layer = ecs.component.Layer{ .base = false, .player = true },
+            .mask = ecs.component.Layer{ .base = false, .player = false }, // This player cannot collide with other players.
         },
         ecs.component.Plr{ .id = 0 },
         ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
@@ -36,6 +37,7 @@ pub fn init(sim: *simulation.Simulation) !void {
         ecs.component.Col{
             .dim = [_]i32{ 16, 16 },
             .layer = ecs.component.Layer{ .base = false, .player = true },
+            .mask = ecs.component.Layer{ .base = false, .player = false }, // This player cannot collide with other players.
         },
         ecs.component.Plr{ .id = 1 },
         ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
@@ -49,8 +51,8 @@ pub fn init(sim: *simulation.Simulation) !void {
         ecs.component.Mov{},
         ecs.component.Col{
             .dim = [_]i32{ 16, 16 },
-            .layer = ecs.component.Layer{ .base = false, .player = true },
-            .mask = ecs.component.Layer{ .base = false, .player = false },
+            .layer = ecs.component.Layer{ .base = false, .player = false },
+            .mask = ecs.component.Layer{ .base = false, .player = true }, // This entity can collide with other players.
         },
         ecs.component.Plr{ .id = 2 },
         ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
