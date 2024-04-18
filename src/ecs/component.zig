@@ -101,7 +101,10 @@ pub const Plr = struct {
 
 /// Entities with this component have associated text.
 pub const Txt = struct {
-    string: []const u8 = "", // TODO: use hash instead of slice
+    string: [:0]const u8 = "", // TODO: use hash instead of slice
+    color: u32 = 0xFFFFFFFF,
+    font_size: u8 = 24,
+    draw: bool = true, // This is very ugly, but is useful for menu items. Change if needed. (Use dynamic strings??)
 };
 
 /// Entities with this component have an associated texture.

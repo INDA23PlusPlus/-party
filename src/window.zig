@@ -10,6 +10,7 @@ pub const Window = struct {
 
     pub fn init(width: i32, height: i32) Window {
         rl.setTraceLogLevel(rl.TraceLogLevel.log_error);
+        rl.setConfigFlags(rl.ConfigFlags.flag_window_resizable);
         rl.initWindow(width, height, "++party");
         rl.setTargetFPS(60);
 
@@ -23,14 +24,13 @@ pub const Window = struct {
     }
 
     pub fn update(self: *Self) void {
-        if  (rl.windowShouldClose() or rl.isKeyPressed(rl.KeyboardKey.key_escape)) {
+        if (rl.windowShouldClose() or rl.isKeyPressed(rl.KeyboardKey.key_escape)) {
             self.running = false;
         }
 
-        if  (rl.isWindowResized()) {
+        if (rl.isWindowResized()) {
             self.width = rl.getRenderWidth();
             self.height = rl.getRenderHeight();
         }
     }
 };
-

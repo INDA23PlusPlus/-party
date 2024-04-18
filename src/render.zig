@@ -3,9 +3,11 @@ const std = @import("std");
 const ecs = @import("ecs/ecs.zig");
 const AssetManager = @import("AssetManager.zig");
 const constants = @import("constants.zig");
+const win = @import("window.zig");
 
-pub fn update(world: *ecs.world.World, am: *AssetManager) void {
+pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) void {
     var query = world.query(&.{ ecs.component.Pos, ecs.component.Tex }, &.{});
+    var text_query = world.query(&.{ ecs.component.Pos, ecs.component.Txt }, &.{});
 
     while (query.next()) |_| {
         const pos_component = query.get(ecs.component.Pos) catch unreachable;
@@ -29,17 +31,45 @@ pub fn update(world: *ecs.world.World, am: *AssetManager) void {
             .height = h,
         };
 
+        // Convert internal range to window range.
+        const dst_x = ((pos.x * @as(f32, @floatFromInt(window.width))) / constants.world_width);
+        const dst_y = ((pos.y * @as(f32, @floatFromInt(window.height))) / constants.world_height);
+        const dst_w = ((w * @as(f32, @floatFromInt(window.width))) / constants.world_width);
+        const dst_h = ((h * @as(f32, @floatFromInt(window.height))) / constants.world_height);
+
         const dst = rl.Rectangle{
-            .x = pos.x * 1.875,
-            .y = pos.y * 1.875,
-            .width = w * 1.875,
-            .height = h * 1.875,
+            .x = dst_x,
+            .y = dst_y,
+            .width = dst_w,
+            .height = dst_h,
         };
 
         // ! rotation unused
         rl.drawTexturePro(tex, src, dst, rl.Vector2.init(0, 0), 0.0, tex_component.tint);
 
         // rl.drawTextureEx(texture, pos, 0, @floatCast(c.scale.toFloat()), c.tint);
+    }
+
+    // Draw text
+    while (text_query.next()) |_| {
+        const pos_component = text_query.get(ecs.component.Pos) catch unreachable;
+        const text_c = text_query.get(ecs.component.Txt) catch unreachable;
+
+        if (text_c.draw == false) continue; // Ugly, can be fixed with dynamic strings for text??
+
+        const col = rl.Color.fromInt(text_c.color);
+        const pos_x = pos_component.pos[0];
+        const pos_y = pos_component.pos[1];
+
+        const font = rl.getFontDefault();
+        const text_dims = rl.measureTextEx(font, text_c.string, @floatFromInt(text_c.font_size), 0.0);
+        const text_width_half: i32 = @intFromFloat(text_dims.x / 2.0);
+        const text_height_half: i32 = @intFromFloat(text_dims.y / 2.0);
+
+        const dst_x = @divFloor(pos_x * window.width, constants.world_width) - text_width_half;
+        const dst_y = @divFloor(pos_y * window.height, constants.world_height) - text_height_half;
+
+        rl.drawText(text_c.string, dst_x, dst_y, @intCast(text_c.font_size), col);
     }
 }
 
