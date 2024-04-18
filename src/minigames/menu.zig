@@ -61,54 +61,30 @@ pub fn init(sim: *simulation.Simulation, inputs: *const input.InputState) simula
 
 pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, arena: Allocator) simulation.SimulationError!void {
     _ = arena;
-    try handleInputs(sim, inputs);
-}
-
-fn handleInputs(sim: *simulation.Simulation, inputs: *const input.InputState) !void {
     for (inputs) |inp| {
         if (inp.is_connected) {
-            if (inp.down.pressed()) {
-                const previous = selected;
-                selected = @mod(selected + 1, 2);
-                try changeSelection(sim, selected, previous);
-            }
-            if (inp.up.pressed()) {
-                const previous = selected;
-                selected = @mod(selected - 1, 2);
-                try changeSelection(sim, selected, previous);
-            }
-            if (inp.right.pressed() and selected == 1) {
-                const prev_res = current_resolution;
-                current_resolution = @mod(current_resolution + 1, 4);
-                try changeResolution(sim, current_resolution, prev_res);
-            }
-            if (inp.left.pressed() and selected == 1) {
-                const prev_res = current_resolution;
-                current_resolution = @mod(current_resolution - 1, 4);
-                try changeResolution(sim, current_resolution, prev_res);
-            }
-            if (inp.b.pressed() and selected == 0) {
-                sim.world.reset();
-                sim.meta.minigame_id = 2;
-            }
-        }
-    }
-}
+            if (inp.button_down.pressed()) selected = @mod(selected + 1, 3);
+            if (inp.button_up.pressed()) selected = @mod(selected - 1, 3);
+            if (inp.button_right.pressed() and selected == 1) {
+                const prev_res = res;
+                res = @mod(res + 1, 4);
 
-fn changeSelection(sim: *simulation.Simulation, cur: i8, prev: i8) !void {
-    var prev_txt_comp = try sim.world.inspect(menu_items[selections[@intCast(prev)]], ecs.component.Txt);
-    var cur_txt_comp = try sim.world.inspect(menu_items[selections[@intCast(cur)]], ecs.component.Txt);
+                var prev_txt_comp = try sim.world.inspect(menu_items[@as(usize, @intCast(prev_res)) + 2], ecs.component.Txt);
+                var cur_txt_comp = try sim.world.inspect(menu_items[@as(usize, @intCast(res)) + 2], ecs.component.Txt);
+                prev_txt_comp.color = 0x000000FF;
+                prev_txt_comp.draw = false;
 
-    prev_txt_comp.color = 0x000000FF;
-    cur_txt_comp.color = 0xDE3163FF;
-}
+                cur_txt_comp.color = 0xDE3163FF;
+                cur_txt_comp.draw = true;
+            }
+            if (inp.button_left.pressed() and selected == 1) {
+                const prev_res = res;
+                res = @mod(res - 1, 4);
 
-fn changeResolution(sim: *simulation.Simulation, cur: i8, prev: i8) !void {
-    var prev_txt_comp = try sim.world.inspect(menu_items[@as(usize, @intCast(prev)) + 1], ecs.component.Txt);
-    var cur_txt_comp = try sim.world.inspect(menu_items[@as(usize, @intCast(cur)) + 1], ecs.component.Txt);
-
-    prev_txt_comp.color = 0x000000FF;
-    prev_txt_comp.draw = false;
+                var prev_txt_comp = try sim.world.inspect(menu_items[@as(usize, @intCast(prev_res)) + 2], ecs.component.Txt);
+                var cur_txt_comp = try sim.world.inspect(menu_items[@as(usize, @intCast(res)) + 2], ecs.component.Txt);
+                prev_txt_comp.color = 0x000000FF;
+                prev_txt_comp.draw = false;
 
     cur_txt_comp.color = 0xDE3163FF;
     cur_txt_comp.draw = true;

@@ -86,10 +86,10 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
         const state = inputs[plr.id];
 
         if (state.is_connected) {
-            if (state.left.is_down and dir.facing != .East) mov.velocity = ecs.component.Vec2.init(-3, 0).div(4);
-            if (state.right.is_down and dir.facing != .West) mov.velocity = ecs.component.Vec2.init(3, 0).div(4);
-            if (state.up.is_down and dir.facing != .South) mov.velocity = ecs.component.Vec2.init(0, -3).div(4);
-            if (state.down.is_down and dir.facing != .North) mov.velocity = ecs.component.Vec2.init(0, 3).div(4);
+            if (state.button_left.is_down and dir.facing != .East) mov.velocity = ecs.component.Vec2.init(-3, 0).div(4);
+            if (state.button_right.is_down and dir.facing != .West) mov.velocity = ecs.component.Vec2.init(3, 0).div(4);
+            if (state.button_up.is_down and dir.facing != .South) mov.velocity = ecs.component.Vec2.init(0, -3).div(4);
+            if (state.button_down.is_down and dir.facing != .North) mov.velocity = ecs.component.Vec2.init(0, 3).div(4);
         }
     }
 }
