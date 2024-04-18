@@ -88,9 +88,6 @@ pub const View = struct {
             rl.drawTextureEx(texture, position, rotation, scale, tint);
         }
 
-        // Temp
-        rl.drawText("MINIGAME WINDOW", 0, 0, 2, rl.Color.gold);
-
         rl.endTextureMode();
 
         const origin = rl.Vector2.init(0.0, 0.0);

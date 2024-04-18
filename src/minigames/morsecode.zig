@@ -13,7 +13,8 @@ var keystrokes: [constants.max_player_count][8]u8 = [][]u8{.{0}};
 fn assigned_pos(id: usize) @Vector(2, i32) {
     const top_left_x = 120;
     const top_left_y = 160;
-    const pos = @Vector(2, i32){ @intCast(80 * (id % 4) + top_left_x), @intCast(80 * (id / 4) + top_left_y) };
+    const pos: @Vector(2, i32) = [_]i32{ @intCast(80 * (id % 4) + top_left_x), @intCast(80 * (id / 4) + top_left_y) };
+
     return pos;
 }
 

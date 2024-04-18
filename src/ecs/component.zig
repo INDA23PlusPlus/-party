@@ -73,15 +73,15 @@ pub const Plr = struct {
 
 /// Entities with this component have associated text.
 pub const Txt = struct {
-    string: []const u8 = "", // TODO: use hash instead of slice
+    string: [:0]const u8 = "", // TODO: use hash instead of slice
 };
 
 /// Entities with this component have an associated texture.
 pub const Tex = struct {
     u: usize = 0,
     v: usize = 0,
-    tiles_x: usize = 1,
-    tiles_y: usize = 1,
+    tiles_x: u16 = 1,
+    tiles_y: u16 = 1,
     texture_hash: u64 = 0, // TODO: add default texture to renderer?
     tint: rl.Color = rl.Color.white, // TODO: does this work for serialization?
     scale: F32 = F32.fromInt(1),
