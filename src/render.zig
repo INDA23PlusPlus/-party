@@ -61,15 +61,16 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
         const pos_x = pos_component.pos[0];
         const pos_y = pos_component.pos[1];
 
-        const font = rl.getFontDefault();
-        const text_dims = rl.measureTextEx(font, text_c.string, @floatFromInt(text_c.font_size), 0.0);
-        const text_width_half: i32 = @intFromFloat(text_dims.x / 2.0);
-        const text_height_half: i32 = @intFromFloat(text_dims.y / 2.0);
+        const font_size_scaled = @as(f32, @floatFromInt(text_c.font_size * window.height)) * 138889.0 / 50000000.0; // Super specific magic number go brrrrr
+
+        const text_dim_x = rl.measureText(text_c.string, @intFromFloat(font_size_scaled));
+        const text_width_half: i32 = @divFloor(text_dim_x, 2);
+        const text_height_half: i32 = @intFromFloat(font_size_scaled * (1.0 / 3.0));
 
         const dst_x = @divFloor(pos_x * window.width, constants.world_width) - text_width_half;
         const dst_y = @divFloor(pos_y * window.height, constants.world_height) - text_height_half;
 
-        rl.drawText(text_c.string, dst_x, dst_y, @intCast(text_c.font_size), col);
+        rl.drawText(text_c.string, dst_x, dst_y, @intFromFloat(font_size_scaled), col);
     }
 }
 

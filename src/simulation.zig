@@ -67,6 +67,6 @@ pub fn simulate(sim: *Simulation, input_state: *const input.InputState, allocato
 
     if (frame_start_minigame != sim.meta.minigame_id) {
         // TODO: Clear the world?
-        try minigames_list[sim.meta.minigame_id].init(sim, &input.default_input_state);
+        try minigames_list[sim.meta.minigame_id].init(sim, input_state);
     }
 }

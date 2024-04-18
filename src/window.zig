@@ -10,7 +10,6 @@ pub const Window = struct {
 
     pub fn init(width: i32, height: i32) Window {
         rl.setTraceLogLevel(rl.TraceLogLevel.log_error);
-        rl.setConfigFlags(rl.ConfigFlags.flag_window_resizable);
         rl.initWindow(width, height, "++party");
         rl.setTargetFPS(60);
 
