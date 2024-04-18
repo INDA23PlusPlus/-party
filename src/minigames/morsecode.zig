@@ -24,7 +24,8 @@ pub fn init(sim: *simulation.Simulation) !void {
     }
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState) !void {
+pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, arena: std.mem.Allocator) !void {
+    _ = arena;
     rl.drawText("This is a new minigame", 64, 8, 32, rl.Color.blue);
     _ = inputs;
     _ = sim;
