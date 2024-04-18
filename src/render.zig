@@ -13,41 +13,36 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
         const pos_component = query.get(ecs.component.Pos) catch unreachable;
         const tex_component = query.get(ecs.component.Tex) catch unreachable;
 
-        const pos = rl.Vector2{ .x = @floatFromInt(pos_component.pos[0]), .y = @floatFromInt(pos_component.pos[1]) };
+        const tex = am.hashmap.get(tex_component.texture_hash) orelse am.hashmap.get(AssetManager.pathHash("assets/default.png")) orelse unreachable;
 
-        // TODO: error handling
+        // Src
 
-        const tex = am.hashmap.get(tex_component.texture_hash) orelse @panic("Texture not found");
+        const src_x: f32 = @floatFromInt(tex_component.u * constants.asset_resolution);
+        const src_y: f32 = @floatFromInt(tex_component.v * constants.asset_resolution);
+        const src_w: f32 = @floatFromInt(tex_component.w * constants.asset_resolution);
+        const src_h: f32 = @floatFromInt(tex_component.h * constants.asset_resolution);
 
-        const u: f32 = @floatFromInt(tex_component.u * constants.asset_resolution);
-        const v: f32 = @floatFromInt(tex_component.v * constants.asset_resolution);
-        const w: f32 = @floatFromInt(tex_component.tiles_x * constants.asset_resolution);
-        const h: f32 = @floatFromInt(tex_component.tiles_y * constants.asset_resolution);
+        const src = rl.Rectangle{ .x = src_x, .y = src_y, .width = src_w, .height = src_h };
 
-        const src = rl.Rectangle{
-            .x = u,
-            .y = v,
-            .width = w,
-            .height = h,
+        // Dst
+
+        const scaling: @Vector(2, f32) = .{
+            @as(f32, @floatFromInt(window.width)) / constants.world_width,
+            @as(f32, @floatFromInt(window.height)) / constants.world_height,
         };
 
-        // Convert internal range to window range.
-        const dst_x = ((pos.x * @as(f32, @floatFromInt(window.width))) / constants.world_width);
-        const dst_y = ((pos.y * @as(f32, @floatFromInt(window.height))) / constants.world_height);
-        const dst_w = ((w * @as(f32, @floatFromInt(window.width))) / constants.world_width);
-        const dst_h = ((h * @as(f32, @floatFromInt(window.height))) / constants.world_height);
+        const dst_pos = @as(@Vector(2, f32), @floatFromInt(pos_component.pos + tex_component.subpos)) * scaling;
 
-        const dst = rl.Rectangle{
-            .x = dst_x,
-            .y = dst_y,
-            .width = dst_w,
-            .height = dst_h,
-        };
+        const dst_x = dst_pos[0];
+        const dst_y = dst_pos[1];
+        const dst_w = src_w * scaling[0];
+        const dst_h = src_h * scaling[1];
 
-        // ! rotation unused
+        const dst = rl.Rectangle{ .x = dst_x, .y = dst_y, .width = dst_w, .height = dst_h };
+
+        // Draw
+
         rl.drawTexturePro(tex, src, dst, rl.Vector2.init(0, 0), 0.0, tex_component.tint);
-
-        // rl.drawTextureEx(texture, pos, 0, @floatCast(c.scale.toFloat()), c.tint);
     }
 
     // Draw text
@@ -57,9 +52,10 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
 
         if (text_c.draw == false) continue; // Ugly, can be fixed with dynamic strings for text??
 
-        const col = rl.Color.fromInt(text_c.color);
-        const pos_x = pos_component.pos[0];
-        const pos_y = pos_component.pos[1];
+        const color = rl.Color.fromInt(text_c.color);
+        const pos = pos_component.pos + text_c.subpos;
+        const pos_x = pos[0];
+        const pos_y = pos[1];
 
         const font_size_scaled = @as(f32, @floatFromInt(text_c.font_size * window.height)) * 138889.0 / 50000000.0; // Super specific magic number go brrrrr
 
@@ -70,82 +66,6 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
         const dst_x = @divFloor(pos_x * window.width, constants.world_width) - text_width_half;
         const dst_y = @divFloor(pos_y * window.height, constants.world_height) - text_height_half;
 
-        rl.drawText(text_c.string, dst_x, dst_y, @intFromFloat(font_size_scaled), col);
+        rl.drawText(text_c.string, dst_x, dst_y, @intFromFloat(font_size_scaled), color);
     }
 }
-
-/// Represents a section of a window for rendering a world.
-pub const View = struct {
-    const Self = @This();
-
-    const width = constants.world_width;
-    const height = constants.world_height;
-
-    dst: rl.Rectangle,
-    src: rl.Rectangle,
-    tex: rl.RenderTexture2D,
-
-    pub fn init(x: f32, y: f32) Self {
-        const dst = rl.Rectangle.init(x, y, width, height);
-        const src = rl.Rectangle.init(0.0, 0.0, width, -height);
-        const tex = rl.loadRenderTexture(width, height);
-
-        return Self{
-            .dst = dst,
-            .src = src,
-            .tex = tex,
-        };
-    }
-
-    pub fn deinit(self: *Self) void {
-        rl.unloadRenderTexture(self.tex);
-    }
-
-    pub fn draw(view: *Self, world: *ecs.world.World, assets: *AssetManager) void {
-        rl.beginTextureMode(view.tex);
-        rl.clearBackground(rl.Color.black);
-        rl.drawText("MINIGAME WINDOW", 0, 0, 2, rl.Color.gold);
-
-        var query = world.query(&.{ ecs.component.Pos, ecs.component.Tex }, &.{});
-        while (query.next()) |_| {
-            const pos = query.get(ecs.component.Pos) catch unreachable;
-            const tex = query.get(ecs.component.Tex) catch unreachable;
-
-            const texture = assets.hashmap.get(tex.texture_hash) orelse @panic("Texture not found");
-            const position = toVector2(pos);
-            const rotation, const scale = transform(tex);
-            const tint = tex.tint;
-
-            rl.drawTextureEx(texture, position, rotation, scale, tint);
-        }
-
-        rl.endTextureMode();
-
-        const origin = rl.Vector2.init(0.0, 0.0);
-        const rotation = 0.0;
-
-        rl.drawTexturePro(view.tex.texture, view.src, view.dst, origin, rotation, rl.Color.white);
-    }
-
-    inline fn transform(tex: *ecs.component.Tex) struct { f32, f32 } {
-        const rotation: f32 = switch (tex.rotate) {
-            .R0 => 0.0,
-            .R90 => 90.0,
-            .R180 => 180.0,
-            .R270 => 270.0,
-        };
-
-        const mirror: f32 = if (tex.mirror) -1.0 else 1.0;
-
-        const scale: f32 = @floatCast(tex.scale.toFloat());
-
-        return .{ rotation, scale * mirror };
-    }
-
-    inline fn toVector2(pos: *ecs.component.Pos) rl.Vector2 {
-        return rl.Vector2.init(
-            @as(f32, @floatFromInt(pos.pos[0])),
-            @as(f32, @floatFromInt(pos.pos[1])),
-        );
-    }
-};

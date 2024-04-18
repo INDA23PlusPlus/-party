@@ -10,6 +10,7 @@ const movement = @import("../physics/movement.zig");
 const collision = @import("../physics/collision.zig");
 const animator = @import("../animation/animator.zig");
 const Animation = @import("../animation/animations.zig").Animation;
+const constants = @import("../constants.zig");
 
 // Temporary globals.
 var prng = std.rand.DefaultPrng.init(0);
@@ -20,8 +21,8 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
         ecs.component.Pos{},
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/tron_map.png"),
-            .tiles_x = 32,
-            .tiles_y = 18,
+            .w = 32,
+            .h = 18,
         },
     });
 

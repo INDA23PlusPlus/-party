@@ -1,6 +1,9 @@
 const std = @import("std");
 const rl = @import("raylib");
 
+pub const default_path = "assets/default.png";
+pub const default_hash = pathHash(default_path);
+
 pub fn pathHash(path: []const u8) u64 {
     return std.hash.Wyhash.hash(0, path);
 }
@@ -29,6 +32,7 @@ const map_type = std.HashMap(
 );
 
 const paths = [_][:0]const u8{
+    default_path,
     "assets/test.png",
     "assets/kattis.png",
     "assets/tron_map.png",

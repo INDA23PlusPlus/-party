@@ -1,5 +1,7 @@
 const rl = @import("raylib");
 
+const constants = @import("../constants.zig");
+
 const Layer = @import("../physics/collision.zig").Layer;
 
 const Entity = @import("entity.zig").Entity;
@@ -8,6 +10,7 @@ const entity_count = @import("world.zig").N;
 pub const F32 = @import("../math/fixed.zig").F(16, 16);
 pub const Vec2 = @import("../math/linear.zig").V(2, F32);
 const Animation = @import("../animation/animations.zig").Animation;
+const AssetManager = @import("../AssetManager.zig");
 
 /// Components the ECS supports.
 /// All components MUST be default initializable.
@@ -76,26 +79,27 @@ pub const Txt = struct {
     string: [:0]const u8 = "", // TODO: use hash instead of slice
     color: u32 = 0xFFFFFFFF,
     font_size: u8 = 24,
+    subpos: @Vector(2, i32) = .{ 0, 0 },
     draw: bool = true, // This is very ugly, but is useful for menu items. Change if needed. (Use dynamic strings??)
 };
 
 /// Entities with this component have an associated texture.
 pub const Tex = struct {
-    u: usize = 0,
-    v: usize = 0,
-    tiles_x: u16 = 1,
-    tiles_y: u16 = 1,
-    texture_hash: u64 = 0, // TODO: add default texture to renderer?
+    texture_hash: u64 = AssetManager.default_hash, // TODO: add default texture to renderer/assets?
+    u: u32 = 0,
+    v: u32 = 0,
+    w: u32 = 1,
+    h: u32 = 1,
+    subpos: @Vector(2, i32) = .{ 0, 0 },
     tint: rl.Color = rl.Color.white, // TODO: does this work for serialization?
-    scale: F32 = F32.fromInt(1),
     rotate: enum { R0, R90, R180, R270 } = .R0,
     mirror: bool = false,
 };
 
 /// Entities with this component are animated.
 pub const Anm = struct {
-    animation: Animation = Animation.KattisIdle,
-    subframe: usize = 0,
-    interval: usize = 1,
+    animation: Animation = Animation.Default,
+    subframe: u32 = 0,
+    interval: u32 = 1,
     looping: bool = true,
 };

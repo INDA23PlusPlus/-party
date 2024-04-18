@@ -14,9 +14,10 @@ pub const Layer = packed struct {
 
     base: bool = true,
     player: bool = false,
-    damage: bool = false,
-    kill: bool = false,
-    push: bool = false,
+    damaging: bool = false,
+    killing: bool = false,
+    pushing: bool = false,
+    bouncing: bool = false,
     // Add more layers here and set their default to false.
 
     pub inline fn complement(self: Self) Self {
