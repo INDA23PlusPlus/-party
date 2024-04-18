@@ -25,33 +25,6 @@ pub fn init(sim: *simulation.Simulation) !void {
         },
     });
 
-    // for (5..15) |i| {
-    //     for (5..15) |j| {
-    //         const x = blk: {
-    //             var r: i4 = 0;
-    //             while (r == 0) {
-    //                 r = rand.int(i4);
-    //             }
-    //             break :blk r;
-    //         };
-
-    //         const y = blk: {
-    //             var r: i4 = 0;
-    //             while (r == 0) {
-    //                 r = rand.int(i4);
-    //             }
-    //             break :blk r;
-    //         };
-
-    //         _ = try sim.world.spawnWith(.{
-    //             ecs.component.Pos{ .pos = [_]i32{ @intCast(i * 16), @intCast(j * 16) } },
-    //             ecs.component.Mov{ .velocity = ecs.component.Vec2.init(x, y) },
-    //             ecs.component.Col{ .dim = [_]i32{ 16, 16 } },
-    //             ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis.png") },
-    //         });
-    //     }
-    // }
-
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{},
         ecs.component.Col{ .dim = [_]i32{ 16, 16 * 18 } },

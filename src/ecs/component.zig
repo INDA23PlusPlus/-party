@@ -1,5 +1,7 @@
 const rl = @import("raylib");
 
+const Layer = @import("../physics/collision.zig").Layer;
+
 const Entity = @import("entity.zig").Entity;
 const entity_count = @import("world.zig").N;
 
@@ -32,36 +34,6 @@ pub const Mov = struct {
     subpixel: Vec2 = Vec2{},
     velocity: Vec2 = Vec2{},
     acceleration: Vec2 = Vec2{},
-};
-
-/// Bitmask for collisions.
-pub const Layer = packed struct {
-    const Self = @This();
-    const Bits = @typeInfo(Self).Struct.backing_integer.?;
-
-    base: bool = true,
-    player: bool = false,
-    // Add more layers here and set their default to false.
-
-    pub inline fn complement(self: Self) Self {
-        const bits: Bits = @bitCast(self);
-
-        return @bitCast(~bits);
-    }
-
-    pub inline fn intersects(self: Self, other: Self) bool {
-        const a: Bits = @bitCast(self);
-        const b: Bits = @bitCast(other);
-
-        return a & b != 0;
-    }
-
-    pub inline fn coincides(self: Self, other: Self) bool {
-        const a: Bits = @bitCast(self);
-        const b: Bits = @bitCast(other);
-
-        return a == b;
-    }
 };
 
 /// Entities with this component are collidable.

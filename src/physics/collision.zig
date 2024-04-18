@@ -7,6 +7,39 @@ const ecs = @import("../ecs/ecs.zig");
 
 // pub const max_collisions = ecs.world.N * (ecs.world.N - 1) / 2;
 
+/// Bitmask for collisions, used for filtering and resolving collisions between entities.
+pub const Layer = packed struct {
+    const Self = @This();
+    const Bits = @typeInfo(Self).Struct.backing_integer.?;
+
+    base: bool = true,
+    player: bool = false,
+    damage: bool = false,
+    kill: bool = false,
+    push: bool = false,
+    // Add more layers here and set their default to false.
+
+    pub inline fn complement(self: Self) Self {
+        const bits: Bits = @bitCast(self);
+
+        return @bitCast(~bits);
+    }
+
+    pub inline fn intersects(self: Self, other: Self) bool {
+        const a: Bits = @bitCast(self);
+        const b: Bits = @bitCast(other);
+
+        return a & b != 0;
+    }
+
+    pub inline fn coincides(self: Self, other: Self) bool {
+        const a: Bits = @bitCast(self);
+        const b: Bits = @bitCast(other);
+
+        return a == b;
+    }
+};
+
 pub const CollisionQueue = struct {
     const Self = @This();
     const Key = struct { a: ecs.entity.Entity, b: ecs.entity.Entity };
