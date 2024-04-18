@@ -12,13 +12,13 @@ pub const max_player_count = 8;
 /// What is the average pixel width of our smaller assets (as well as tiles).
 pub const asset_resolution = 16;
 
-// Width of the world in pixels.
+/// Width of the world in pixels.
 pub const world_width = 512;
 
 // Height of the world in pixels.
 pub const world_height = 288;
 
-// The color hint of each player.
+/// The color hint of each player.
 pub const player_colors: [max_player_count]rl.Color = .{
     rl.Color.white,
     rl.Color.red,

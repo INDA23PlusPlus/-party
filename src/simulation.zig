@@ -21,7 +21,7 @@ pub const Metadata = struct {
     score: [constants.max_player_count]u32 = [_]u32{0} ** constants.max_player_count,
     seed: usize = 555,
     ticks_elapsed: usize = 0,
-    minigame_id: usize = starting_minigame_id, // Remove
+    minigame_id: usize = starting_minigame_id,
 };
 
 pub const Simulation = struct {
