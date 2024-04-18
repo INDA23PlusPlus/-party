@@ -67,27 +67,27 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, aren
 fn handleInputs(sim: *simulation.Simulation, inputs: *const input.InputState) !void {
     for (inputs) |inp| {
         if (inp.is_connected) {
-            if (inp.down.pressed()) {
+            if (inp.button_down.pressed()) {
                 const previous = selected;
                 selected = @mod(selected + 1, 2);
                 try changeSelection(sim, selected, previous);
             }
-            if (inp.up.pressed()) {
+            if (inp.button_up.pressed()) {
                 const previous = selected;
                 selected = @mod(selected - 1, 2);
                 try changeSelection(sim, selected, previous);
             }
-            if (inp.right.pressed() and selected == 1) {
+            if (inp.button_right.pressed() and selected == 1) {
                 const prev_res = current_resolution;
                 current_resolution = @mod(current_resolution + 1, 4);
                 try changeResolution(sim, current_resolution, prev_res);
             }
-            if (inp.left.pressed() and selected == 1) {
+            if (inp.button_left.pressed() and selected == 1) {
                 const prev_res = current_resolution;
                 current_resolution = @mod(current_resolution - 1, 4);
                 try changeResolution(sim, current_resolution, prev_res);
             }
-            if (inp.b.pressed() and selected == 0) {
+            if (inp.button_b.pressed() and selected == 0) {
                 sim.world.reset();
                 sim.meta.minigame_id = 2;
             }

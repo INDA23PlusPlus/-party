@@ -39,7 +39,7 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
                 .layer = .{ .base = true, .player = true },
                 .mask = .{
                     .base = false,
-                    .kill = true,
+                    .killing = true,
                 },
             },
             ecs.component.Pos{
@@ -118,15 +118,15 @@ fn spawnSystem(world: *ecs.world.World) !void {
                 .texture_hash = AssetManager.pathHash("assets/error.png"),
                 .u = 0,
                 .v = 0,
-                .du = 3,
-                .dv = 1,
+                .w = 3,
+                .h = 1,
             },
             ecs.component.Mov{
                 .velocity = obstacle_velocity,
             },
             ecs.component.Col{
                 .dim = .{ 48, 16 },
-                .layer = .{ .base = true, .kill = true },
+                .layer = .{ .base = true, .killing = true },
                 .mask = .{ .base = true, .player = true },
             },
             ecs.component.Tmr{

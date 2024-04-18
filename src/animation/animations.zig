@@ -5,6 +5,7 @@ const input = @import("../input.zig");
 const constants = @import("../constants.zig");
 
 pub const Animation = enum {
+    Default,
     KattisIdle,
     KattisRun,
     KattisFly,
@@ -12,11 +13,16 @@ pub const Animation = enum {
 
 pub fn data(animation: Animation) []const Frame {
     return switch (animation) {
+        Animation.Default => &frames_default,
         Animation.KattisIdle => &frames_kattis_idle,
         Animation.KattisRun => &frames_kattis_run,
         Animation.KattisFly => &frames_kattis_fly,
     };
 }
+
+const frames_default: [1]Frame = .{
+    Frame.init(0, 0),
+};
 
 const frames_kattis_idle: [4]Frame = .{
     Frame.init(0, 0),
