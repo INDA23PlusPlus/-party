@@ -72,4 +72,4 @@ pub const PlayerInputState = struct {
 
 pub const InputState = [constants.max_player_count]PlayerInputState;
 
-pub const DefaultInputState: InputState = [_]PlayerInputState{.{}} ** constants.max_player_count;
+pub const default_input_state: InputState = [_]PlayerInputState{.{}} ** constants.max_player_count;

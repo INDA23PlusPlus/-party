@@ -15,7 +15,7 @@ const Animation = @import("../animation/animations.zig").Animation;
 var prng = std.rand.DefaultPrng.init(0);
 const rand = prng.random();
 
-pub fn init(sim: *simulation.Simulation) !void {
+pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{},
         ecs.component.Tex{

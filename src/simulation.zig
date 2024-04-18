@@ -43,7 +43,7 @@ pub const SimulationError = ecs.world.WorldError;
 
 /// Should this be here?
 pub fn init(sim: *Simulation) !void {
-    try minigames_list[sim.meta.minigame_id].init(sim);
+    try minigames_list[sim.meta.minigame_id].init(sim, &input.default_input_state);
 }
 
 /// Simulate one tick in the game world.
@@ -67,6 +67,6 @@ pub fn simulate(sim: *Simulation, input_state: *const input.InputState, allocato
 
     if (frame_start_minigame != sim.meta.minigame_id) {
         // TODO: Clear the world?
-        try minigames_list[sim.meta.minigame_id].init(sim);
+        try minigames_list[sim.meta.minigame_id].init(sim, &input.default_input_state);
     }
 }

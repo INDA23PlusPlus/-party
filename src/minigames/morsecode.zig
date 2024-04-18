@@ -6,7 +6,7 @@ const AssetManager = @import("../AssetManager.zig");
 const constants = @import("../constants.zig");
 const input = @import("../input.zig");
 
-pub fn init(sim: *simulation.Simulation) !void {
+pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     // _ = sim;
     // jag tänker att det ska vara ett klassrum, och alla spelare är elever
     // de kommer först in i klassrummet genom en och samma rum och sedan står på angett plats
@@ -14,9 +14,9 @@ pub fn init(sim: *simulation.Simulation) !void {
     // på tavlan har vi den dynamiska morse code tabellen.
     for (0..constants.max_player_count) |id| {
         _ = try sim.world.spawnWith(.{
-            ecs.component.Plr{ .id = id},
+            ecs.component.Plr{ .id = id },
             ecs.component.Txt{ .string = "Player x" },
-            ecs.component.Pos{ .pos = .{@intCast(64 * (id % 4) + 100), @intCast(64 * (id / 4) + 100)} },
+            ecs.component.Pos{ .pos = .{ @intCast(64 * (id % 4) + 100), @intCast(64 * (id / 4) + 100) } },
             ecs.component.Mov{ .velocity = ecs.component.Vec2.init(0, 0) },
             ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis.png") },
             // animations för spelarna?

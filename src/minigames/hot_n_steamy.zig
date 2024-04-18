@@ -17,7 +17,7 @@ const collision = @import("../physics/collision.zig");
 const gravity = ecs.component.Vec2.init(0, ecs.component.F32.init(1, 10));
 const boost = ecs.component.Vec2.init(0, ecs.component.F32.init(-1, 4));
 
-pub fn init(sim: *simulation.Simulation) !void {
+pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     for (0..constants.max_player_count) |id| {
         _ = try sim.world.spawnWith(.{
             ecs.component.Plr{ .id = id }, ecs.component.Pos{ .pos = .{ 8, 0 } }, ecs.component.Mov{ .acceleration = gravity },
