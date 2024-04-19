@@ -129,7 +129,7 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
 
     for (0..constants.max_player_count) |id| {
         _ = try sim.world.spawnWith(.{
-            ecs.component.Plr{ .id = id },
+            ecs.component.Plr{ .id = @intCast(id) },
             ecs.component.Pos{ .pos = .{ 8, 0 } },
             ecs.component.Mov{
                 .acceleration = player_gravity,

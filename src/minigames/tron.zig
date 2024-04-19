@@ -91,10 +91,10 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) void {
 
         const dir = query.get(ecs.component.Dir) catch unreachable;
 
-        if (state.left.is_down) dir.facing = .West;
-        if (state.right.is_down) dir.facing = .East;
-        if (state.up.is_down) dir.facing = .North;
-        if (state.down.is_down) dir.facing = .South;
+        if (state.button_left.is_down) dir.facing = .West;
+        if (state.button_right.is_down) dir.facing = .East;
+        if (state.button_up.is_down) dir.facing = .North;
+        if (state.button_down.is_down) dir.facing = .South;
     }
 }
 

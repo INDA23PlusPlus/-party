@@ -37,7 +37,7 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
 
     for (0..constants.max_player_count) |id| {
         _ = try sim.world.spawnWith(.{
-            ecs.component.Plr{ .id = id },
+            ecs.component.Plr{ .id = @intCast(id) },
             ecs.component.Txt{ .string = "Player x" },
             ecs.component.Pos{ .pos = assigned_pos(id) },
             ecs.component.Mov{ .velocity = ecs.component.Vec2.init(0, 0) },
@@ -59,15 +59,14 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, aren
 
 fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
     var query = world.query(&.{ecs.component.Plr}, &.{});
-    while(query.next()) |_| {
+    while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
         const state = inputs[plr.id];
         if (state.is_connected) {
             if (state.button_a.is_down) {
                 keystrokes[plr.id][last_key_index[plr.id]] = 1;
                 last_key_index[plr.id] += 1;
-            }
-            else if (state.button_b.is_down) {
+            } else if (state.button_b.is_down) {
                 keystrokes[plr.id][last_key_index[plr.id]] = 2;
                 last_key_index[plr.id] += 1;
             }
@@ -80,4 +79,3 @@ fn wordSystem(world: *ecs.world.World) !void {
     // TODO: check if keystrokes array equals a morse character
     // in which case go to next word if possible, else give player score
 }
-
