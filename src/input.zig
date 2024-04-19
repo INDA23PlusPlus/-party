@@ -10,6 +10,7 @@ const ButtonState = struct {
         if (self.is_down) {
             return current_tick - self.press_tick;
         }
+
         return 0;
     }
 

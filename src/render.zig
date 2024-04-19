@@ -7,7 +7,6 @@ const win = @import("window.zig");
 
 pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) void {
     var query = world.query(&.{ ecs.component.Pos, ecs.component.Tex }, &.{});
-    var text_query = world.query(&.{ ecs.component.Pos, ecs.component.Txt }, &.{});
 
     while (query.next()) |_| {
         const pos_component = query.get(ecs.component.Pos) catch unreachable;
@@ -44,6 +43,8 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
 
         rl.drawTexturePro(tex, src, dst, rl.Vector2.init(0, 0), 0.0, tex_component.tint);
     }
+
+    var text_query = world.query(&.{ ecs.component.Pos, ecs.component.Txt }, &.{});
 
     // Draw text
     while (text_query.next()) |_| {

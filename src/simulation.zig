@@ -22,6 +22,7 @@ pub const Metadata = struct {
     seed: usize = 555,
     ticks_elapsed: usize = 0,
     minigame_id: usize = starting_minigame_id,
+    minigame_ticks_per_update: u32 = 1, // Used by minigames to
 };
 
 pub const Simulation = struct {
@@ -43,6 +44,7 @@ pub const SimulationError = ecs.world.WorldError;
 
 /// Should this be here?
 pub fn init(sim: *Simulation) !void {
+    sim.meta.minigame_ticks_per_update = 1;
     try minigames_list[sim.meta.minigame_id].init(sim, &input.default_input_state);
 }
 
@@ -52,6 +54,8 @@ pub fn init(sim: *Simulation) !void {
 /// will lead to inconsistencies.
 pub fn simulate(sim: *Simulation, input_state: *const input.InputState, allocator: std.mem.Allocator) !void {
     const frame_start_minigame = sim.meta.minigame_id;
+
+    sim.meta.ticks_elapsed += 1;
 
     // Allocator for a single frame.
     var arena_state = std.heap.ArenaAllocator.init(allocator);

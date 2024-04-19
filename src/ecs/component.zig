@@ -28,6 +28,7 @@ pub const components: []const type = &.{
     Anm,
     Lnk,
     Tmr,
+    Ctr,
 };
 
 /// Entities with this component are positionable.
@@ -56,10 +57,6 @@ pub const Lnk = struct {
 
 /// Entities with component point in a direction.
 pub const Dir = struct {
-    // Do not add a None, value to this enum.
-    // If an entity does not have a facing,
-    // then it should not have a Dir component.
-    // Components are cheap to remove at runtime.
     facing: enum {
         North,
         South,
@@ -74,7 +71,7 @@ pub const Dir = struct {
 
 /// Entities with this component are player controllable.
 pub const Plr = struct {
-    id: usize = 0, // Use this value to find the correct player input.
+    id: u32 = 0, // Use this value to find the correct player input.
 };
 
 /// Entities with this component have associated text.
@@ -109,9 +106,14 @@ pub const Anm = struct {
 
 // Entities with this component trigger an action after a specified delay.
 pub const Tmr = struct {
-    delay: usize = 0, // ticks until the event fires
-    elapsed: usize = 0, // how many ticks have passed
+    delay: u32 = 0, // ticks until the event fires
+    elapsed: u32 = 0, // how many ticks have passed
     fired: bool = false, // whether the timer has fired or not
     repeat: bool = false, // whether the timer restarts after firing
     action: *const fn (*World, Entity) void,
+};
+
+/// Entities with this component can count.
+pub const Ctr = struct {
+    counter: u32 = 0,
 };
