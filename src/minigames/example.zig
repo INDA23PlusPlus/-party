@@ -11,7 +11,7 @@ const animator = @import("../animation/animator.zig");
 const collision = @import("../physics/collision.zig");
 const movement = @import("../physics/movement.zig");
 
-pub fn init(sim: *simulation.Simulation) !void {
+pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{},
         ecs.component.Tex{

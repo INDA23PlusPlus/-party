@@ -4,6 +4,8 @@ const menu = @import("menu.zig");
 const morsecode = @import("morsecode.zig");
 const tron = @import("tron.zig");
 const hot_n_steamy = @import("hot_n_steamy.zig");
+const lobby = @import("lobby.zig");
+const example = @import("example.zig");
 
 /// Create a list of Minigames.
 pub const list = [_]minigame.Minigame{
@@ -11,6 +13,16 @@ pub const list = [_]minigame.Minigame{
         .name = "menu",
         .update = menu.update,
         .init = menu.init,
+    },
+    .{
+        .name = "lobby",
+        .update = lobby.update,
+        .init = lobby.init,
+    },
+    .{
+        .name = "example",
+        .update = example.update,
+        .init = example.init,
     },
     .{
         .name = "morsecode",
