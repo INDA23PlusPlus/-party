@@ -11,6 +11,12 @@ To run a specific example, use the `-Dminigame=<name>` flag. For example:
 ```bash
 zig build run -Dminigame=example
 ```
+Some available minigames are:
+- Menu (`menu`)
+- Tron (`tron`)
+- Morse code (`morsecode`)
+- Hot n' steamy (`hns`)
+
 To run as a server, use run-server:
 ```bash
 zig build run-server
