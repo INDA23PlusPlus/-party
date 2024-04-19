@@ -78,7 +78,7 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, aren
         try obsticleGenerator(&sim.world, std.Random.intRangeAtMost(rand, i32, -6, 6));
     }
     sim.meta.ticks_elapsed += 1;
-    try deathSystem(&sim.world);
+    // try deathSystemS(&sim.world);
     animator.update(&sim.world);
 
     // fn gravitySystem(world: *ecs.world.World) !void {
@@ -89,10 +89,10 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, aren
     //     }
     // }
     //Elliots lösning
-    // try deathSystem(&sim.world, &collisions);
-    // // try spawnSystem(&sim.world);
-    // animator.update(&sim.world);
-    // timer.update(&sim.world);
+    try deathSystemE(&sim.world, &collisions);
+    try spawnSystem(&sim.world);
+    animator.update(&sim.world);
+    timer.update(&sim.world);
 }
 
 fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
@@ -119,9 +119,9 @@ fn obsticleGenerator(world: *ecs.world.World, length: i32) !void {
         },
         ecs.component.Mov{ .velocity = object_acc },
         ecs.component.Tex{
-            .texture_hash = AssetManager.pathHash("assets/test.png"),
-            .tiles_x = 1,
-            .tiles_y = @as(usize, @intCast(baseObHeight - length)),
+            .texture_hash = AssetManager.pathHash("assets/error.png"),
+            .w = 1,
+            .h = @intCast(baseObHeight - length),
         },
     });
     _ = try world.spawnWith(.{
@@ -135,12 +135,12 @@ fn obsticleGenerator(world: *ecs.world.World, length: i32) !void {
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/error.png"),
             .w = 1,
-            .h = @as(usize, @intCast(baseObHeight + length)),
+            .h = @intCast(baseObHeight + length),
         },
     });
 }
 
-fn deathSystem(world: *ecs.world.World) !void {
+fn deathSystemS(world: *ecs.world.World) !void {
     var query = world.query(&.{ecs.component.Pos}, &.{});
     while (query.next()) |entity| {
         const pos = try query.get(ecs.component.Pos);
