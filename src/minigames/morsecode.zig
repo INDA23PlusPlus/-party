@@ -42,6 +42,25 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
 pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, arena: std.mem.Allocator) !void {
     _ = arena;
     rl.drawText("This is a new minigame", 64, 8, 32, rl.Color.blue);
+    // try input(&sim.world, inputs);
     _ = inputs;
     _ = sim;
 }
+
+fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
+    var query = world.query(&.{ecs.component.Plr}, &.{});
+    while(query.next()) |_| {
+        const plr = try query.get(ecs.component.Plr);
+        const state = inputs[plr.id];
+        if (state.is_connected) {
+            if (state.button_a.is_down) {
+                // TODO: add 1 to keystrokes for current player
+            }
+            else if (state.button_b.is_down) {
+                // TODO: add 2 to keystrokes for current player
+            }
+        }
+    }
+}
+
+
