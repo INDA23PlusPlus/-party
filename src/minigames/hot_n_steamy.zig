@@ -16,13 +16,14 @@ const Vec2 = ecs.component.Vec2;
 const F32 = ecs.component.F32;
 
 // TODO: Spawn and collide with obstacles
-//Global Constants
+//Soams Constants
 const gravity = ecs.component.Vec2.init(0, ecs.component.F32.init(1, 10));
 const boost = ecs.component.Vec2.init(0, ecs.component.F32.init(-1, 4));
 var object_acc = ecs.component.Vec2.init(-4, 0);
 var prng = std.rand.DefaultPrng.init(555);
 const rand = prng.random();
 const baseObHeight = 7;
+//Elliots constatns
 const player_gravity = Vec2.init(0, F32.init(1, 10));
 const player_boost = Vec2.init(0, F32.init(-1, 4));
 const obstacle_velocity = Vec2.init(-8, 0);
@@ -39,45 +40,32 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     obstacle_spawn_delay = obstacle_spawn_delay_initial;
     for (0..constants.max_player_count) |id| {
         _ = try sim.world.spawnWith(.{
-            ecs.component.Plr{ .id = id }, ecs.component.Pos{ .pos = .{ 8, 0 } },
+            ecs.component.Plr{ .id = id },
+            ecs.component.Pos{ .pos = .{ 8, 0 } },
             ecs.component.Mov{
                 .acceleration = gravity,
             },
+            //Somas lösning
             ecs.component.Col{
                 .dim = .{ 16, 16 },
                 .layer = collision.Layer{ .base = false, .player = true },
                 .mask = collision.Layer{ .base = false, .player = false },
-            ecs.component.Plr{
-                .id = id,
             },
-            ecs.component.Col{
-                .dim = .{ 16, 16 },
-                .layer = .{ .base = true, .player = true },
-                .mask = .{
-                    .base = false,
-                    .killing = true,
-                },
-            },
-            ecs.component.Pos{
-                .pos = .{ 8, 0 },
-            },
-            ecs.component.Mov{
-                .acceleration = player_gravity,
-            },
+            //Elliots lösning
+            // ecs.component.Col{
+            //     .dim = .{ 16, 16 },
+            //     .layer = .{ .base = true, .player = true },
+            //     .mask = .{
+            //         .base = false,
+            //         .killing = true,
+            //     },
+            // },
             ecs.component.Tex{
                 .texture_hash = AssetManager.pathHash("assets/kattis.png"),
                 .tint = constants.player_colors[id],
             },
             ecs.component.Anm{ .animation = Animation.KattisFly, .interval = 8, .looping = true },
         });
-        // _ = try sim.world.spawnWith(.{
-        //     ecs.component.Pos{ .pos = .{ 0, constants.world_height - 16 } },
-        //     ecs.component.Col{
-        //         .dim = [_]i32{ 16, 16 * 18 },
-        //         .layer = collision.Layer{ .base = false, .player = false },
-        //         .mask = collision.Layer{ .base = false, .player = true },
-        //     },
-        // });
     }
 }
 
@@ -85,26 +73,26 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, aren
     try jetpackSystem(&sim.world, inputs);
     var collisions = collision.CollisionQueue.init(arena) catch @panic("could not initialize collision queue");
     movement.update(&sim.world, &collisions, arena) catch @panic("movement system failed");
-
+    //Somas lösning
     if (sim.meta.ticks_elapsed % (80 - (sim.meta.ticks_elapsed / 80)) == 0) {
         try obsticleGenerator(&sim.world, std.Random.intRangeAtMost(rand, i32, -6, 6));
     }
     sim.meta.ticks_elapsed += 1;
     try deathSystem(&sim.world);
     animator.update(&sim.world);
-}
 
-// fn gravitySystem(world: *ecs.world.World) !void {
-//     var query = world.query(&.{ecs.component.Mov}, &.{});
-//     while (query.next()) |_| {
-//         const mov = try query.get(ecs.component.Mov);
-//         mov.acceleration = mov.acceleration.add(gravity);
-//     }
-// }
-    try deathSystem(&sim.world, &collisions);
-    try spawnSystem(&sim.world);
-    animator.update(&sim.world);
-    timer.update(&sim.world);
+    // fn gravitySystem(world: *ecs.world.World) !void {
+    //     var query = world.query(&.{ecs.component.Mov}, &.{});
+    //     while (query.next()) |_| {
+    //         const mov = try query.get(ecs.component.Mov);
+    //         mov.acceleration = mov.acceleration.add(gravity);
+    //     }
+    // }
+    //Elliots lösning
+    // try deathSystem(&sim.world, &collisions);
+    // // try spawnSystem(&sim.world);
+    // animator.update(&sim.world);
+    // timer.update(&sim.world);
 }
 
 fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
@@ -120,7 +108,7 @@ fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void
         }
     }
 }
-
+//Somas lösning
 fn obsticleGenerator(world: *ecs.world.World, length: i32) !void {
     _ = try world.spawnWith(.{
         ecs.component.Pos{ .pos = [_]i32{ constants.world_width, 0 } },
@@ -145,9 +133,9 @@ fn obsticleGenerator(world: *ecs.world.World, length: i32) !void {
         },
         ecs.component.Mov{ .velocity = object_acc },
         ecs.component.Tex{
-            .texture_hash = AssetManager.pathHash("assets/test.png"),
-            .tiles_x = 1,
-            .tiles_y = @as(usize, @intCast(baseObHeight + length)),
+            .texture_hash = AssetManager.pathHash("assets/error.png"),
+            .w = 1,
+            .h = @as(usize, @intCast(baseObHeight + length)),
         },
     });
 }
@@ -162,7 +150,10 @@ fn deathSystem(world: *ecs.world.World) !void {
             world.kill(entity);
             std.debug.print("entity {} died\n", .{entity.identifier});
         }
-fn deathSystem(world: *ecs.world.World, collisions: *collision.CollisionQueue) !void {
+    }
+}
+//Elliots lösning
+fn deathSystemE(world: *ecs.world.World, collisions: *collision.CollisionQueue) !void {
 
     // var query = world.query(&.{ecs.component.Pos}, &.{});
     // while (query.next()) |entity| {
