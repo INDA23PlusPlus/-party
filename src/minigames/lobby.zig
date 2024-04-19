@@ -32,7 +32,7 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, aren
     for (player_changes, player_ids, 0..) |change, entity, index| {
         if (change == .add) {
             _ = try sim.world.spawnWith(.{
-                ecs.component.Plr{ .id = index },
+                ecs.component.Plr{ .id = @truncate(index) },
                 ecs.component.Pos{ .pos = .{ 256, 36 } },
                 ecs.component.Tex{
                     .texture_hash = AssetManager.pathHash("assets/kattis.png"),
