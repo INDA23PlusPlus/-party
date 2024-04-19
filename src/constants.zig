@@ -18,6 +18,9 @@ pub const world_width = 512;
 // Height of the world in pixels.
 pub const world_height = 288;
 
+pub const world_width_tiles = world_width / asset_resolution;
+pub const world_height_tiles = world_height / asset_resolution;
+
 /// The color hint of each player.
 pub const player_colors: [max_player_count]rl.Color = .{
     rl.Color.white,
