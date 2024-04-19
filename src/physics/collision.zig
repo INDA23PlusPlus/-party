@@ -137,3 +137,16 @@ pub fn checkCollisions(
 
     return collided;
 }
+
+pub inline fn intersects(
+    pos1: *ecs.component.Pos,
+    col1: *ecs.component.Col,
+    pos2: *ecs.component.Pos,
+    col2: *ecs.component.Col,
+) bool {
+    const a = @intFromBool(pos1.pos + col1.dim > pos2.pos);
+    const b = @intFromBool(pos2.pos + col2.dim > pos1.pos);
+    const c = (a & b) != [_]u1{ 0, 0 };
+
+    return @reduce(.And, c);
+}

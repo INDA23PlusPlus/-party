@@ -179,6 +179,7 @@ pub const World = struct {
         _ = self;
         _ = entity;
         _ = Components;
+        @compileError("unimplemented");
     }
 
     /// TODO
@@ -187,6 +188,7 @@ pub const World = struct {
         _ = self;
         _ = entity;
         _ = Components;
+        @compileError("unimplemented");
     }
 
     /// TODO
@@ -195,12 +197,14 @@ pub const World = struct {
         _ = self;
         _ = entity;
         _ = Components;
+        @compileError("unimplemented");
     }
 
     /// TODO
     /// Creates a new entity without any components.
     pub fn spawnEmpty(self: *Self) !Entity {
         _ = self;
+        @compileError("unimplemented");
     }
 
     /// TODO
@@ -208,6 +212,7 @@ pub const World = struct {
     pub fn respawnEmpty(self: *Self, entity: Entity) !void {
         _ = self;
         _ = entity;
+        @compileError("unimplemented");
     }
 
     /// Removes components from an entity.
@@ -236,7 +241,7 @@ pub const World = struct {
         const include = comptime componentSignature(Include);
         const exclude = comptime componentSignature(Exclude);
 
-        const signature = self.world.signatures[entity.identifier];
+        const signature = self.signatures[entity.identifier];
 
         return signature.intersectWith(include).xorWith(signature.intersectWith(exclude)).eql(include);
     }
@@ -255,6 +260,16 @@ pub const World = struct {
     /// Constructs a Query.
     pub fn query(self: *Self, comptime Include: []const type, comptime Exclude: []const type) Query(Include, Exclude) {
         return Query(Include, Exclude).init(self);
+    }
+
+    pub fn serialize(self: *Self, allocator: std.mem.Allocator) void {
+        _ = self;
+        _ = allocator;
+        @compileError("unimplemented");
+    }
+
+    pub fn deserialize() Self {
+        @compileError("unimplemented");
     }
 
     fn componentArray(self: *Self, comptime Component: type) *[N]Component {
