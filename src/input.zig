@@ -54,22 +54,22 @@ const ButtonState = struct {
 pub const PlayerInputState = struct {
     is_local: bool = false,
     is_connected: bool = false,
-    a: ButtonState = .{},
-    b: ButtonState = .{},
-    up: ButtonState = .{},
-    down: ButtonState = .{},
-    left: ButtonState = .{},
-    right: ButtonState = .{},
+    button_a: ButtonState = .{},
+    button_b: ButtonState = .{},
+    button_up: ButtonState = .{},
+    button_down: ButtonState = .{},
+    button_left: ButtonState = .{},
+    button_right: ButtonState = .{},
 
     pub fn horizontal(self: *const PlayerInputState) i32 {
-        return self.right.cmp(self.left);
+        return self.button_right.cmp(self.button_left);
     }
 
     pub fn vertical(self: *const PlayerInputState) i32 {
-        return self.down.cmp(self.up);
+        return self.button_down.cmp(self.button_up);
     }
 };
 
 pub const InputState = [constants.max_player_count]PlayerInputState;
 
-pub const DefaultInputState: InputState = [_]PlayerInputState{.{}} ** constants.max_player_count;
+pub const default_input_state: InputState = [_]PlayerInputState{.{}} ** constants.max_player_count;

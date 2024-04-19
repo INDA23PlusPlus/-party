@@ -10,7 +10,10 @@ pub const Minigame = struct {
 
     /// Initializes the minigame.
     /// This should include setting up the starting positions of the players and the play area.
-    init: *const fn (sim: *simulation.Simulation) simulation.SimulationError!void,
+    init: *const fn (
+        sim: *simulation.Simulation,
+        input: *const input_state.InputState,
+    ) simulation.SimulationError!void,
 
     /// Updates the minigame one frame.
     /// Memory allocations using `arena` are nonpersistent and automatically freed after each frame.

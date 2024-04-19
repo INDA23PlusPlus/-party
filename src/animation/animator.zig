@@ -14,8 +14,10 @@ pub fn update(world: *ecs.world.World) void {
     while (query.next()) |_| {
         const tex_component = query.get(ecs.component.Tex) catch unreachable;
         const anm_component = query.get(ecs.component.Anm) catch unreachable;
+
         const frames = animations.data(anm_component.animation);
-        const subframe_max = frames.len * anm_component.interval;
+        const subframe_max = @as(u32, @truncate(frames.len)) * anm_component.interval;
+
         if (anm_component.subframe >= subframe_max) {
             if (anm_component.looping) {
                 anm_component.subframe = 0;
@@ -23,7 +25,9 @@ pub fn update(world: *ecs.world.World) void {
                 anm_component.subframe = subframe_max - 1;
             }
         }
+
         const frame_index = anm_component.subframe / anm_component.interval;
+
         tex_component.u = frames[frame_index].u;
         tex_component.v = frames[frame_index].v;
         anm_component.subframe += 1;

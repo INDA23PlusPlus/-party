@@ -10,18 +10,19 @@ const movement = @import("../physics/movement.zig");
 const collision = @import("../physics/collision.zig");
 const animator = @import("../animation/animator.zig");
 const Animation = @import("../animation/animations.zig").Animation;
+const constants = @import("../constants.zig");
 
 // Temporary globals.
 var prng = std.rand.DefaultPrng.init(0);
 const rand = prng.random();
 
-pub fn init(sim: *simulation.Simulation) !void {
+pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{},
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/tron_map.png"),
-            .tiles_x = 32,
-            .tiles_y = 18,
+            .w = 32,
+            .h = 18,
         },
     });
 
@@ -85,10 +86,10 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
         const state = inputs[plr.id];
 
         if (state.is_connected) {
-            if (state.left.is_down and dir.facing != .East) mov.velocity = ecs.component.Vec2.init(-3, 0).div(4);
-            if (state.right.is_down and dir.facing != .West) mov.velocity = ecs.component.Vec2.init(3, 0).div(4);
-            if (state.up.is_down and dir.facing != .South) mov.velocity = ecs.component.Vec2.init(0, -3).div(4);
-            if (state.down.is_down and dir.facing != .North) mov.velocity = ecs.component.Vec2.init(0, 3).div(4);
+            if (state.button_left.is_down and dir.facing != .East) mov.velocity = ecs.component.Vec2.init(-3, 0).div(4);
+            if (state.button_right.is_down and dir.facing != .West) mov.velocity = ecs.component.Vec2.init(3, 0).div(4);
+            if (state.button_up.is_down and dir.facing != .South) mov.velocity = ecs.component.Vec2.init(0, -3).div(4);
+            if (state.button_down.is_down and dir.facing != .North) mov.velocity = ecs.component.Vec2.init(0, 3).div(4);
         }
     }
 }

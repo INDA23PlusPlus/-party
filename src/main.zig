@@ -52,18 +52,10 @@ const LaunchOptions = struct {
     }
 };
 
-inline fn initWindow(resolution: enum { FHD, HD, qHD, nHD }) win.Window {
-    switch (resolution) {
-        .FHD => return win.Window.init(1980, 1080),
-        .HD => return win.Window.init(1280, 720),
-        .qHD => return win.Window.init(960, 540),
-        .nHD => return win.Window.init(640, 360),
-    }
-}
-
 pub fn main() !void {
-    const launch_options = try LaunchOptions.parse();
-    var window = initWindow(.qHD);
+    // var launch_options = try LaunchOptions.parse();
+
+    var window = win.Window.init(640, 360);
     defer window.deinit();
 
     var game_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -82,19 +74,13 @@ pub fn main() !void {
     controllers[1].input_index = 1;
 
     // Networking
-    if (launch_options.start_as_role == .client) {
-        try networking.startClient(&shared_simulation);
-    } else {
-        try networking.startServer(&shared_simulation);
-    }
+    // if (launch_options.start_as_role == .client) {
+    //     try networking.startClient(&shared_simulation);
+    // } else {
+    //     try networking.startServer(&shared_simulation);
+    // }
 
     try simulation.init(&shared_simulation.sim);
-
-    // var timer = try std.time.Timer.start();
-    // var time: u64 = 0;
-    // var laps: u64 = 0;
-    // var out = std.io.getStdOut();
-    // var writer = out.writer();
 
     var benchmarker = try @import("Benchmarker.zig").init("Simulation");
 
@@ -105,7 +91,7 @@ pub fn main() !void {
 
         // Fetch input.
         shared_input_timeline.rw_lock.lock();
-        const tick = shared_simulation.sim.meta.ticks_elapsed; // WILL ALWAYS BE ZERO!!!
+        const tick = shared_simulation.sim.meta.ticks_elapsed; // WILL ALWAYS BE ZERO
         const frame_input: input.InputState = shared_input_timeline.localUpdate(&controllers, tick).*;
         shared_input_timeline.rw_lock.unlock();
 
@@ -124,7 +110,7 @@ pub fn main() !void {
         window.update();
         rl.beginDrawing();
         rl.clearBackground(BC_COLOR);
-        render.update(&shared_simulation.sim.world, &assets);
+        render.update(&shared_simulation.sim.world, &assets, &window);
 
         // Stop rendering.
         rl.endDrawing();
