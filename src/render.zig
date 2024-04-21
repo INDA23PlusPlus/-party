@@ -21,7 +21,10 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
         const src_w: f32 = @floatFromInt(tex_component.w * constants.asset_resolution);
         const src_h: f32 = @floatFromInt(tex_component.h * constants.asset_resolution);
 
-        const src = rl.Rectangle{ .x = src_x, .y = src_y, .width = src_w, .height = src_h };
+        const flip_vertical: f32 = @floatFromInt(1 - 2 * @as(i32, @intFromBool(tex_component.flip_vertical)));
+        const flip_horizontal: f32 = @floatFromInt(1 - 2 * @as(i32, @intFromBool(tex_component.flip_horizontal)));
+
+        const src = rl.Rectangle{ .x = src_x, .y = src_y, .width = flip_horizontal * src_w, .height = flip_vertical * src_h };
 
         // Dst
 

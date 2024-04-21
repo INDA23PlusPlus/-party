@@ -11,6 +11,7 @@ const collision = @import("../physics/collision.zig");
 const animator = @import("../animation/animator.zig");
 const Animation = @import("../animation/animations.zig").Animation;
 const constants = @import("../constants.zig");
+const timer = @import("../timer.zig");
 
 pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     sim.meta.minigame_ticks_per_update = 16;
@@ -69,6 +70,9 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, aren
     // Set move velocity for animation.
     velocitySystem(sim);
 
+    // Set facing of players.
+    playerFacingSystem(sim);
+
     // Set subpositions of sprites.
     animationSystem(sim);
 
@@ -117,6 +121,24 @@ fn velocitySystem(sim: *simulation.Simulation) void {
             .South => if (mov.velocity.vector[1] >= 0) mov.velocity.set([_]i16{ 0, 1 }),
             else => {},
         }
+    }
+}
+
+fn playerFacingSystem(sim: *simulation.Simulation) void {
+    if (sim.meta.ticks_elapsed % sim.meta.minigame_ticks_per_update != 0) return;
+
+    var query = sim.world.query(&.{
+        ecs.component.Plr,
+        ecs.component.Tex,
+        ecs.component.Mov,
+    }, &.{});
+
+    while (query.next()) |_| {
+        const tex = query.get(ecs.component.Tex) catch unreachable;
+        const mov = query.get(ecs.component.Mov) catch unreachable;
+
+        if (mov.velocity.vector[0] < 0) tex.flip_horizontal = true;
+        if (mov.velocity.vector[0] > 0) tex.flip_horizontal = false;
     }
 }
 
@@ -180,7 +202,13 @@ fn trailSystem(sim: *simulation.Simulation) !void {
             ecs.component.Pos{ .pos = pos.pos },
             ecs.component.Col{ .dim = [_]i32{ 16, 16 } },
             ecs.component.Ctr{},
-            ecs.component.Tex{},
+            ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/tron_skull.png") },
+            ecs.component.Anm{
+                .animation = .TronSkull,
+                .looping = true,
+                .interval = 16,
+                .subframe = @intCast((sim.meta.ticks_elapsed % 64)), // sync animations
+            },
         });
     }
 

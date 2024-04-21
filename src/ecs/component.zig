@@ -14,6 +14,8 @@ pub const Vec2 = @import("../math/linear.zig").V(2, F32);
 const Animation = @import("../animation/animations.zig").Animation;
 const AssetManager = @import("../AssetManager.zig");
 
+const Action = @import("../timer.zig").Action;
+
 /// Components the ECS supports.
 /// All components MUST be default initializable.
 /// All components MUST have a documented purpose.
@@ -27,8 +29,8 @@ pub const components: []const type = &.{
     Txt,
     Anm,
     Lnk,
-    Tmr,
     Ctr,
+    TimerDepracated,
 };
 
 /// Entities with this component are positionable.
@@ -93,27 +95,32 @@ pub const Tex = struct {
     subpos: @Vector(2, i32) = .{ 0, 0 },
     tint: rl.Color = rl.Color.white, // TODO: does this work for serialization?
     rotate: enum { R0, R90, R180, R270 } = .R0,
-    mirror: bool = false,
+    flip_horizontal: bool = false,
+    flip_vertical: bool = false,
 };
 
 /// Entities with this component are animated.
 pub const Anm = struct {
-    animation: Animation = Animation.Default,
     subframe: u32 = 0,
     interval: u32 = 1,
+    animation: Animation = Animation.Default,
     looping: bool = true,
 };
 
 // Entities with this component trigger an action after a specified delay.
-pub const Tmr = struct {
+pub const TimerDepracated = struct {
     delay: u32 = 0, // ticks until the event fires
     elapsed: u32 = 0, // how many ticks have passed
     fired: bool = false, // whether the timer has fired or not
     repeat: bool = false, // whether the timer restarts after firing
-    action: *const fn (*World, Entity) void,
+    action: Action = .default,
 };
 
 /// Entities with this component can count.
+/// To model a timer that calls a function after a certain number of ticks, set the id to correspond to a specific function.
+/// Then, create a ticker system that updates the counter and calls the correct function if the id matches and if the counter is high enough.
+/// Resetting the counter should then result in a looping timer.
 pub const Ctr = struct {
+    id: u32 = 0,
     counter: u32 = 0,
 };

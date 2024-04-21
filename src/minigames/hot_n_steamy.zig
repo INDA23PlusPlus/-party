@@ -70,7 +70,7 @@ fn spawnVerticalObstacleBoth(world: *ecs.world.World, entity: ecs.entity.Entity,
     spawnVerticalObstacleLower(world, entity, @intCast(@divTrunc(constants.world_height_tiles - delta, 2)));
 }
 
-fn spawnRandomObstacle(world: *ecs.world.World, entity: ecs.entity.Entity) void {
+pub fn spawnRandomObstacle(world: *ecs.world.World, entity: ecs.entity.Entity) void {
     const kind = std.Random.enumValue(rand, ObstacleKind);
     switch (kind) {
         ObstacleKind.ObstacleLower => {
@@ -111,8 +111,8 @@ fn spawnHorizontalObstacle(world: *ecs.world.World, _: ecs.entity.Entity) void {
             .layer = .{ .base = true, .killing = true },
             .mask = .{ .base = true, .player = true },
         },
-        ecs.component.Tmr{
-            .action = ecs.world.World.kill,
+        ecs.component.TimerDepracated{
+            .action = .killEntity,
             .delay = obstacle_lifetime,
         },
     }) catch unreachable;
@@ -120,8 +120,8 @@ fn spawnHorizontalObstacle(world: *ecs.world.World, _: ecs.entity.Entity) void {
 
 pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     _ = try sim.world.spawnWith(.{
-        ecs.component.Tmr{
-            .action = spawnRandomObstacle,
+        ecs.component.TimerDepracated{
+            .action = .hnsSpawnRandomObstacle,
             .delay = obstacle_spawn_delay_initial,
             .repeat = true,
         },

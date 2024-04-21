@@ -9,6 +9,7 @@ pub const Animation = enum {
     KattisIdle,
     KattisRun,
     KattisFly,
+    TronSkull,
 };
 
 pub fn data(animation: Animation) []const Frame {
@@ -17,6 +18,7 @@ pub fn data(animation: Animation) []const Frame {
         Animation.KattisIdle => &frames_kattis_idle,
         Animation.KattisRun => &frames_kattis_run,
         Animation.KattisFly => &frames_kattis_fly,
+        Animation.TronSkull => &frames_tron_skull,
     };
 }
 
@@ -42,6 +44,13 @@ const frames_kattis_fly: [4]Frame = .{
     Frame.init(1, 2),
     Frame.init(2, 2),
     Frame.init(3, 2),
+};
+
+const frames_tron_skull: [4]Frame = .{
+    Frame.init(0, 0),
+    Frame.init(1, 0),
+    Frame.init(2, 0),
+    Frame.init(3, 0),
 };
 
 pub const Frame = struct {
