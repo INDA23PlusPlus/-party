@@ -70,7 +70,7 @@ pub fn simulate(sim: *Simulation, input_state: *const input.InputState, allocato
     // We could select the game randomly by first switching to a "game select minigame" with ID 0 maybe?
 
     if (frame_start_minigame != sim.meta.minigame_id) {
-        // TODO: Clear the world?
+        sim.world.reset();
         try minigames_list[sim.meta.minigame_id].init(sim, input_state);
     }
 }

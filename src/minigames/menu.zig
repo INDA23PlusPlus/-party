@@ -75,8 +75,7 @@ fn handleInputs(sim: *simulation.Simulation, inputs: *const input.InputState) !v
                 try changeResolution(sim, current_resolution);
             }
             if (inp.button_b.pressed() and selected == 0) {
-                sim.world.reset();
-                sim.meta.minigame_id = 1;
+                sim.meta.minigame_id = 1; // Send to lobby
             }
         }
     }
