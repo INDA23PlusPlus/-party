@@ -35,18 +35,6 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, aren
         }
     }
 
-    // while (players.next()) |entity| {
-    //     const plr = players.get(ecs.component.Plr) catch unreachable;
-    //     player_ids[plr.id] = entity;
-    //     if (inputs[plr.id].is_connected) {
-    //         player_changes[plr.id] = .add;
-    //     } else {
-    //         player_changes[plr.id] = .remove;
-    //     }
-    // }
-
-    // std.debug.print("{any}\n\n{any}\n\n-------------------------------\n\n", .{ player_ids, player_changes });
-
     for (player_changes, player_ids, 0..) |change, entity, index| {
         if (change == .add) {
             _ = try sim.world.spawnWith(.{
