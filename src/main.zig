@@ -53,7 +53,7 @@ const LaunchOptions = struct {
 };
 
 pub fn main() !void {
-    // var launch_options = try LaunchOptions.parse();
+    // const launch_options = try LaunchOptions.parse();
 
     var window = win.Window.init(640, 360);
     defer window.deinit();

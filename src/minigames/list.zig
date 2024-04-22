@@ -20,11 +20,11 @@ pub const list = [_]minigame.Minigame{
         .update = lobby.update,
         .init = lobby.init,
     },
-    .{
-        .name = "example",
-        .update = example.update,
-        .init = example.init,
-    },
+        // .{
+        //     .name = "example",
+        //     .update = example.update,
+        //     .init = example.init,
+        // },
     .{
         .name = "morsecode",
         .update = morsecode.update,

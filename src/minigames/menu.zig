@@ -6,10 +6,17 @@ const ecs = @import("../ecs/ecs.zig");
 
 const Allocator = std.mem.Allocator;
 
-var menu_items: [5]ecs.entity.Entity = undefined;
-var selections: [2]usize = .{ 0, 1 };
+var menu_items: [2]ecs.entity.Entity = undefined;
+
 var selected: i8 = 0;
 var current_resolution: i8 = 0;
+
+const resolution_strings: [4][:0]const u8 = .{
+    "Resolution: 640 x 360",
+    "Resolution: 960 x 540",
+    "Resolution: 1280 x 720",
+    "Resolution: 1920 x 1080",
+};
 
 pub fn init(sim: *simulation.Simulation, inputs: *const input.InputState) simulation.SimulationError!void {
     _ = inputs;
@@ -30,22 +37,7 @@ pub fn init(sim: *simulation.Simulation, inputs: *const input.InputState) simula
     });
 
     const item1 = try sim.world.spawnWith(.{
-        ecs.component.Txt{ .string = "Resolution: 640 x 360", .color = 0x000000FF, .font_size = 36 },
-        ecs.component.Pos{ .pos = .{ 256, 167 } },
-    });
-
-    const item2 = try sim.world.spawnWith(.{
-        ecs.component.Txt{ .string = "Resolution: 960 x 540", .color = 0x000000FF, .font_size = 36, .draw = false },
-        ecs.component.Pos{ .pos = .{ 256, 167 } },
-    });
-
-    const item3 = try sim.world.spawnWith(.{
-        ecs.component.Txt{ .string = "Resolution: 1280 x 720", .color = 0x000000FF, .font_size = 36, .draw = false },
-        ecs.component.Pos{ .pos = .{ 256, 167 } },
-    });
-
-    const item4 = try sim.world.spawnWith(.{
-        ecs.component.Txt{ .string = "Resolution: 1980 x 1080", .color = 0x000000FF, .font_size = 36, .draw = false },
+        ecs.component.Txt{ .string = resolution_strings[@intCast(current_resolution)], .color = 0x000000FF, .font_size = 36 },
         ecs.component.Pos{ .pos = .{ 256, 167 } },
     });
 
@@ -53,9 +45,6 @@ pub fn init(sim: *simulation.Simulation, inputs: *const input.InputState) simula
     menu_items = .{
         item0,
         item1,
-        item2,
-        item3,
-        item4,
     };
 }
 
@@ -78,43 +67,34 @@ fn handleInputs(sim: *simulation.Simulation, inputs: *const input.InputState) !v
                 try changeSelection(sim, selected, previous);
             }
             if (inp.button_right.pressed() and selected == 1) {
-                const prev_res = current_resolution;
                 current_resolution = @mod(current_resolution + 1, 4);
-                try changeResolution(sim, current_resolution, prev_res);
+                try changeResolution(sim, current_resolution);
             }
             if (inp.button_left.pressed() and selected == 1) {
-                const prev_res = current_resolution;
                 current_resolution = @mod(current_resolution - 1, 4);
-                try changeResolution(sim, current_resolution, prev_res);
+                try changeResolution(sim, current_resolution);
             }
             if (inp.button_b.pressed() and selected == 0) {
                 sim.world.reset();
-                sim.meta.minigame_id = 2;
+                sim.meta.minigame_id = 1;
             }
         }
     }
 }
 
 fn changeSelection(sim: *simulation.Simulation, cur: i8, prev: i8) !void {
-    var prev_txt_comp = try sim.world.inspect(menu_items[selections[@intCast(prev)]], ecs.component.Txt);
-    var cur_txt_comp = try sim.world.inspect(menu_items[selections[@intCast(cur)]], ecs.component.Txt);
+    var prev_txt_comp = try sim.world.inspect(menu_items[@intCast(prev)], ecs.component.Txt);
+    var cur_txt_comp = try sim.world.inspect(menu_items[@intCast(cur)], ecs.component.Txt);
 
     prev_txt_comp.color = 0x000000FF;
     cur_txt_comp.color = 0xDE3163FF;
 }
 
-fn changeResolution(sim: *simulation.Simulation, cur: i8, prev: i8) !void {
-    var prev_txt_comp = try sim.world.inspect(menu_items[@as(usize, @intCast(prev)) + 1], ecs.component.Txt);
-    var cur_txt_comp = try sim.world.inspect(menu_items[@as(usize, @intCast(cur)) + 1], ecs.component.Txt);
-
-    prev_txt_comp.color = 0x000000FF;
-    prev_txt_comp.draw = false;
-
-    cur_txt_comp.color = 0xDE3163FF;
-    cur_txt_comp.draw = true;
+fn changeResolution(sim: *simulation.Simulation, cur: i8) !void {
+    var txt_comp = try sim.world.inspect(menu_items[@intCast(selected)], ecs.component.Txt);
+    txt_comp.string = resolution_strings[@intCast(cur)];
 
     setWindowSize();
-    selections[1] = @intCast(current_resolution + 1);
 }
 
 fn setWindowSize() void {
