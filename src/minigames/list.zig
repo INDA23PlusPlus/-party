@@ -3,6 +3,7 @@ const minigame = @import("interface.zig");
 const menu = @import("menu.zig");
 const morsecode = @import("morsecode.zig");
 const tron = @import("tron.zig");
+const smash = @import("smash.zig");
 const hot_n_steamy = @import("hot_n_steamy.zig");
 const lobby = @import("lobby.zig");
 const example = @import("example.zig");
@@ -33,6 +34,11 @@ pub const list = [_]minigame.Minigame{
         .name = "tron",
         .update = tron.update,
         .init = tron.init,
+    },
+    .{
+        .name = "smash",
+        .update = smash.update,
+        .init = smash.init,
     },
     .{
         .name = "hns",

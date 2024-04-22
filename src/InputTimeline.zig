@@ -8,6 +8,7 @@ rw_lock: std.Thread.RwLock = .{},
 recent_timeline: [40]input.InputState = [_]input.InputState{input.default_input_state} ** 40,
 
 pub fn localUpdate(self: *Self, controllers: []Controller, tick: usize) *input.InputState {
+    self.recent_timeline[tick % self.recent_timeline.len] = self.recent_timeline[(tick + self.recent_timeline.len - 1) % self.recent_timeline.len];
     const state = &self.recent_timeline[tick % self.recent_timeline.len];
     Controller.poll(controllers, state, tick);
     return state;

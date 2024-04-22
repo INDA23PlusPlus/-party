@@ -107,7 +107,7 @@ pub const Anm = struct {
     looping: bool = true,
 };
 
-// Entities with this component trigger an action after a specified delay.
+/// Entities with this component trigger an action after a specified delay.
 pub const TimerDepracated = struct {
     delay: u32 = 0, // ticks until the event fires
     elapsed: u32 = 0, // how many ticks have passed

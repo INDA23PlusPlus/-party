@@ -11,11 +11,11 @@ const collision = @import("../physics/collision.zig");
 const animator = @import("../animation/animator.zig");
 const Animation = @import("../animation/animations.zig").Animation;
 const constants = @import("../constants.zig");
-const timer = @import("../timer.zig");
 
 pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     sim.meta.minigame_ticks_per_update = 16;
 
+    // Background
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{},
         ecs.component.Tex{
@@ -25,6 +25,7 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
         },
     });
 
+    // Walls
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{},
         ecs.component.Col{ .dim = [_]i32{ 16, 16 * 18 } },
@@ -42,6 +43,7 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
         ecs.component.Col{ .dim = [_]i32{ 16 * 32, 16 } },
     });
 
+    // Players
     _ = try sim.world.spawnWith(.{
         ecs.component.Plr{},
         ecs.component.Pos{ .pos = [_]i32{ 48, 16 } },
