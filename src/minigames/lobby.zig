@@ -2,6 +2,7 @@
 
 const AssetManager = @import("../AssetManager.zig");
 const Animation = @import("../animation/animations.zig").Animation;
+const Invariables = @import("../Invariables.zig");
 const rl = @import("raylib");
 const simulation = @import("../simulation.zig");
 const input = @import("../input.zig");
@@ -31,7 +32,7 @@ const ready_strings: [2][:0]const u8 = .{
 
 pub fn init(_: *simulation.Simulation, _: *const input.InputState) !void {}
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, arena: std.mem.Allocator) !void {
+pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: Invariables) !void {
     var players = sim.world.query(&.{ecs.component.Plr}, &.{});
     var player_changes = [_]PlayerChange{.nothing} ** inputs.len;
     var player_ids: [inputs.len]?ecs.entity.Entity = [_]?ecs.entity.Entity{null} ** inputs.len;
@@ -75,10 +76,10 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, aren
         }
     }
 
-    var collisions = collision.CollisionQueue.init(arena) catch @panic("collision");
+    var collisions = collision.CollisionQueue.init(rt.arena) catch @panic("collision");
 
     try inputSystem(&sim.world, inputs);
-    movement.update(&sim.world, &collisions, arena) catch @panic("movement");
+    movement.update(&sim.world, &collisions, rt.arena) catch @panic("movement");
     animator.update(&sim.world); // I don't think this should be here
 
     // Count ready players

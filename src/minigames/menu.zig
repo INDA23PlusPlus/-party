@@ -4,7 +4,7 @@ const simulation = @import("../simulation.zig");
 const input = @import("../input.zig");
 const ecs = @import("../ecs/ecs.zig");
 
-const Allocator = std.mem.Allocator;
+const Invariables = @import("../Invariables.zig");
 
 var menu_items: [2]ecs.entity.Entity = undefined;
 
@@ -48,8 +48,7 @@ pub fn init(sim: *simulation.Simulation, inputs: *const input.InputState) simula
     };
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, arena: Allocator) simulation.SimulationError!void {
-    _ = arena;
+pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, _: Invariables) simulation.SimulationError!void {
     try handleInputs(sim, inputs);
 }
 

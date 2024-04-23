@@ -3,6 +3,7 @@ const rl = @import("raylib");
 const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
 const AssetManager = @import("../AssetManager.zig");
+const Invariables = @import("../Invariables.zig");
 const constants = @import("../constants.zig");
 const input = @import("../input.zig");
 
@@ -50,8 +51,7 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     }
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, arena: std.mem.Allocator) !void {
-    _ = arena;
+pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, _: Invariables) !void {
     rl.drawText("This is a new minigame", 64, 8, 32, rl.Color.blue);
     try inputSystem(&sim.world, inputs);
     // try wordSystem(&sim.world)

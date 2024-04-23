@@ -5,8 +5,9 @@ const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
 const render = @import("../render.zig");
 const AssetManager = @import("../AssetManager.zig");
-const input = @import("../input.zig");
 const Animation = @import("../animation/animations.zig").Animation;
+const Invariables = @import("../Invariables.zig");
+const input = @import("../input.zig");
 const animator = @import("../animation/animator.zig");
 const collision = @import("../physics/collision.zig");
 const movement = @import("../physics/movement.zig");
@@ -59,11 +60,11 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     });
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, arena: std.mem.Allocator) !void {
-    var collisions = collision.CollisionQueue.init(arena) catch @panic("collision");
+pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: Invariables) !void {
+    var collisions = collision.CollisionQueue.init(rt.arena) catch @panic("collision");
 
     try inputSystem(&sim.world, inputs);
-    movement.update(&sim.world, &collisions, arena) catch @panic("movement");
+    movement.update(&sim.world, &collisions, rt.arena) catch @panic("movement");
 
     animator.update(&sim.world); // I don't think this should be here
 

@@ -4,13 +4,15 @@ const rl = @import("raylib");
 const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
 const render = @import("../render.zig");
-const AssetManager = @import("../AssetManager.zig");
 const input = @import("../input.zig");
 const movement = @import("../physics/movement.zig");
 const collision = @import("../physics/collision.zig");
 const animator = @import("../animation/animator.zig");
 const Animation = @import("../animation/animations.zig").Animation;
 const constants = @import("../constants.zig");
+
+const AssetManager = @import("../AssetManager.zig");
+const Invariables = @import("../Invariables.zig");
 
 pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     sim.meta.minigame_ticks_per_update = 16;
@@ -55,8 +57,7 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     });
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, arena: std.mem.Allocator) !void {
-    _ = arena;
+pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, _: Invariables) !void {
 
     // Set move direction.
     inputSystem(&sim.world, inputs);

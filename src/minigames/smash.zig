@@ -4,13 +4,15 @@ const rl = @import("raylib");
 const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
 const render = @import("../render.zig");
-const AssetManager = @import("../AssetManager.zig");
 const input = @import("../input.zig");
 const movement = @import("../physics/movement.zig");
 const collision = @import("../physics/collision.zig");
 const animator = @import("../animation/animator.zig");
-const Animation = @import("../animation/animations.zig").Animation;
 const constants = @import("../constants.zig");
+
+const Animation = @import("../animation/animations.zig").Animation;
+const AssetManager = @import("../AssetManager.zig");
+const Invariables = @import("../Invariables.zig");
 
 const gravity = ecs.component.F32.init(1, 10);
 const friction = ecs.component.F32.init(0, 1);
@@ -50,11 +52,11 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     });
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, arena: std.mem.Allocator) !void {
-    var collisions = collision.CollisionQueue.init(arena) catch @panic("collision");
+pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: Invariables) !void {
+    var collisions = collision.CollisionQueue.init(rt.arena) catch @panic("collision");
 
     try inputSystem(&sim.world, inputs);
-    movement.update(&sim.world, &collisions, arena) catch @panic("movement");
+    movement.update(&sim.world, &collisions, rt.arena) catch @panic("movement");
 
     animator.update(&sim.world); // I don't think this should be here
 }

@@ -14,6 +14,20 @@ const minigames = @import("minigames/list.zig");
 const AssetManager = @import("AssetManager.zig");
 const Controller = @import("controller.zig");
 const InputTimeline = @import("InputTimeline.zig");
+const Invariables = @import("Invariables.zig");
+
+const minigames_list = @import("minigames/list.zig").list;
+const config = @import("config");
+const starting_minigame_id = blk: {
+    for (minigames_list, 0..minigames_list.len) |mg, i| {
+        if (std.mem.eql(u8, mg.name, config.minigame)) {
+            break :blk i;
+        }
+    }
+
+    break :blk 0;
+};
+
 
 // Settings
 // TODO: move to settings file
@@ -66,6 +80,7 @@ pub fn main() !void {
     defer assets.deinit();
 
     var shared_simulation = simulation.SharedSimulation{ .rw_lock = .{}, .sim = .{} };
+    shared_simulation.sim.meta.minigame_id = starting_minigame_id; // TODO: Maybe sim.init() is a better place. Just add a new arg.
 
     var shared_input_timeline = InputTimeline{};
 
@@ -80,7 +95,12 @@ pub fn main() !void {
     //     try networking.startServer(&shared_simulation);
     // }
 
-    try simulation.init(&shared_simulation.sim);
+    const invariables = Invariables {
+        .minigames_list = &minigames_list,
+        .arena = game_allocator,
+    };
+
+    try simulation.init(&shared_simulation.sim, invariables);
 
     var benchmarker = try @import("Benchmarker.zig").init("Simulation");
 
@@ -99,7 +119,8 @@ pub fn main() !void {
         // should be placed inside of the simulate procedure as the simulate procedure
         // is called in other places. Not doing so will lead to inconsistencies.
         benchmarker.start();
-        try simulation.simulate(&shared_simulation.sim, &frame_input, game_allocator);
+        try simulation.simulate(&shared_simulation.sim, &frame_input, invariables);
+        _ = game_arena.reset(.retain_capacity);
         benchmarker.stop();
         if (benchmarker.laps % 360 == 0) {
             try benchmarker.write();

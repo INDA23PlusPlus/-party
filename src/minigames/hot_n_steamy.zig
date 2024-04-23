@@ -5,6 +5,7 @@ const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
 const render = @import("../render.zig");
 const AssetManager = @import("../AssetManager.zig");
+const Invariables = @import("../Invariables.zig");
 const input = @import("../input.zig");
 const Animation = @import("../animation/animations.zig").Animation;
 const animator = @import("../animation/animator.zig");
@@ -158,10 +159,10 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     }
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, arena: std.mem.Allocator) !void {
+pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: Invariables) !void {
     try jetpackSystem(&sim.world, inputs);
-    var collisions = collision.CollisionQueue.init(arena) catch @panic("could not initialize collision queue");
-    movement.update(&sim.world, &collisions, arena) catch @panic("movement system failed");
+    var collisions = collision.CollisionQueue.init(rt.arena) catch @panic("could not initialize collision queue");
+    movement.update(&sim.world, &collisions, rt.arena) catch @panic("movement system failed");
     //Somas lösning
     // if (sim.meta.ticks_elapsed % (80 - (sim.meta.ticks_elapsed / 80)) == 0) {
     //     try obsticleGenerator(&sim.world, std.Random.intRangeAtMost(rand, i32, -6, 6));
