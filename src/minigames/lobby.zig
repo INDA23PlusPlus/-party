@@ -90,9 +90,16 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: 
         }
     }
 
-    // Always send to shuffle.
     if (ready_count == player_count) {
-        sim.meta.minigame_id = 2;
+        // Find the game-wheel minigame and switch to it.
+        // If not found, returns to game 0.
+        sim.meta.minigame_id = 0;
+        for (rt.minigames_list, 0..) |minigame, minigame_id| {
+            if (std.mem.eql(u8, minigame.name, "gamewheel")) {
+                sim.meta.minigame_id = minigame_id;
+                break;
+            }
+        }
     }
 }
 

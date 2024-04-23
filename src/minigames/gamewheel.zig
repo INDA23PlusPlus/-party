@@ -13,6 +13,8 @@ const main_ctr_id = 0;
 const handle_ctr_id = 1;
 const waiting = std.math.maxInt(u32);
 
+const title_id = std.math.maxInt(u32);
+
 pub fn init(_: *simulation.Simulation, _: *const input.InputState) !void {}
 
 fn setup(sim: *simulation.Simulation, available_minigames: []const Minigame) !void {
@@ -25,21 +27,31 @@ fn setup(sim: *simulation.Simulation, available_minigames: []const Minigame) !vo
         .counter = 0
     }});
 
+     _ = try sim.world.spawnWith(.{
+            ecs.component.Pos {
+                .pos = .{ 256, 40 }
+            },
+            ecs.component.Plr { // Not really a player, Too bad! I want a u32.
+                .id = title_id
+            },
+            ecs.component.Txt{ .string = "Press A/B to spin!", .color = 0x666666FF, .subpos = .{ 0, 0 }, .font_size = 24 },
+        });
+
     for(available_minigames, 0..) |minigame, i| {
         _ = try sim.world.spawnWith(.{
             ecs.component.Pos {
-                .pos = .{ 256, 100 + @as(i32, @intCast(i)) * 15 }
+                .pos = .{ 256, 90 + @as(i32, @intCast(i)) * 15 }
             },
             ecs.component.Plr { // Not really a player, Too bad! I want a u32.
                 .id = @truncate(i),
             },
-            ecs.component.Txt{ .string = minigame.name, .color = 0x666666FF, .subpos = .{ 0, 0 }, .font_size = 12 },
+            ecs.component.Txt{ .string = minigame.name, .color = 0x666666FF, .subpos = .{ 0, 0 }, .font_size = 18 },
         });
     }
 }
 
 pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: Invariables) !void {
-    const available_minigames = rt.minigames_list[sim.meta.minigame_id..];
+    const available_minigames = rt.minigames_list[sim.meta.minigame_id + 1..];
 
     var query = sim.world.query(&.{ecs.component.Ctr}, &.{});
     var dummy = ecs.component.Ctr { .id = 0, .counter = 0 };
@@ -95,7 +107,11 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: 
     while (query_texts.next()) |_| {
         const plr = try query_texts.get(ecs.component.Plr);
         const txt = try query_texts.get(ecs.component.Txt);
-        if (plr.id == handle_ctr.counter) {
+        if (plr.id == title_id) {
+            if (main_ctr.counter != waiting) {
+                txt.string = "Spinning...";
+            }
+        } else if (plr.id == handle_ctr.counter) {
             txt.color = 0xDD6666FF;
         } else {
             txt.color = 0x666666FF;
