@@ -1,12 +1,11 @@
-// TODO: Make a lobby minigame.
+const std = @import("std");
+const rl = @import("raylib");
 
 const AssetManager = @import("../AssetManager.zig");
 const Animation = @import("../animation/animations.zig").Animation;
-const rl = @import("raylib");
 const simulation = @import("../simulation.zig");
 const input = @import("../input.zig");
 const ecs = @import("../ecs/ecs.zig");
-const std = @import("std");
 const movement = @import("../physics/movement.zig");
 const collision = @import("../physics/collision.zig");
 const animator = @import("../animation/animator.zig");
@@ -90,10 +89,9 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, aren
         }
     }
 
-    // Send to game
+    // Always send to shuffle.
     if (ready_count == player_count) {
-        sim.meta.minigame_id = 3; // Remove this.
-
+        sim.meta.minigame_id = 2;
     }
 }
 

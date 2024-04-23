@@ -6,6 +6,7 @@ const tron = @import("tron.zig");
 const smash = @import("smash.zig");
 const hot_n_steamy = @import("hot_n_steamy.zig");
 const lobby = @import("lobby.zig");
+const shuffle = @import("shuffle.zig");
 const example = @import("example.zig");
 
 /// Create a list of Minigames.
@@ -20,11 +21,11 @@ pub const list = [_]minigame.Minigame{
         .update = lobby.update,
         .init = lobby.init,
     },
-        // .{
-        //     .name = "example",
-        //     .update = example.update,
-        //     .init = example.init,
-        // },
+    .{
+        .name = "shuffle",
+        .update = shuffle.update,
+        .init = shuffle.init,
+    },
     .{
         .name = "morsecode",
         .update = morsecode.update,
@@ -45,4 +46,9 @@ pub const list = [_]minigame.Minigame{
         .update = hot_n_steamy.update,
         .init = hot_n_steamy.init,
     },
+    // .{
+    //     .name = "example",
+    //     .update = example.update,
+    //     .init = example.init,
+    // },
 };
