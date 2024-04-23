@@ -12,7 +12,6 @@ const animator = @import("../animation/animator.zig");
 const constants = @import("../constants.zig");
 const movement = @import("../physics/movement.zig");
 const collision = @import("../physics/collision.zig");
-const timer = @import("../timer.zig");
 const Vec2 = ecs.component.Vec2;
 const F32 = ecs.component.F32;
 
@@ -32,7 +31,7 @@ const obstacle_spawn_delay_delta: usize = 5;
 
 const ObstacleKind = enum { ObstacleUpper, ObstacleLower, ObstacleBoth };
 
-fn spawnVerticalObstacleUpper(world: *ecs.world.World, _: ecs.entity.Entity, length: u32) void {
+fn spawnVerticalObstacleUpper(world: *ecs.world.World, length: u32) void {
     _ = world.spawnWith(.{
         ecs.component.Pos{ .pos = .{ constants.world_width, 0 } },
         ecs.component.Col{
@@ -46,10 +45,11 @@ fn spawnVerticalObstacleUpper(world: *ecs.world.World, _: ecs.entity.Entity, len
             .w = 1,
             .h = length,
         },
+        ecs.component.Ctr{},
     }) catch unreachable;
 }
 
-fn spawnVerticalObstacleLower(world: *ecs.world.World, _: ecs.entity.Entity, length: u32) void {
+fn spawnVerticalObstacleLower(world: *ecs.world.World, length: u32) void {
     _ = world.spawnWith(.{
         ecs.component.Pos{ .pos = .{ constants.world_width, constants.world_height - @as(i32, @intCast(length)) * constants.asset_resolution } },
         ecs.component.Col{
@@ -63,33 +63,34 @@ fn spawnVerticalObstacleLower(world: *ecs.world.World, _: ecs.entity.Entity, len
             .w = 1,
             .h = length,
         },
+        ecs.component.Ctr{},
     }) catch unreachable;
 }
 
-fn spawnVerticalObstacleBoth(world: *ecs.world.World, entity: ecs.entity.Entity, delta: i32) void {
-    spawnVerticalObstacleUpper(world, entity, @intCast(@divTrunc(constants.world_height_tiles - delta, 2)));
-    spawnVerticalObstacleLower(world, entity, @intCast(@divTrunc(constants.world_height_tiles - delta, 2)));
+fn spawnVerticalObstacleBoth(world: *ecs.world.World, delta: i32) void {
+    spawnVerticalObstacleUpper(world, @intCast(@divTrunc(constants.world_height_tiles - delta, 2)));
+    spawnVerticalObstacleLower(world, @intCast(@divTrunc(constants.world_height_tiles - delta, 2)));
 }
 
-pub fn spawnRandomObstacle(world: *ecs.world.World, entity: ecs.entity.Entity) void {
+pub fn spawnRandomObstacle(world: *ecs.world.World) void {
     const kind = std.Random.enumValue(rand, ObstacleKind);
     switch (kind) {
         ObstacleKind.ObstacleLower => {
             const length = std.Random.intRangeAtMost(rand, u32, 1, constants.world_height_tiles - 1);
-            spawnVerticalObstacleLower(world, entity, length);
+            spawnVerticalObstacleLower(world, length);
         },
         ObstacleKind.ObstacleUpper => {
             const length = std.Random.intRangeAtMost(rand, u32, 1, constants.world_height_tiles - 1);
-            spawnVerticalObstacleUpper(world, entity, length);
+            spawnVerticalObstacleUpper(world, length);
         },
         ObstacleKind.ObstacleBoth => {
             const delta = std.Random.intRangeAtMost(rand, i32, 1, 8);
-            spawnVerticalObstacleBoth(world, entity, delta);
+            spawnVerticalObstacleBoth(world, delta);
         },
     }
 }
 
-fn spawnHorizontalObstacle(world: *ecs.world.World, _: ecs.entity.Entity) void {
+fn spawnHorizontalObstacle(world: *ecs.world.World) void {
     _ = world.spawnWith(.{
         ecs.component.Pos{
             .pos = .{
@@ -112,22 +113,11 @@ fn spawnHorizontalObstacle(world: *ecs.world.World, _: ecs.entity.Entity) void {
             .layer = .{ .base = true, .killing = true },
             .mask = .{ .base = true, .player = true },
         },
-        ecs.component.TimerDepracated{
-            .action = .killEntity,
-            .delay = obstacle_lifetime,
-        },
+        ecs.component.Ctr{},
     }) catch unreachable;
 }
 
 pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
-    _ = try sim.world.spawnWith(.{
-        ecs.component.TimerDepracated{
-            .action = .hnsSpawnRandomObstacle,
-            .delay = obstacle_spawn_delay_initial,
-            .repeat = true,
-        },
-    });
-
     for (0..constants.max_player_count) |id| {
         _ = try sim.world.spawnWith(.{
             ecs.component.Plr{ .id = @intCast(id) },
@@ -159,18 +149,25 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     }
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: Invariables) !void {
+pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, invar: Invariables) !void {
+    std.debug.print("\nBEfor jet\n", .{});
+
     try jetpackSystem(&sim.world, inputs);
-    var collisions = collision.CollisionQueue.init(rt.arena) catch @panic("could not initialize collision queue");
-    movement.update(&sim.world, &collisions, rt.arena) catch @panic("movement system failed");
+    std.debug.print("\nAFter jet\n", .{});
+
+    var collisions = collision.CollisionQueue.init(invar.arena) catch @panic("could not initialize collision queue");
+    std.debug.print("\nAFter Collsion\n", .{});
+
+    movement.update(&sim.world, &collisions, invar.arena) catch @panic("movement system failed");
+    std.debug.print("\nAFter move\n", .{});
+
     //Somas lösning
-    // if (sim.meta.ticks_elapsed % (80 - (sim.meta.ticks_elapsed / 80)) == 0) {
-    //     try obsticleGenerator(&sim.world, std.Random.intRangeAtMost(rand, i32, -6, 6));
-    // }
+
     // sim.meta.ticks_elapsed += 1;
     // try deathSystemS(&sim.world);
     // animator.update(&sim.world);
-
+    //*const fn (*simulation.Simulation, *const [8]input.PlayerInputState, Invariables) error{SpawnLimitExceeded,NullQuery,DeadInspection,InvalidInspection}!void', found
+    //*const fn (*simulation.Simulation, *const [8]input.PlayerInputState, mem.Allocator) @typeInfo(@typeInfo(@TypeOf(minigames.hot_n_steamy.update)).Fn.return_type.?).ErrorUnion.error_set!void
     // fn gravitySystem(world: *ecs.world.World) !void {
     //     var query = world.query(&.{ecs.component.Mov}, &.{});
     //     while (query.next()) |_| {
@@ -179,10 +176,14 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: 
     //     }
     // }
     //Elliots lösning
+    try spawnSystem(&sim.world, sim.meta.ticks_elapsed);
+    std.debug.print("\nAFter spawn\n", .{});
+
     try deathSystem(&sim.world, &collisions);
-    // try spawnSystem(&sim.world);
+    std.debug.print("\nAFter deatg\n", .{});
+    // try despawnSystem(&sim.world, );
     animator.update(&sim.world);
-    timer.update(&sim.world);
+    std.debug.print("\nAFter anime\n", .{});
 }
 
 fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
@@ -199,67 +200,34 @@ fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void
     }
 }
 
-//Somas lösning
-// fn obsticleGenerator(world: *ecs.world.World, length: i32) !void {
-//     _ = try world.spawnWith(.{
-//         ecs.component.Pos{ .pos = [_]i32{ constants.world_width, constants.world_height - 16 * (obstacle_height_base + length) } },
-//         ecs.component.Col{
-//             .dim = [_]i32{ 16, 16 * (obstacle_height_base + length) },
-//             .layer = collision.Layer{ .base = false, .player = false },
-//             .mask = collision.Layer{ .base = false, .player = true },
-//         },
-//         ecs.component.Mov{ .velocity = object_acc },
-//         ecs.component.Tex{
-//             .texture_hash = AssetManager.pathHash("assets/error.png"),
-//             .w = 1,
-//             .h = @intCast(obstacle_height_base + length),
-//         },
-//     });
-// }
-
 fn deathSystem(world: *ecs.world.World, collisions: *collision.CollisionQueue) !void {
     for (collisions.collisions.keys()) |col| {
         // TODO: right now it is random whether the player or obstacle dies, so we have to kill both
         // i call it a feature :,)
         // maybe world.checkSignature (?) to see if it is a player?
+        std.debug.print("\nMAHAHAHA\n\n", .{});
         world.kill(col.a);
         world.kill(col.b);
         std.debug.print("entity {} died\n", .{col.b.identifier});
     }
 }
 
-// fn spawnSystem(world: *ecs.world.World) !void {
-//     if (obstacle_spawn_timer >= obstacle_spawn_delay) {
-//         obstacle_spawn_timer = 0;
-//         obstacle_spawn_delay = @max(obstacle_spawn_delay - obstacle_spawn_delay_delta, obstacle_spawn_delay_min);
-//         _ = try world.spawnWith(.{
-//             ecs.component.Pos{
-//                 .pos = .{
-//                     constants.world_width,
-//                     rl.getRandomValue(0, constants.world_height), // is this ok?
-//                 },
-//             },
-//             ecs.component.Tex{
-//                 .texture_hash = AssetManager.pathHash("assets/error.png"),
-//                 .u = 0,
-//                 .v = 0,
-//                 .w = 3,
-//                 .h = 1,
-//             },
-//             ecs.component.Mov{
-//                 .velocity = obstacle_velocity,
-//             },
-//             ecs.component.Col{
-//                 .dim = .{ 48, 16 },
-//                 .layer = .{ .base = true, .killing = true },
-//                 .mask = .{ .base = true, .player = true },
-//             },
-//             ecs.component.Tmr{
-//                 .action = ecs.world.World.kill,
-//                 .delay = obstacle_lifetime,
-//             },
-//         });
-//     } else {
-//         obstacle_spawn_timer += 1;
-//     }
-// }
+fn despawnSystem(world: *ecs.world.World) !void {
+    var query = world.query(&.{ecs.component.Ctr}, &.{});
+    while (query.next()) |entitity| {
+        var counter = try query.get(ecs.component.Ctr);
+        if (counter == obstacle_lifetime) {
+            world.kill(entitity);
+        } else counter += 1;
+    }
+}
+
+fn spawnSystem(world: *ecs.world.World, ticks: usize) !void {
+    if (ticks % @max(20, (80 - (ticks / 160))) == 0) {
+        spawnRandomObstacle(world);
+    }
+
+    if (ticks % @max(10, (60 - (ticks / 120))) == 0) {
+        spawnHorizontalObstacle(world);
+    }
+}
