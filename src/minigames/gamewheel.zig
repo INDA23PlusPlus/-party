@@ -18,13 +18,15 @@ const title_id = std.math.maxInt(u32);
 pub fn init(_: *simulation.Simulation, _: *const input.InputState) !void {}
 
 fn setup(sim: *simulation.Simulation, available_minigames: []const Minigame) !void {
+    const pseudo = sim.meta.seed + sim.meta.ticks_elapsed;
+    const random_handle_start = pseudo % available_minigames.len;
     _ = try sim.world.spawnWith(.{ecs.component.Ctr {
         .id = main_ctr_id,
         .counter = waiting,
     }});
     _ = try sim.world.spawnWith(.{ecs.component.Ctr {
         .id = handle_ctr_id,
-        .counter = 0
+        .counter = @truncate(random_handle_start),
     }});
 
      _ = try sim.world.spawnWith(.{
@@ -34,7 +36,7 @@ fn setup(sim: *simulation.Simulation, available_minigames: []const Minigame) !vo
             ecs.component.Plr { // Not really a player, Too bad! I want a u32.
                 .id = title_id
             },
-            ecs.component.Txt{ .string = "Press A/B to spin!", .color = 0x666666FF, .subpos = .{ 0, 0 }, .font_size = 24 },
+            ecs.component.Txt{ .string = "Press A/B to spin!", .color = 0x00FF99FF, .subpos = .{ 0, 0 }, .font_size = 24 },
         });
 
     for(available_minigames, 0..) |minigame, i| {
@@ -71,7 +73,7 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: 
     }
 
     for (inputs) |inp| {
-        if (inp.button_a.pressed()) {
+        if (inp.button_a.pressed() or inp.button_b.pressed()) {
             if (main_ctr.counter == waiting) {
                 main_ctr.counter = 500;
             }
