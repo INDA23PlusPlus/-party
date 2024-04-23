@@ -53,6 +53,7 @@ pub fn simulate(sim: *Simulation, input_state: *const input.InputState, rt: Inva
 
     if (frame_start_minigame != sim.meta.minigame_id) {
         sim.world.reset();
+        sim.meta.minigame_ticks_per_update = 1;
         try rt.minigames_list[sim.meta.minigame_id].init(sim, input_state);
     }
 }
