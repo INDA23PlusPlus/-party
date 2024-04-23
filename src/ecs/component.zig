@@ -14,8 +14,6 @@ pub const Vec2 = @import("../math/linear.zig").V(2, F32);
 const Animation = @import("../animation/animations.zig").Animation;
 const AssetManager = @import("../AssetManager.zig");
 
-const Action = @import("../timer.zig").Action;
-
 /// Components the ECS supports.
 /// All components MUST be default initializable.
 /// All components MUST have a documented purpose.
@@ -30,7 +28,6 @@ pub const components: []const type = &.{
     Anm,
     Lnk,
     Ctr,
-    TimerDepracated,
 };
 
 /// Entities with this component are positionable.
@@ -105,15 +102,6 @@ pub const Anm = struct {
     interval: u32 = 1,
     animation: Animation = Animation.Default,
     looping: bool = true,
-};
-
-/// Entities with this component trigger an action after a specified delay.
-pub const TimerDepracated = struct {
-    delay: u32 = 0, // ticks until the event fires
-    elapsed: u32 = 0, // how many ticks have passed
-    fired: bool = false, // whether the timer has fired or not
-    repeat: bool = false, // whether the timer restarts after firing
-    action: Action = .default,
 };
 
 /// Entities with this component can count.
