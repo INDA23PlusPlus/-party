@@ -150,40 +150,25 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
 }
 
 pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, invar: Invariables) !void {
-    std.debug.print("\nBEfor jet\n", .{});
+    // std.debug.print("\nBEfor jet\n", .{});
 
     try jetpackSystem(&sim.world, inputs);
-    std.debug.print("\nAFter jet\n", .{});
+    // std.debug.print("\nAFter jet\n", .{});
 
     var collisions = collision.CollisionQueue.init(invar.arena) catch @panic("could not initialize collision queue");
-    std.debug.print("\nAFter Collsion\n", .{});
+    // std.debug.print("\nAFter Collsion\n", .{});
 
     movement.update(&sim.world, &collisions, invar.arena) catch @panic("movement system failed");
-    std.debug.print("\nAFter move\n", .{});
+    // std.debug.print("\nAFter move\n", .{});
 
-    //Somas lösning
-
-    // sim.meta.ticks_elapsed += 1;
-    // try deathSystemS(&sim.world);
-    // animator.update(&sim.world);
-    //*const fn (*simulation.Simulation, *const [8]input.PlayerInputState, Invariables) error{SpawnLimitExceeded,NullQuery,DeadInspection,InvalidInspection}!void', found
-    //*const fn (*simulation.Simulation, *const [8]input.PlayerInputState, mem.Allocator) @typeInfo(@typeInfo(@TypeOf(minigames.hot_n_steamy.update)).Fn.return_type.?).ErrorUnion.error_set!void
-    // fn gravitySystem(world: *ecs.world.World) !void {
-    //     var query = world.query(&.{ecs.component.Mov}, &.{});
-    //     while (query.next()) |_| {
-    //         const mov = try query.get(ecs.component.Mov);
-    //         mov.acceleration = mov.acceleration.add(gravity);
-    //     }
-    // }
-    //Elliots lösning
     try spawnSystem(&sim.world, sim.meta.ticks_elapsed);
-    std.debug.print("\nAFter spawn\n", .{});
+    // std.debug.print("\nAFter spawn\n", .{});
 
-    try deathSystem(&sim.world, &collisions);
-    std.debug.print("\nAFter deatg\n", .{});
-    // try despawnSystem(&sim.world, );
+    // try deathSystem(&sim.world, &collisions);
+    // std.debug.print("\nAFter deatg\n", .{});
+    // try despawnSystem(&sim.world);
     animator.update(&sim.world);
-    std.debug.print("\nAFter anime\n", .{});
+    // std.debug.print("\nAFter anime\n", .{});
 }
 
 fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
@@ -216,9 +201,9 @@ fn despawnSystem(world: *ecs.world.World) !void {
     var query = world.query(&.{ecs.component.Ctr}, &.{});
     while (query.next()) |entitity| {
         var counter = try query.get(ecs.component.Ctr);
-        if (counter == obstacle_lifetime) {
+        if (counter.counter == obstacle_lifetime) {
             world.kill(entitity);
-        } else counter += 1;
+        } else counter.counter += 1;
     }
 }
 
