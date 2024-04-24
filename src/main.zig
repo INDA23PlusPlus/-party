@@ -28,7 +28,6 @@ const starting_minigame_id = blk: {
     break :blk 0;
 };
 
-
 // Settings
 // TODO: move to settings file
 const BC_COLOR = rl.Color.white;
@@ -72,11 +71,15 @@ pub fn main() !void {
     var window = win.Window.init(640, 360);
     defer window.deinit();
 
-    var game_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    const game_allocator = game_arena.allocator();
-    defer game_arena.deinit();
+    var static_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    const static_allocator = static_arena.allocator();
+    defer static_arena.deinit();
 
-    var assets = AssetManager.init(game_allocator);
+    var frame_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    const frame_allocator = frame_arena.allocator();
+    defer frame_arena.deinit();
+
+    var assets = AssetManager.init(static_allocator);
     defer assets.deinit();
 
     var shared_simulation = simulation.SharedSimulation{ .rw_lock = .{}, .sim = .{} };
@@ -95,9 +98,9 @@ pub fn main() !void {
     //     try networking.startServer(&shared_simulation);
     // }
 
-    const invariables = Invariables {
+    const invariables = Invariables{
         .minigames_list = &minigames_list,
-        .arena = game_allocator,
+        .arena = frame_allocator,
     };
 
     try simulation.init(&shared_simulation.sim, invariables);
@@ -120,7 +123,7 @@ pub fn main() !void {
         // is called in other places. Not doing so will lead to inconsistencies.
         benchmarker.start();
         try simulation.simulate(&shared_simulation.sim, &frame_input, invariables);
-        _ = game_arena.reset(.retain_capacity);
+        _ = static_arena.reset(.retain_capacity);
         benchmarker.stop();
         if (benchmarker.laps % 360 == 0) {
             try benchmarker.write();
