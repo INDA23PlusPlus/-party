@@ -36,7 +36,7 @@ fn spawnVerticalObstacleUpper(world: *ecs.world.World, length: u32) void {
         ecs.component.Pos{ .pos = .{ constants.world_width, 0 } },
         ecs.component.Col{
             .dim = .{ 1 * constants.asset_resolution, constants.asset_resolution * @as(i32, @intCast(length)) },
-            .layer = collision.Layer{ .base = false, .player = false },
+            .layer = collision.Layer{ .base = true },
             .mask = collision.Layer{ .base = false, .player = true },
         },
         ecs.component.Mov{ .velocity = obstacle_velocity },
@@ -53,8 +53,8 @@ fn spawnVerticalObstacleLower(world: *ecs.world.World, length: u32) void {
     _ = world.spawnWith(.{
         ecs.component.Pos{ .pos = .{ constants.world_width, constants.world_height - @as(i32, @intCast(length)) * constants.asset_resolution } },
         ecs.component.Col{
-            .dim = .{ 1 * constants.asset_resolution, constants.asset_resolution * @as(i32, @intCast(length)) },
-            .layer = collision.Layer{ .base = false, .player = false },
+            .dim = .{ constants.asset_resolution, constants.asset_resolution * @as(i32, @intCast(length)) },
+            .layer = collision.Layer{ .base = true },
             .mask = collision.Layer{ .base = false, .player = true },
         },
         ecs.component.Mov{ .velocity = obstacle_velocity },
@@ -95,7 +95,7 @@ fn spawnHorizontalObstacle(world: *ecs.world.World) void {
         ecs.component.Pos{
             .pos = .{
                 constants.world_width,
-                rl.getRandomValue(0, constants.world_height), // is this ok?
+                std.Random.intRangeLessThan(rand, i32, 0, constants.world_height),
             },
         },
         ecs.component.Tex{
@@ -109,64 +109,87 @@ fn spawnHorizontalObstacle(world: *ecs.world.World) void {
             .velocity = obstacle_velocity,
         },
         ecs.component.Col{
-            .dim = .{ 48, 16 },
-            .layer = .{ .base = true, .killing = true },
-            .mask = .{ .base = true, .player = true },
+            .dim = .{ 3 * constants.asset_resolution, constants.asset_resolution },
+            .layer = .{ .base = true },
+            .mask = .{ .base = false, .player = true },
         },
         ecs.component.Ctr{},
     }) catch unreachable;
 }
 
+fn spawnWalls(world: *ecs.world.World) !void {
+    _ = try world.spawnWith(.{
+        ecs.component.Pos{
+            .pos = .{ 0, -32 },
+        },
+        ecs.component.Col{
+            .dim = .{ constants.world_width, 32 },
+            .layer = .{ .base = true },
+            .mask = .{ .base = false, .player = true },
+        },
+    });
+    _ = try world.spawnWith(.{
+        ecs.component.Pos{
+            .pos = .{ 0, constants.world_height },
+        },
+        ecs.component.Col{
+            .dim = .{ constants.world_width, 32 },
+            .layer = .{ .base = true },
+            .mask = .{ .base = false, .player = true },
+        },
+    });
+}
+
+fn spawnPlayer(world: *ecs.world.World, id: u32) !void {
+    _ = try world.spawnWith(.{
+        ecs.component.Plr{ .id = @intCast(id) },
+        ecs.component.Pos{ .pos = .{ 8, @divTrunc(constants.world_height, 2) } },
+        ecs.component.Mov{
+            .acceleration = player_gravity,
+        },
+        ecs.component.Col{
+            .dim = .{ constants.asset_resolution, constants.asset_resolution },
+            .layer = collision.Layer{ .base = false, .player = true },
+            .mask = collision.Layer{ .base = false, .player = false },
+        },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/kattis.png"),
+            .tint = constants.player_colors[id],
+        },
+        ecs.component.Anm{ .animation = Animation.KattisFly, .interval = 8, .looping = true },
+    });
+}
+
 pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
-    for (0..constants.max_player_count) |id| {
-        _ = try sim.world.spawnWith(.{
-            ecs.component.Plr{ .id = @intCast(id) },
-            ecs.component.Pos{ .pos = .{ 8, 0 } },
-            ecs.component.Mov{
-                .acceleration = player_gravity,
-            },
-            //Somas lösning
-            ecs.component.Col{
-                .dim = .{ 16, 16 },
-                .layer = collision.Layer{ .base = false, .player = true },
-                .mask = collision.Layer{ .base = false, .player = false },
-            },
-            //Elliots lösning
-            // ecs.component.Col{
-            //     .dim = .{ 16, 16 },
-            //     .layer = .{ .base = true, .player = true },
-            //     .mask = .{
-            //         .base = false,
-            //         .killing = true,
-            //     },
-            // },
-            ecs.component.Tex{
-                .texture_hash = AssetManager.pathHash("assets/kattis.png"),
-                .tint = constants.player_colors[id],
-            },
-            ecs.component.Anm{ .animation = Animation.KattisFly, .interval = 8, .looping = true },
-        });
+    try spawnWalls(&sim.world);
+    for (0..1) |id| {
+        try spawnPlayer(&sim.world, @intCast(id));
     }
 }
 
 pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, invar: Invariables) !void {
     // std.debug.print("\nBEfor jet\n", .{});
+    // std.debug.print("\nBEfor jet\n", .{});
 
     try jetpackSystem(&sim.world, inputs);
+    // std.debug.print("\nAFter jet\n", .{});
     // std.debug.print("\nAFter jet\n", .{});
 
     var collisions = collision.CollisionQueue.init(invar.arena) catch @panic("could not initialize collision queue");
     // std.debug.print("\nAFter Collsion\n", .{});
+    // std.debug.print("\nAFter Collsion\n", .{});
 
     movement.update(&sim.world, &collisions, invar.arena) catch @panic("movement system failed");
+    // std.debug.print("\nAFter move\n", .{});
     // std.debug.print("\nAFter move\n", .{});
 
     try spawnSystem(&sim.world, sim.meta.ticks_elapsed);
     // std.debug.print("\nAFter spawn\n", .{});
+    // std.debug.print("\nAFter spawn\n", .{});
 
-    // try deathSystem(&sim.world, &collisions);
+    try deathSystem(&sim.world, &collisions);
     // std.debug.print("\nAFter deatg\n", .{});
-    // try despawnSystem(&sim.world);
+    // try despawnSystem(&sim.world, );
     animator.update(&sim.world);
     // std.debug.print("\nAFter anime\n", .{});
 }
@@ -185,29 +208,49 @@ fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void
     }
 }
 
-fn deathSystem(world: *ecs.world.World, collisions: *collision.CollisionQueue) !void {
-    for (collisions.collisions.keys()) |col| {
-        // TODO: right now it is random whether the player or obstacle dies, so we have to kill both
-        // i call it a feature :,)
-        // maybe world.checkSignature (?) to see if it is a player?
-        std.debug.print("\nMAHAHAHA\n\n", .{});
-        world.kill(col.a);
-        world.kill(col.b);
-        std.debug.print("entity {} died\n", .{col.b.identifier});
+fn deathSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
+
+    // Entities die when they touch the back wall (eg. both obstacles and players)
+    // TODO: make this work properly
+    var query = world.query(&.{ ecs.component.Pos, ecs.component.Col }, &.{});
+    while (query.next()) |entity| {
+        const col = try query.get(ecs.component.Col);
+        const pos = try query.get(ecs.component.Pos);
+        const right = pos.pos[0] + col.dim[0];
+        if (right < 0) {
+            world.kill(entity);
+            std.debug.print("entity {} died\n", .{entity.identifier});
+        }
     }
+
+    // Old version
+    // for (collisions.collisions.keys()) |col| {
+    //     // TODO: right now it is random whether the player or obstacle dies, so we have to kill both
+    //     // i call it a feature :,)
+    //     // maybe world.checkSignature (?) to see if it is a player?
+    //     std.debug.print("\nMAHAHAHA\n\n", .{});
+    //     world.kill(col.a);
+    //     world.kill(col.b);
+    //     std.debug.print("entity {} died\n", .{col.b.identifier});
+    // }
+
 }
 
-fn despawnSystem(world: *ecs.world.World) !void {
-    var query = world.query(&.{ecs.component.Ctr}, &.{});
-    while (query.next()) |entitity| {
-        var counter = try query.get(ecs.component.Ctr);
-        if (counter.counter == obstacle_lifetime) {
-            world.kill(entitity);
-        } else counter.counter += 1;
-    }
-}
+// Not needed if obstacles die when colliding with the back wall !
 
-fn spawnSystem(world: *ecs.world.World, ticks: usize) !void {
+// fn despawnSystem(world: *ecs.world.World) !void {
+//     var query = world.query(&.{ecs.component.Ctr}, &.{});
+//     while (query.next()) |entitity| {
+//         var counter = try query.get(ecs.component.Ctr);
+//         if (counter.counter == obstacle_lifetime) {
+//             world.kill(entitity);
+//         } else {
+//             counter.counter += 1;
+//         }
+//     }
+// }
+
+fn spawnSystem(world: *ecs.world.World, ticks: u64) !void {
     if (ticks % @max(20, (80 - (ticks / 160))) == 0) {
         spawnRandomObstacle(world);
     }
