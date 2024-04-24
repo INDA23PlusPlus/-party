@@ -31,6 +31,81 @@ const obstacle_spawn_delay_delta: usize = 5;
 
 const ObstacleKind = enum { ObstacleUpper, ObstacleLower, ObstacleBoth };
 
+pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
+    try spawnWalls(&sim.world);
+    for (0..1) |id| {
+        try spawnPlayer(&sim.world, @intCast(id));
+    }
+}
+
+pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, invar: Invariables) !void {
+    // std.debug.print("\nBEfor jet\n", .{});
+    // std.debug.print("\nBEfor jet\n", .{});
+
+    try jetpackSystem(&sim.world, inputs);
+    // std.debug.print("\nAFter jet\n", .{});
+    // std.debug.print("\nAFter jet\n", .{});
+
+    var collisions = collision.CollisionQueue.init(invar.arena) catch @panic("could not initialize collision queue");
+    // std.debug.print("\nAFter Collsion\n", .{});
+    // std.debug.print("\nAFter Collsion\n", .{});
+
+    movement.update(&sim.world, &collisions, invar.arena) catch @panic("movement system failed");
+    // std.debug.print("\nAFter move\n", .{});
+    // std.debug.print("\nAFter move\n", .{});
+
+    try spawnSystem(&sim.world, sim.meta.ticks_elapsed);
+    // std.debug.print("\nAFter spawn\n", .{});
+    // std.debug.print("\nAFter spawn\n", .{});
+
+    try deathSystem(&sim.world, &collisions);
+    // std.debug.print("\nAFter deatg\n", .{});
+    // try despawnSystem(&sim.world, );
+    animator.update(&sim.world);
+    // std.debug.print("\nAFter anime\n", .{});
+}
+
+fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
+    var query = world.query(&.{ ecs.component.Mov, ecs.component.Plr }, &.{});
+    while (query.next()) |_| {
+        const plr = try query.get(ecs.component.Plr);
+        const mov = try query.get(ecs.component.Mov);
+        const state = inputs[plr.id];
+        if (state.is_connected) {
+            if (state.button_up.is_down) {
+                mov.velocity = mov.velocity.add(player_boost);
+            }
+        }
+    }
+}
+
+fn deathSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
+
+    // Entities die when they touch the back wall (eg. both obstacles and players)
+    // TODO: make this work properly
+    var query = world.query(&.{ ecs.component.Pos, ecs.component.Col }, &.{});
+    while (query.next()) |entity| {
+        const col = try query.get(ecs.component.Col);
+        const pos = try query.get(ecs.component.Pos);
+        const right = pos.pos[0] + col.dim[0];
+        if (right < 0) {
+            world.kill(entity);
+            std.debug.print("entity {} died\n", .{entity.identifier});
+        }
+    }
+}
+
+fn spawnSystem(world: *ecs.world.World, ticks: u64) !void {
+    //The decrease causes an integer overflow. This will most likely not happen once players can die
+    if (ticks % @max(20, (80 - (ticks / 160))) == 0) {
+        spawnRandomObstacle(world);
+    }
+
+    if (ticks % @max(10, (60 - (ticks / 120))) == 0) {
+        spawnHorizontalObstacle(world);
+    }
+}
+
 fn spawnVerticalObstacleUpper(world: *ecs.world.World, length: u32) void {
     _ = world.spawnWith(.{
         ecs.component.Pos{ .pos = .{ constants.world_width, 0 } },
@@ -76,15 +151,15 @@ pub fn spawnRandomObstacle(world: *ecs.world.World) void {
     const kind = std.Random.enumValue(rand, ObstacleKind);
     switch (kind) {
         ObstacleKind.ObstacleLower => {
-            const length = std.Random.intRangeAtMost(rand, u32, 1, constants.world_height_tiles - 1);
+            const length = std.Random.intRangeAtMost(rand, u32, 5, constants.world_height_tiles - 7);
             spawnVerticalObstacleLower(world, length);
         },
         ObstacleKind.ObstacleUpper => {
-            const length = std.Random.intRangeAtMost(rand, u32, 1, constants.world_height_tiles - 1);
+            const length = std.Random.intRangeAtMost(rand, u32, 5, constants.world_height_tiles - 7);
             spawnVerticalObstacleUpper(world, length);
         },
         ObstacleKind.ObstacleBoth => {
-            const delta = std.Random.intRangeAtMost(rand, i32, 1, 8);
+            const delta = std.Random.intRangeAtMost(rand, i32, 3, 8);
             spawnVerticalObstacleBoth(world, delta);
         },
     }
@@ -158,104 +233,4 @@ fn spawnPlayer(world: *ecs.world.World, id: u32) !void {
         },
         ecs.component.Anm{ .animation = Animation.KattisFly, .interval = 8, .looping = true },
     });
-}
-
-pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
-    try spawnWalls(&sim.world);
-    for (0..1) |id| {
-        try spawnPlayer(&sim.world, @intCast(id));
-    }
-}
-
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, invar: Invariables) !void {
-    // std.debug.print("\nBEfor jet\n", .{});
-    // std.debug.print("\nBEfor jet\n", .{});
-
-    try jetpackSystem(&sim.world, inputs);
-    // std.debug.print("\nAFter jet\n", .{});
-    // std.debug.print("\nAFter jet\n", .{});
-
-    var collisions = collision.CollisionQueue.init(invar.arena) catch @panic("could not initialize collision queue");
-    // std.debug.print("\nAFter Collsion\n", .{});
-    // std.debug.print("\nAFter Collsion\n", .{});
-
-    movement.update(&sim.world, &collisions, invar.arena) catch @panic("movement system failed");
-    // std.debug.print("\nAFter move\n", .{});
-    // std.debug.print("\nAFter move\n", .{});
-
-    try spawnSystem(&sim.world, sim.meta.ticks_elapsed);
-    // std.debug.print("\nAFter spawn\n", .{});
-    // std.debug.print("\nAFter spawn\n", .{});
-
-    try deathSystem(&sim.world, &collisions);
-    // std.debug.print("\nAFter deatg\n", .{});
-    // try despawnSystem(&sim.world, );
-    animator.update(&sim.world);
-    // std.debug.print("\nAFter anime\n", .{});
-}
-
-fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
-    var query = world.query(&.{ ecs.component.Mov, ecs.component.Plr }, &.{});
-    while (query.next()) |_| {
-        const plr = try query.get(ecs.component.Plr);
-        const mov = try query.get(ecs.component.Mov);
-        const state = inputs[plr.id];
-        if (state.is_connected) {
-            if (state.button_up.is_down) {
-                mov.velocity = mov.velocity.add(player_boost);
-            }
-        }
-    }
-}
-
-fn deathSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
-
-    // Entities die when they touch the back wall (eg. both obstacles and players)
-    // TODO: make this work properly
-    var query = world.query(&.{ ecs.component.Pos, ecs.component.Col }, &.{});
-    while (query.next()) |entity| {
-        const col = try query.get(ecs.component.Col);
-        const pos = try query.get(ecs.component.Pos);
-        const right = pos.pos[0] + col.dim[0];
-        if (right < 0) {
-            world.kill(entity);
-            std.debug.print("entity {} died\n", .{entity.identifier});
-        }
-    }
-
-    // Old version
-    // for (collisions.collisions.keys()) |col| {
-    //     // TODO: right now it is random whether the player or obstacle dies, so we have to kill both
-    //     // i call it a feature :,)
-    //     // maybe world.checkSignature (?) to see if it is a player?
-    //     std.debug.print("\nMAHAHAHA\n\n", .{});
-    //     world.kill(col.a);
-    //     world.kill(col.b);
-    //     std.debug.print("entity {} died\n", .{col.b.identifier});
-    // }
-
-}
-
-// Not needed if obstacles die when colliding with the back wall !
-
-// fn despawnSystem(world: *ecs.world.World) !void {
-//     var query = world.query(&.{ecs.component.Ctr}, &.{});
-//     while (query.next()) |entitity| {
-//         var counter = try query.get(ecs.component.Ctr);
-//         if (counter.counter == obstacle_lifetime) {
-//             world.kill(entitity);
-//         } else {
-//             counter.counter += 1;
-//         }
-//     }
-// }
-
-fn spawnSystem(world: *ecs.world.World, ticks: u64) !void {
-    if (ticks % @max(20, (80 - (ticks / 160))) == 0) {
-        spawnRandomObstacle(world);
-    }
-
-    if (ticks % @max(10, (60 - (ticks / 120))) == 0) {
-        spawnHorizontalObstacle(world);
-    }
 }
