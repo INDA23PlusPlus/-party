@@ -34,35 +34,23 @@ const ObstacleKind = enum { ObstacleUpper, ObstacleLower, ObstacleBoth };
 pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     try spawnWalls(&sim.world);
     for (0..1) |id| {
+        //     if (inputs[id].is_connected) {
         try spawnPlayer(&sim.world, @intCast(id));
     }
+    // }
 }
 
 pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, invar: Invariables) !void {
-    // std.debug.print("\nBEfor jet\n", .{});
-    // std.debug.print("\nBEfor jet\n", .{});
-
     try jetpackSystem(&sim.world, inputs);
-    // std.debug.print("\nAFter jet\n", .{});
-    // std.debug.print("\nAFter jet\n", .{});
 
     var collisions = collision.CollisionQueue.init(invar.arena) catch @panic("could not initialize collision queue");
-    // std.debug.print("\nAFter Collsion\n", .{});
-    // std.debug.print("\nAFter Collsion\n", .{});
 
     movement.update(&sim.world, &collisions, invar.arena) catch @panic("movement system failed");
-    // std.debug.print("\nAFter move\n", .{});
-    // std.debug.print("\nAFter move\n", .{});
 
     try spawnSystem(&sim.world, sim.meta.ticks_elapsed);
-    // std.debug.print("\nAFter spawn\n", .{});
-    // std.debug.print("\nAFter spawn\n", .{});
 
     try deathSystem(&sim.world, &collisions);
-    // std.debug.print("\nAFter deatg\n", .{});
-    // try despawnSystem(&sim.world, );
     animator.update(&sim.world);
-    // std.debug.print("\nAFter anime\n", .{});
 }
 
 fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
