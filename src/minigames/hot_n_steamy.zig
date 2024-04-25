@@ -46,15 +46,20 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, inva
 
     movement.update(&sim.world, &collisions, invar.arena) catch @panic("movement system failed");
 
+    try collisionSystem(&sim.world, &collisions);
+
     try spawnSystem(&sim.world, sim.meta.ticks_elapsed);
 
     try deathSystem(&sim.world, &collisions);
     animator.update(&sim.world);
 }
 
-fn collisionSystem(world: *ecs.world.World, collisions: *collision.CollisionQueue) !void {
-    _ = collisions;
-    _ = world;}
+// TODO: Set player y velocity to zero when hitting top or bottom
+// Fix so obstacles push players and not the other way around
+fn collisionSystem(world: *ecs.world.World, col_queue: *collision.CollisionQueue) !void {
+    _ = world;
+    for (col_queue.collisions.keys()) |_| {}
+}
 
 fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
     var query = world.query(&.{ ecs.component.Mov, ecs.component.Plr }, &.{});
