@@ -25,7 +25,7 @@ const ButtonState = struct {
     pub fn set(self: *ButtonState, value: bool, current_tick: usize) void {
         self.was_down = self.is_down;
         self.is_down = value;
-        if (self.pressed()) { // TODO: Shouldn't this just be isDown? Won't it be pressed for one extra tick as it is?
+        if (self.pressed()) {
             self.press_tick = current_tick;
         }
         if (self.released()) {
@@ -42,15 +42,9 @@ const ButtonState = struct {
         }
         return 0;
     }
-
-    // Possibly more/less performant depending on the compiler.
-    pub inline fn cmp_branchless(self: ButtonState, other: ButtonState) i32 {
-        const a = @intFromBool(self.is_down) > @intFromBool(other.is_down);
-        const b = @intFromBool(self.is_down) < @intFromBool(other.is_down);
-
-        return @intFromBool(a) - @intFromBool(b);
-    }
 };
+
+pub const InputDirection = enum { None, East, North, West, South, NorthEast, NorthWest, SouthWest, SouthEast };
 
 pub const PlayerInputState = struct {
     is_local: bool = false,
@@ -67,7 +61,35 @@ pub const PlayerInputState = struct {
     }
 
     pub fn vertical(self: *const PlayerInputState) i32 {
-        return self.button_down.cmp(self.button_up);
+        return self.button_up.cmp(self.button_down);
+    }
+
+    pub fn vertical_inv(self: *const PlayerInputState) i32 {
+        return -self.vertical();
+    }
+
+    pub fn direction(self: *const PlayerInputState) InputDirection {
+        return switch (self.vertical()) {
+            -1 => switch (self.horizontal()) {
+                -1 => InputDirection.SouthWest,
+                0 => InputDirection.South,
+                1 => InputDirection.SouthEast,
+                else => unreachable,
+            },
+            0 => switch (self.horizontal()) {
+                -1 => InputDirection.West,
+                0 => InputDirection.None,
+                1 => InputDirection.East,
+                else => unreachable,
+            },
+            1 => switch (self.horizontal()) {
+                -1 => InputDirection.NorthWest,
+                0 => InputDirection.North,
+                1 => InputDirection.NorthEast,
+                else => unreachable,
+            },
+            else => unreachable,
+        };
     }
 };
 

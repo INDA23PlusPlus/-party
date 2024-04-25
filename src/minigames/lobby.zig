@@ -52,6 +52,8 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: 
         if (!ins.is_connected and player_ids[index] != null) {
             player_changes[index] = .remove;
         }
+
+        std.debug.print("dir {}\n", .{ins.direction()});
     }
 
     for (player_changes, player_ids, 0..) |change, entity, index| {
@@ -113,11 +115,11 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
         const state = inputs[plr.id];
         mov.velocity.set([_]i16{
             @intCast(3 * state.horizontal()),
-            @intCast(3 * state.vertical()),
+            @intCast(3 * state.vertical_inv()),
         });
 
         const anm = try query.get(ecs.component.Anm);
-        if (state.horizontal() + state.vertical() != 0) {
+        if (state.direction() != input.InputDirection.None) {
             anm.animation = Animation.KattisRun;
             anm.interval = 8;
         } else {

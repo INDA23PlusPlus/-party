@@ -78,16 +78,16 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
         if (state.is_connected) {
             mov.velocity.set([_]i16{
                 @intCast(3 * state.horizontal()),
-                @intCast(3 * state.vertical()),
+                @intCast(3 * state.vertical_inv()),
             });
 
             const anm = try query.get(ecs.component.Anm);
-            if (state.horizontal() + state.vertical() != 0) {
-                anm.animation = Animation.KattisRun;
-                anm.interval = 8;
-            } else {
+            if (state.direction() == input.InputDirection.None) {
                 anm.animation = Animation.KattisIdle;
                 anm.interval = 16;
+            } else {
+                anm.animation = Animation.KattisRun;
+                anm.interval = 8;
             }
         }
     }

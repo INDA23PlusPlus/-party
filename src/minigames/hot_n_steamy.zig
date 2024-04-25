@@ -33,11 +33,10 @@ const ObstacleKind = enum { ObstacleUpper, ObstacleLower, ObstacleBoth };
 
 pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     try spawnWalls(&sim.world);
-    for (0..1) |id| {
-        //     if (inputs[id].is_connected) {
+    for (0..constants.max_player_count) |id| {
+        // if (inputs[id].is_connected) ?
         try spawnPlayer(&sim.world, @intCast(id));
     }
-    // }
 }
 
 pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, invar: Invariables) !void {
@@ -52,6 +51,10 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, inva
     try deathSystem(&sim.world, &collisions);
     animator.update(&sim.world);
 }
+
+fn collisionSystem(world: *ecs.world.World, collisions: *collision.CollisionQueue) !void {
+    _ = collisions;
+    _ = world;}
 
 fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
     var query = world.query(&.{ ecs.component.Mov, ecs.component.Plr }, &.{});
@@ -205,7 +208,7 @@ fn spawnWalls(world: *ecs.world.World) !void {
 fn spawnPlayer(world: *ecs.world.World, id: u32) !void {
     _ = try world.spawnWith(.{
         ecs.component.Plr{ .id = @intCast(id) },
-        ecs.component.Pos{ .pos = .{ 8, @divTrunc(constants.world_height, 2) } },
+        ecs.component.Pos{ .pos = .{ std.Random.intRangeAtMost(rand, i32, 8, 24), @divTrunc(constants.world_height, 2) } },
         ecs.component.Mov{
             .acceleration = player_gravity,
         },
