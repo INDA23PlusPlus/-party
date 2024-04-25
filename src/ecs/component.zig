@@ -82,7 +82,7 @@ pub const Txt = struct {
     string: [:0]const u8 = "", // TODO: use hash instead of slice
     color: u32 = 0xFFFFFFFF,
     font_size: u8 = 24,
-    subpos: @Vector(2, i32) = .{ 10, 0 },
+    subpos: @Vector(2, i32) = .{ 0, 0 },
     draw: bool = true, // This is very ugly, but is useful for menu items. Change if needed. (Use dynamic strings??)
 };
 
