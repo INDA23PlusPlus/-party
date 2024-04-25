@@ -23,8 +23,8 @@ const obstacle_height_delta = 6;
 
 const player_gravity = Vec2.init(0, F32.init(1, 10));
 const player_boost = Vec2.init(0, F32.init(-1, 4));
-const obstacle_velocity = Vec2.init(-8, 0);
-const obstacle_lifetime: usize = 200; // ticks until despawning obstacles, increase if they die too early
+const vertical_obstacle_velocity = Vec2.init(-8, 0);
+const horizontal_obstacle_velocity = Vec2.init(-12, 0);
 const obstacle_spawn_delay_initial: usize = 120;
 const obstacle_spawn_delay_min: usize = 10;
 const obstacle_spawn_delay_delta: usize = 5;
@@ -70,7 +70,6 @@ fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void
 fn deathSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
 
     // Entities die when they touch the back wall (eg. both obstacles and players)
-    // TODO: make this work properly
     var query = world.query(&.{ ecs.component.Pos, ecs.component.Col }, &.{});
     while (query.next()) |entity| {
         const col = try query.get(ecs.component.Col);
@@ -99,10 +98,10 @@ fn spawnVerticalObstacleUpper(world: *ecs.world.World, length: u32) void {
         ecs.component.Pos{ .pos = .{ constants.world_width, 0 } },
         ecs.component.Col{
             .dim = .{ 1 * constants.asset_resolution, constants.asset_resolution * @as(i32, @intCast(length)) },
-            .layer = collision.Layer{ .base = true },
+            .layer = collision.Layer{ .base = true, .pushing = true },
             .mask = collision.Layer{ .base = false, .player = true },
         },
-        ecs.component.Mov{ .velocity = obstacle_velocity },
+        ecs.component.Mov{ .velocity = vertical_obstacle_velocity },
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/error.png"),
             .w = 1,
@@ -120,7 +119,7 @@ fn spawnVerticalObstacleLower(world: *ecs.world.World, length: u32) void {
             .layer = collision.Layer{ .base = true },
             .mask = collision.Layer{ .base = false, .player = true },
         },
-        ecs.component.Mov{ .velocity = obstacle_velocity },
+        ecs.component.Mov{ .velocity = vertical_obstacle_velocity },
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/error.png"),
             .w = 1,
@@ -169,11 +168,11 @@ fn spawnHorizontalObstacle(world: *ecs.world.World) void {
             .h = 1,
         },
         ecs.component.Mov{
-            .velocity = obstacle_velocity,
+            .velocity = horizontal_obstacle_velocity,
         },
         ecs.component.Col{
             .dim = .{ 3 * constants.asset_resolution, constants.asset_resolution },
-            .layer = .{ .base = true },
+            .layer = .{ .base = true, .pushing = true },
             .mask = .{ .base = false, .player = true },
         },
         ecs.component.Ctr{},
@@ -187,7 +186,7 @@ fn spawnWalls(world: *ecs.world.World) !void {
         },
         ecs.component.Col{
             .dim = .{ constants.world_width, 32 },
-            .layer = .{ .base = true },
+            .layer = .{ .base = true, .pushing = true },
             .mask = .{ .base = false, .player = true },
         },
     });
@@ -197,7 +196,7 @@ fn spawnWalls(world: *ecs.world.World) !void {
         },
         ecs.component.Col{
             .dim = .{ constants.world_width, 32 },
-            .layer = .{ .base = true },
+            .layer = .{ .base = true, .pushing = true },
             .mask = .{ .base = false, .player = true },
         },
     });
@@ -211,9 +210,10 @@ fn spawnPlayer(world: *ecs.world.World, id: u32) !void {
             .acceleration = player_gravity,
         },
         ecs.component.Col{
-            .dim = .{ constants.asset_resolution, constants.asset_resolution },
+            .dim = .{ 16, 12 },
+            .off = .{ 0, 2 },
             .layer = collision.Layer{ .base = false, .player = true },
-            .mask = collision.Layer{ .base = false, .player = false },
+            .mask = collision.Layer{ .base = false, .player = false, .pushing = true },
         },
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/kattis.png"),
