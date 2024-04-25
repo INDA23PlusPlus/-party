@@ -52,8 +52,6 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: 
         if (!ins.is_connected and player_ids[index] != null) {
             player_changes[index] = .remove;
         }
-
-        std.debug.print("dir {}\n", .{ins.direction()});
     }
 
     for (player_changes, player_ids, 0..) |change, entity, index| {
