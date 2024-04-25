@@ -34,13 +34,7 @@ const ButtonState = struct {
     }
 
     pub fn cmp(self: *const ButtonState, other: ButtonState) i32 {
-        if (self.is_down and !other.is_down) {
-            return 1;
-        }
-        if (!self.is_down and other.is_down) {
-            return -1;
-        }
-        return 0;
+        return @as(i32, @intFromBool(self.is_down)) - @as(i32, @intFromBool(other.is_down));
     }
 };
 
