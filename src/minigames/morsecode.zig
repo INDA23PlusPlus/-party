@@ -5,6 +5,8 @@ const simulation = @import("../simulation.zig");
 const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
 const constants = @import("../constants.zig");
+const Animation = @import("../animation/animations.zig").Animation;
+const animator = @import("../animation/animator.zig");
 const input = @import("../input.zig");
 
 // all morse characters are less than 8 long
@@ -22,7 +24,13 @@ fn assigned_pos(id: usize) @Vector(2, i32) {
     return pos;
 }
 
+fn generate_String() []const u8 {
+    // TODO: generate a random string for gameplay
+    return "plusplusparty";
+}
+
 pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
+    sim.meta.minigame_ticks_per_update = 8;
     // _ = sim;
     // jag tänker att det ska vara ett klassrum, och alla spelare är elever
     // de kommer först in i klassrummet genom en och samma rum och sedan står på angett plats
@@ -39,13 +47,19 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     for (0..constants.max_player_count) |id| {
         _ = try sim.world.spawnWith(.{
             ecs.component.Plr{ .id = @intCast(id) },
-            ecs.component.Txt{ .string = "Player x" },
+            ecs.component.Txt{
+                .string = "Player x",
+                .font_size = 10,
+                .color = 0xff0066ff,
+                .subpos = .{ 10, 20 },
+            },
             ecs.component.Pos{ .pos = assigned_pos(id) },
             ecs.component.Mov{ .velocity = ecs.component.Vec2.init(0, 0) },
             ecs.component.Tex{
                 .texture_hash = AssetManager.pathHash("assets/kattis.png"),
                 .tint = constants.player_colors[id],
             },
+            ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
             // animations för spelarna?
         });
     }
@@ -54,7 +68,8 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
 pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, _: Invariables) !void {
     rl.drawText("Morsecode Minigame", 64, 8, 32, rl.Color.blue);
     try inputSystem(&sim.world, inputs);
-    // try wordSystem(&sim.world)
+    // try wordSystem(&sim.world);
+    animator.update(&sim.world);
 }
 
 fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
@@ -77,13 +92,14 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
     }
 }
 
-fn code_to_char(a: []const u8) u8 {
-    // 
+fn code_to_char(id: usize) u8 {
+    //
     // _ = a;
+    var a = &keystrokes[id];
     var res: u8 = 0;
-    if (std.mem.eql(u8, &a, &[_]u8{1, 2, 0, 0, 0})) {
+    if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 0, 0, 0 })) {
         res = @intCast('A' - 'A' + 1);
-    } else if (std.mem.eql(u8, &a, &[_]u8{2, 1, 1, 1, 0})) {
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 1, 1, 0 })) {
         res = @intCast('B' - 'A' + 1);
     }
     return res;
@@ -91,14 +107,14 @@ fn code_to_char(a: []const u8) u8 {
 
 fn wordSystem(world: *ecs.world.World) !void {
     _ = world;
-    for(0..constants.max_player_count) |id| {
+    for (0..constants.max_player_count) |id| {
         const character: u8 = code_to_char(id);
         if (character != 0) {
             typed_len[id] = 0;
-            // TODO: check for all keystrokes arrays: equals a morse character ? 
+            keystrokes[id] = .{ 0, 0, 0, 0, 0 };
+            // TODO: check for all keystrokes arrays: equals a morse character ?
             // in which case:
             // go to next word if possible, else give player score
         }
     }
-
 }
