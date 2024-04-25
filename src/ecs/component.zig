@@ -44,6 +44,7 @@ pub const Mov = struct {
 
 /// Entities with this component are collidable.
 pub const Col = struct {
+    off: @Vector(2, i32) = .{ 0, 0 }, // x, y
     dim: @Vector(2, i32) = .{ 0, 0 }, // w, h
     layer: Layer = Layer{}, // Determines what entities collide with this entity.
     mask: Layer = Layer{}, // Determines what entities this entity collides with.
