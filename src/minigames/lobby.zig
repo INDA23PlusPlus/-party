@@ -10,19 +10,9 @@ const ecs = @import("../ecs/ecs.zig");
 const movement = @import("../physics/movement.zig");
 const collision = @import("../physics/collision.zig");
 const animator = @import("../animation/animator.zig");
+const constants = @import("../constants.zig");
 
 const PlayerChange = enum { remove, add, nothing };
-
-const colors: [8]rl.Color = .{
-    rl.Color.red,
-    rl.Color.green,
-    rl.Color.blue,
-    rl.Color.yellow,
-    rl.Color.magenta,
-    rl.Color.sky_blue,
-    rl.Color.brown,
-    rl.Color.white,
-};
 
 const ready_strings: [2][:0]const u8 = .{
     "Not Ready",
@@ -61,7 +51,7 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: 
                 ecs.component.Pos{ .pos = .{ 256, 144 } },
                 ecs.component.Tex{
                     .texture_hash = AssetManager.pathHash("assets/kattis.png"),
-                    .tint = colors[index],
+                    .tint = constants.player_colors[index],
                 },
                 ecs.component.Mov{},
                 ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },

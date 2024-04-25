@@ -23,12 +23,12 @@ pub const world_height_tiles = world_height / asset_resolution;
 
 /// The color hint of each player.
 pub const player_colors: [max_player_count]rl.Color = .{
-    rl.Color.white,
     rl.Color.red,
     rl.Color.green,
     rl.Color.blue,
     rl.Color.yellow,
-    rl.Color.pink,
-    rl.Color.orange,
-    rl.Color.black,
+    rl.Color.magenta,
+    rl.Color.sky_blue,
+    rl.Color.brown,
+    rl.Color.white,
 };
