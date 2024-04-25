@@ -38,6 +38,7 @@ const paths = [_][:0]const u8{
     "assets/tron_map.png",
     "assets/tron_skull.png",
     "assets/error.png",
+    "assets/kattis_testcases.png"
 };
 
 hashmap: map_type,

@@ -5,6 +5,7 @@ const morsecode = @import("morsecode.zig");
 const tron = @import("tron.zig");
 const smash = @import("smash.zig");
 const hot_n_steamy = @import("hot_n_steamy.zig");
+const kattis = @import("kattis.zig");
 const lobby = @import("lobby.zig");
 const gamewheel = @import("gamewheel.zig");
 const shuffle = @import("shuffle.zig");
@@ -58,6 +59,11 @@ pub const list = [_]Minigame{
         .name = "hns",
         .update = hot_n_steamy.update,
         .init = hot_n_steamy.init,
+    },
+    .{
+        .name = "kattis",
+        .update = kattis.update,
+        .init = kattis.init,
     },
     // .{
     //     .name = "example",
