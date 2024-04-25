@@ -5,7 +5,7 @@ const ecs = @import("../ecs/ecs.zig");
 //  - [X] Make collision system simd-based.
 //  - [ ] Make CollisionQueue not suck.
 
-// pub const max_collisions = ecs.world.N * (ecs.world.N - 1) / 2;
+// pub const max_collisions = (ecs.world.N * (ecs.world.N - 1)) / 2;
 
 /// Bitmask for collisions, used for filtering and resolving collisions between entities.
 pub const Layer = packed struct {
@@ -41,34 +41,33 @@ pub const Layer = packed struct {
     }
 };
 
+pub const Collision = packed struct {
+    bidirectional: bool = false,
+};
+
 pub const CollisionQueue = struct {
     const Self = @This();
-    const Key = struct { a: ecs.entity.Entity, b: ecs.entity.Entity };
-    const Set = std.AutoArrayHashMapUnmanaged(Key, void);
+    pub const Key = packed struct { a: ecs.entity.Entity, b: ecs.entity.Entity };
+    const Map = std.AutoArrayHashMapUnmanaged(Key, void);
 
-    collisions: Set,
+    collisions: Map,
 
-    pub fn init(allocator: std.mem.Allocator) !Self {
-        const collisions = try Set.init(allocator, &.{}, &.{});
+    pub fn init(arena: std.mem.Allocator) !Self {
+        const collisions = try Map.init(arena, &.{}, &.{});
 
         return Self{
             .collisions = collisions,
         };
     }
 
-    pub fn pop(self: *Self) Key {
-        return self.collisions.pop().key;
-    }
-
-    pub fn put(self: *Self, allocator: std.mem.Allocator, pair: Key) !void {
-        try self.collisions.put(allocator, pair, {});
-    }
-
-    pub fn clear(self: *Self) void {
-        self.collisions.clearRetainingCapacity();
+    pub fn put(self: *Self, arena: std.mem.Allocator, pair: Key) !void {
+        try self.collisions.put(arena, pair, {});
     }
 };
 
+/// Note, if .xy is false, then neither .x nor .y can be true.
+/// Valid: 000, 100, 110, 101, 111.
+/// Invalid: 010, 001, 011.
 const CollisionMask = packed struct(u3) {
     /// There was a collision.
     xy: bool = false,
@@ -80,6 +79,7 @@ const CollisionMask = packed struct(u3) {
     y: bool = false,
 };
 
+/// Adds collisions to the collision queue. They are guaranteed to not be the same entity.
 pub fn checkCollisions(
     ent1: ecs.entity.Entity,
     pos1: *ecs.component.Pos,
@@ -115,7 +115,10 @@ pub fn checkCollisions(
 
         if (d) {
             collided.xy = true;
-            try collisions.put(allocator, .{ .a = ent1, .b = ent2 });
+            try collisions.put(allocator, .{
+                .a = @bitCast(@min(ent1.toBits(), ent2.toBits())),
+                .b = @bitCast(@max(ent1.toBits(), ent2.toBits())),
+            });
 
             const x_velocity = velocity & [_]i32{ ~@as(i32, 0), 0 };
             const x_a = @intFromBool(pos1.pos + col1.dim + col1.off + x_velocity > pos2.pos + col2.off);
@@ -146,6 +149,20 @@ pub inline fn intersects(
 ) bool {
     const a = @intFromBool(pos1.pos + col1.dim + col1.off > pos2.pos + col2.off);
     const b = @intFromBool(pos2.pos + col2.dim + col2.off > pos1.pos + col1.off);
+    const c = (a & b) != [_]u1{ 0, 0 };
+
+    return @reduce(.And, c);
+}
+
+pub inline fn intersectsAt(
+    pos1: *ecs.component.Pos,
+    col1: *ecs.component.Col,
+    pos2: *ecs.component.Pos,
+    col2: *ecs.component.Col,
+    offset: @Vector(2, i32),
+) bool {
+    const a = @intFromBool(pos1.pos + col1.dim + offset > pos2.pos);
+    const b = @intFromBool(pos2.pos + col2.dim > pos1.pos + offset);
     const c = (a & b) != [_]u1{ 0, 0 };
 
     return @reduce(.And, c);

@@ -28,6 +28,8 @@ pub const components: []const type = &.{
     Anm,
     Lnk,
     Ctr,
+    Air,
+    Jmp,
 };
 
 /// Entities with this component are positionable.
@@ -55,9 +57,10 @@ pub const Lnk = struct {
     child: ?Entity = null,
 };
 
-/// Entities with component point in a direction.
+/// Entities with component can point in a direction.
 pub const Dir = struct {
     facing: enum {
+        None,
         North,
         South,
         West,
@@ -66,7 +69,7 @@ pub const Dir = struct {
         Northeast,
         Southwest,
         Southeast,
-    } = .North,
+    } = .None,
 };
 
 /// Entities with this component are player controllable.
@@ -113,3 +116,10 @@ pub const Ctr = struct {
     id: u32 = 0,
     counter: u32 = 0,
 };
+
+/// Entities with this component are airborne.
+pub const Air = struct {};
+
+/// Entities with this component are jumping.
+/// Should be removed in favor of input buffering.
+pub const Jmp = struct {};

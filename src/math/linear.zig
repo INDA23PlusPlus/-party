@@ -156,6 +156,11 @@ pub fn V(comptime dimensions: comptime_int, comptime F: anytype) type {
             return Self{ .vector = @truncate(v) };
         }
 
+        /// Performs the absolute value function elementwise.
+        pub inline fn abs(self: Self) Self {
+            return Self{ .vector = @intCast(@abs(self.vector)) };
+        }
+
         /// Returns a fixed point number representing the largest element,
         /// the smallest element, or the sum of all elements.
         pub inline fn reduce(self: Self, comptime op: std.builtin.ReduceOp) F {

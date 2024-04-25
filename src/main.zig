@@ -68,7 +68,7 @@ const LaunchOptions = struct {
 pub fn main() !void {
     // const launch_options = try LaunchOptions.parse();
 
-    var window = win.Window.init(640, 360);
+    var window = win.Window.init(960, 540);
     defer window.deinit();
 
     var static_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);

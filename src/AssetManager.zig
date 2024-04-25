@@ -36,7 +36,12 @@ const paths = [_][:0]const u8{
     "assets/test.png",
     "assets/kattis.png",
     "assets/tron_map.png",
+    "assets/smash_background_0.png",
+    "assets/smash_background_1.png",
+    "assets/smash_background_2.png",
+    "assets/smash_platform.png",
     "assets/tron_skull.png",
+    "assets/smash_cat.png",
     "assets/error.png",
     "assets/kattis_testcases.png"
 };

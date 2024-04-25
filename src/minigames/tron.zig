@@ -52,7 +52,7 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
         ecs.component.Col{ .dim = [_]i32{ 16, 16 } },
         ecs.component.Mov{ .velocity = ecs.component.Vec2.init(1, 0) },
         ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis.png") },
-        ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
+        ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 8, .looping = true },
         ecs.component.Dir{ .facing = .East },
     });
 }
@@ -209,8 +209,8 @@ fn trailSystem(sim: *simulation.Simulation) !void {
             ecs.component.Anm{
                 .animation = .TronSkull,
                 .looping = true,
-                .interval = 16,
-                .subframe = @intCast((sim.meta.ticks_elapsed % 64)), // sync animations
+                .interval = 8,
+                .subframe = @intCast((sim.meta.ticks_elapsed % 32)), // sync animations
             },
         });
     }

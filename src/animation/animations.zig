@@ -10,15 +10,25 @@ pub const Animation = enum {
     KattisRun,
     KattisFly,
     TronSkull,
+    SmashIdle,
+    SmashRun,
+    SmashJump,
+    SmashFall,
+    SmashLand,
 };
 
 pub fn data(animation: Animation) []const Frame {
     return switch (animation) {
-        Animation.Default => &frames_default,
-        Animation.KattisIdle => &frames_kattis_idle,
-        Animation.KattisRun => &frames_kattis_run,
-        Animation.KattisFly => &frames_kattis_fly,
-        Animation.TronSkull => &frames_tron_skull,
+        .Default => &frames_default,
+        .KattisIdle => &frames_kattis_idle,
+        .KattisRun => &frames_kattis_run,
+        .KattisFly => &frames_kattis_fly,
+        .TronSkull => &frames_tron_skull,
+        .SmashIdle => &frames_smash_idle,
+        .SmashRun => &frames_smash_run,
+        .SmashJump => &frames_smash_jump,
+        .SmashFall => &frames_smash_fall,
+        .SmashLand => &frames_smash_land,
     };
 }
 
@@ -53,6 +63,40 @@ const frames_tron_skull: [4]Frame = .{
     Frame.init(3, 0),
 };
 
+const frames_smash_idle: [4]Frame = .{
+    Frame.init(0, 0),
+    Frame.init(2, 0),
+    Frame.init(4, 0),
+    Frame.init(6, 0),
+};
+
+const frames_smash_run: [8]Frame = .{
+    Frame.init(0, 4),
+    Frame.init(2, 4),
+    Frame.init(4, 4),
+    Frame.init(6, 4),
+    Frame.init(8, 4),
+    Frame.init(10, 4),
+    Frame.init(12, 4),
+    Frame.init(14, 4),
+};
+
+const frames_smash_jump: [3]Frame = .{
+    Frame.init(0, 8),
+    Frame.init(2, 8),
+    Frame.init(4, 8),
+};
+
+const frames_smash_fall: [2]Frame = .{
+    Frame.init(6, 8),
+    Frame.init(8, 8),
+};
+
+const frames_smash_land: [2]Frame = .{
+    Frame.init(10, 8),
+    Frame.init(12, 8),
+};
+
 pub const Frame = struct {
     u: u32,
     v: u32,
@@ -61,3 +105,7 @@ pub const Frame = struct {
         return Frame{ .u = u, .v = v };
     }
 };
+
+// 0  1  2  3  4
+// 5  6
+// 10 11
