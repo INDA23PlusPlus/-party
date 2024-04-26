@@ -32,10 +32,12 @@ const obstacle_spawn_delay_delta: usize = 5;
 const ObstacleKind = enum { ObstacleUpper, ObstacleLower, ObstacleBoth };
 
 pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
-    try spawnWalls(&sim.world);
-    for (0..constants.max_player_count) |id| {
-        // if (inputs[id].is_connected) ?
+    // try spawnWalls(&sim.world);
+    for (0..1) |id| {
+        //Condtion for only spawning player that are connected DOESN'T WORK AT THE MOMENT
+        // if (inputs[id].is_connected) {
         try spawnPlayer(&sim.world, @intCast(id));
+        // }
     }
 }
 
@@ -46,7 +48,7 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, inva
 
     movement.update(&sim.world, &collisions, invar.arena) catch @panic("movement system failed");
 
-    try collisionSystem(&sim.world, &collisions);
+    try collisionSystem(&sim.world);
 
     try spawnSystem(&sim.world, sim.meta.ticks_elapsed);
 
@@ -54,11 +56,23 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, inva
     animator.update(&sim.world);
 }
 
-// TODO: Set player y velocity to zero when hitting top or bottom
-// Fix so obstacles push players and not the other way around
-fn collisionSystem(world: *ecs.world.World, col_queue: *collision.CollisionQueue) !void {
-    _ = world;
-    for (col_queue.collisions.keys()) |_| {}
+// TODO: Fix so obstacles push players and not the other way around
+fn collisionSystem(world: *ecs.world.World) !void {
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Col, ecs.component.Pos, ecs.component.Mov }, &.{});
+    while (query.next()) |_| {
+        const pos = try query.get(ecs.component.Pos);
+        const mov = try query.get(ecs.component.Mov);
+        const col = try query.get(ecs.component.Col);
+        const y = pos.pos[1];
+        if (y < 0) {
+            mov.velocity.vector[1] = 0;
+            pos.pos[1] = 0;
+            // mov.acceleration = player_gravity;
+        } else if ((y + col.dim[1]) > constants.world_height) {
+            mov.velocity.vector[1] = 0;
+            pos.pos[1] = constants.world_height - col.dim[1];
+        }
+    }
 }
 
 fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
@@ -190,7 +204,7 @@ fn spawnHorizontalObstacle(world: *ecs.world.World) void {
 fn spawnWalls(world: *ecs.world.World) !void {
     _ = try world.spawnWith(.{
         ecs.component.Pos{
-            .pos = .{ 0, -32 },
+            .pos = .{ 0, -33 },
         },
         ecs.component.Col{
             .dim = .{ constants.world_width, 32 },
@@ -200,7 +214,7 @@ fn spawnWalls(world: *ecs.world.World) !void {
     });
     _ = try world.spawnWith(.{
         ecs.component.Pos{
-            .pos = .{ 0, constants.world_height },
+            .pos = .{ 0, constants.world_height + 1 },
         },
         ecs.component.Col{
             .dim = .{ constants.world_width, 32 },
@@ -219,13 +233,13 @@ fn spawnPlayer(world: *ecs.world.World, id: u32) !void {
         },
         ecs.component.Col{
             .dim = .{ 16, 12 },
-            .off = .{ 0, 2 },
             .layer = collision.Layer{ .base = false, .player = true },
             .mask = collision.Layer{ .base = false, .player = false, .pushing = true },
         },
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/kattis.png"),
             .tint = constants.player_colors[id],
+            .subpos = .{ 0, -2 },
         },
         ecs.component.Anm{ .animation = Animation.KattisFly, .interval = 8, .looping = true },
     });
