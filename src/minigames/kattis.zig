@@ -9,135 +9,116 @@ const Animation = @import("../animation/animations.zig").Animation;
 const constants = @import("../constants.zig");
 const Invariables = @import("../Invariables.zig");
 
-const test_cases_count = 14;
+// Hey, nice code you got there!   (^‿^ )
+// Would be a shame if someone deleted everything...   (0‿0  )
 
-var current_score = [_]u8{0} ** constants.max_player_count;
-var best_score = [_]u8{0} ** constants.max_player_count;
-var waiting = [_]bool{true} ** constants.max_player_count;
-var completed_tcs = [_]std.bit_set.StaticBitSet(test_cases_count){std.bit_set.StaticBitSet(test_cases_count).initEmpty()} ** constants.max_player_count;
-var correct_tcs = [_]std.bit_set.StaticBitSet(test_cases_count){std.bit_set.StaticBitSet(test_cases_count).initEmpty()} ** constants.max_player_count;
-
-// Game over, (time limit exceeded)
-var tle = false;
-
-pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
-    
-    //Init correct testcases
+pub fn init(sim: *simulation.Simulation, inputs: *const input.InputState) !void {
     var rng = std.rand.DefaultPrng.init(sim.meta.seed + sim.meta.ticks_elapsed);
+    var player_count: u8 = 0;
 
-    for (0..constants.max_player_count) |id| {
-        for (0..test_cases_count) |test_case| {
-            correct_tcs[id].setValue(test_case, @mod(rng.next(), 2) == 1);
-        }
-    }
-
-    // Init world
-    for (0..8) |id| {
-
-        const plr_collumn = 4 + 3 * @as(i32, @intCast(id));
-
-        // PLayer
-        _ = try sim.world.spawnWith(.{
-            ecs.component.Plr{ .id = @intCast(id) },
-            ecs.component.Pos{ .pos = [_]i32{ 16 * plr_collumn, 16 * 16 } },
-            ecs.component.Tex{
-                .texture_hash = AssetManager.pathHash("assets/kattis.png"),
-                .tint = constants.player_colors[id],
-            },
-            ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
-            ecs.component.Ctr{
-                .id = @intCast(id),
-                .counter = 0
-            },
-        });
-
-        // Player testcases
-        for (0..test_cases_count) |testcase| {
+    // Players
+    for (inputs, 0..) |inp, id| {
+        if (inp.is_connected) {
+            const bitset: u32 = @truncate(rng.next());
+            std.debug.print("{b}\n", .{bitset});
+            player_count += 1;
             _ = try sim.world.spawnWith(.{
-                ecs.component.Pos{ .pos = [_]i32{ 16 * (plr_collumn + 1), 16 * (15 - @as(i32, @intCast(testcase))) } },
-                ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis_testcases.png"), },
+                ecs.component.Plr{ .id = @intCast(id) },
+                ecs.component.Pos{ .pos = .{ 16, 32 + 28 * @as(i32, @intCast(id)) } },
+                ecs.component.Tex{
+                    .texture_hash = AssetManager.pathHash("assets/kattis.png"),
+                    .tint = constants.player_colors[id],
+                },
+                ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
+                ecs.component.Ctr{ .id = bitset, .counter = 1 },
             });
+
+            for (0..26) |i| {
+                _ = try sim.world.spawnWith(.{
+                    ecs.component.Pos{ .pos = .{ 48 + 16 * @as(i32, @intCast(i)), 32 + 28 * @as(i32, @intCast(id)) } },
+                    ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis_testcases.png") },
+                    ecs.component.Ctr{ .id = @intCast(id), .counter = @intCast(i + 1) },
+                });
+            }
         }
     }
+
+    // Count down.
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Ctr{ .id = 100, .counter = 20 * 60 },
+    });
 }
 
 pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, _: Invariables) !void {
-
-    // Game over
-    if (tle) {}
-
     inputSystem(&sim.world, inputs);
-    resetPlayersSystem(&sim.world);
-    updateTestcasesTex(&sim.world);
+    updateTestcasesTex(&sim.world, inputs);
     animator.update(&sim.world);
+
+    var query = sim.world.query(&.{ecs.component.Ctr}, &.{ ecs.component.Plr, ecs.component.Tex });
+    while (query.next()) |_| {
+        const ctr = query.get(ecs.component.Ctr) catch unreachable;
+        if (ctr.id == 100) {
+            if (ctr.counter == 0) {
+                sim.meta.minigame_id = 3;
+                return;
+            } else {
+                ctr.counter = 1;
+            }
+        }
+    }
 }
 
 fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) void {
-    if (tle) return;
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Ctr }, &.{});
+    var ended = false;
 
-    var query = world.query(&.{ ecs.component.Plr }, &.{});
-    
     while (query.next()) |_| {
         const plr = query.get(ecs.component.Plr) catch unreachable;
+        var ctr = query.get(ecs.component.Ctr) catch unreachable;
         const state = inputs[plr.id];
+        var wrong = false;
 
-        if (!state.is_connected or !waiting[plr.id]) continue;
-
-        var pressed_a: bool = undefined;
-
-        if (state.button_a.pressed()) { pressed_a = true; }
-        else if (state.button_b.pressed()) { pressed_a = false; }
-        else { continue; }
-
-        if (correct_tcs[plr.id].isSet(current_score[plr.id]) == pressed_a) {
-            completed_tcs[plr.id].setValue(current_score[plr.id], true);
-            current_score[plr.id] += @as(u8, 1);
-            best_score[plr.id] = @max(best_score[plr.id], current_score[plr.id]);
+        if (state.button_a.pressed()) {
+            ctr.counter <<= 1;
+            wrong = ctr.counter & ctr.id != 0;
+        } else if (state.button_b.pressed()) {
+            ctr.counter <<= 1;
+            wrong = ctr.counter & ctr.id == 0;
         }
-        else { waiting[plr.id] = false; }
+
+        if (wrong) ctr.counter = 1;
+        if (std.math.log2(ctr.counter) >= 26) ended = true;
     }
 
-    for (0..constants.max_player_count) |id| {
-        if (completed_tcs[id].isSet(test_cases_count - 1)) { tle = true; }
+    if (ended) {
+        var query_c = world.query(&.{ecs.component.Ctr}, &.{ ecs.component.Plr, ecs.component.Tex });
+        while (query_c.next()) |_| {
+            const ctr = query_c.get(ecs.component.Ctr) catch unreachable;
+            if (ctr.id == 100) {
+                ctr.counter = 0;
+            }
+        }
     }
 }
 
-fn updateTestcasesTex(world: *ecs.world.World) void {
-    var query = world.query(&.{
-        ecs.component.Tex,
-        ecs.component.Pos
-    }, &.{ 
-        ecs.component.Plr 
-    });
+fn updateTestcasesTex(world: *ecs.world.World, inputs: *const input.InputState) void {
+    var query_p = world.query(&.{ ecs.component.Plr, ecs.component.Ctr }, &.{});
 
-    while (query.next()) |_| {
-        const tex = query.get(ecs.component.Tex) catch unreachable;
-        const pos = query.get(ecs.component.Pos) catch unreachable;
+    while (query_p.next()) |_| {
+        const plr = query_p.get(ecs.component.Plr) catch unreachable;
+        if (!(inputs[plr.id].button_a.pressed() or inputs[plr.id].button_b.pressed())) continue;
 
-        const player_id = @as(u32, @intCast(pos.pos[0] - 4 * 16)) / (3 * 16);
-        const testcase = 15 - @as(u32, @intCast(pos.pos[1])) / 16;
+        const pctr = query_p.get(ecs.component.Ctr) catch unreachable;
 
-        if (completed_tcs[player_id].isSet(testcase)) { tex.u = 1; }
-        else if (!waiting[player_id] and testcase == current_score[player_id]) { tex.u = 2; }
-        else { tex.u = 0; }
-    }
-}
-
-fn resetPlayersSystem(world: *ecs.world.World) void {
-    var query = world.query(&.{ ecs.component.Ctr },&.{});
-
-    while (query.next()) |_| {
-        const ctr = query.get(ecs.component.Ctr) catch unreachable;
-
-        if (waiting[ctr.id]) continue;
-
-        if (ctr.counter == 40) {
-            const range = std.bit_set.Range{ .start = 0, .end = test_cases_count };
-            completed_tcs[ctr.id].setRangeValue(range, false);
-            current_score[ctr.id] = @as(u8, 0);
-            ctr.counter = 0;
-            waiting[ctr.id] = true;
+        var query_c = world.query(&.{ ecs.component.Ctr, ecs.component.Tex }, &.{ecs.component.Plr});
+        while (query_c.next()) |_| {
+            const ctr = query_c.get(ecs.component.Ctr) catch unreachable;
+            var tex = query_c.get(ecs.component.Tex) catch unreachable;
+            if (ctr.id == plr.id and ctr.counter <= std.math.log2(pctr.counter)) {
+                tex.u = 1;
+            } else if (ctr.id == plr.id) {
+                tex.u = 0;
+            }
         }
-        else { ctr.counter += 1; }
     }
 }
