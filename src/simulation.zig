@@ -8,7 +8,7 @@ const Invariables = @import("Invariables.zig");
 pub const Metadata = struct {
     score: [constants.max_player_count]u32 = [_]u32{0} ** constants.max_player_count,
     seed: usize = 555,
-    ticks_elapsed: usize = 0,
+    ticks_elapsed: usize = 1,
     minigame_id: usize = 0,
     minigame_ticks_per_update: u32 = 1, // Used by minigames to
 };

@@ -9,6 +9,7 @@ const xev = @import("xev");
 
 const sim = @import("simulation.zig");
 const ecs = @import("ecs/world.zig");
+const NetworkingQueue = @import("NetworkingQueue.zig");
 
 const NetData = struct {
     // Any common data.
@@ -116,7 +117,7 @@ fn clientConnected(_: ?*void, l: *xev.Loop, _: *xev.Completion, r: xev.TCP.Accep
     }
 }
 
-fn serverThread(rendered_simulation: *sim.SharedSimulation) !void {
+fn serverThread(networking_queue: *NetworkingQueue) !void {
     var server_data = NetServerData{ .loop = undefined };
     server_data.loop = try xev.Loop.init(.{ .entries = 128 });
     defer server_data.loop.deinit();
@@ -135,10 +136,10 @@ fn serverThread(rendered_simulation: *sim.SharedSimulation) !void {
         try server_data.loop.run(.once);
         // TODO: Copy the local input and treat any changes the same way as remote input changes.
 
-        rendered_simulation.rw_lock.lock();
+        networking_queue.rw_lock.lock();
         // Perform the required re-simulations.
         // TODO: Copy the real world to the rendered world.
-        rendered_simulation.rw_lock.unlock();
+        networking_queue.rw_lock.unlock();
         //
         // TODO: Take clock timestamp
         // TODO: Compare these then sleep a bit to lock the ticks per second.
@@ -146,15 +147,15 @@ fn serverThread(rendered_simulation: *sim.SharedSimulation) !void {
     }
 }
 
-pub fn startServer(rendered_simulation: *sim.SharedSimulation) !void {
-    _ = try std.Thread.spawn(.{}, serverThread, .{rendered_simulation});
+pub fn startServer(networking_queue: *NetworkingQueue) !void {
+    _ = try std.Thread.spawn(.{}, serverThread, .{networking_queue});
 }
 
 const NetClientData = struct {
     common: NetData,
 };
 
-fn clientThread(predicted_simulation: *sim.SharedSimulation) !void {
+fn clientThread(networking_queue: *NetworkingQueue) !void {
     // The client doesn't currently do evented IO. I don't think it will be necessary.
 
     var mem: [1024]u8 = undefined;
@@ -173,15 +174,15 @@ fn clientThread(predicted_simulation: *sim.SharedSimulation) !void {
         _ = try stream.write("hi");
 
         // TODO: Parse the new world.
-        predicted_simulation.rw_lock.lock();
+        networking_queue.rw_lock.lock();
         // TODO: Get the current tick number from predicted_simulation.
         // TODO: Copy the new simulation to the predicted simulation.
         // TODO: Simulate the simulation up to the same point (if it isn't too far off).
         // TODO: Copy the newly simulated simulation to the predicted_simulation.
-        predicted_simulation.rw_lock.unlock();
+        networking_queue.rw_lock.unlock();
     }
 }
 
-pub fn startClient(predicted_simulation: *sim.SharedSimulation) !void {
-    _ = try std.Thread.spawn(.{}, clientThread, .{predicted_simulation});
+pub fn startClient(networking_queue: *NetworkingQueue) !void {
+    _ = try std.Thread.spawn(.{}, clientThread, .{networking_queue});
 }

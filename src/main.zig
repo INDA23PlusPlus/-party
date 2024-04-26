@@ -15,6 +15,7 @@ const AssetManager = @import("AssetManager.zig");
 const Controller = @import("controller.zig");
 const InputTimeline = @import("InputTimeline.zig");
 const Invariables = @import("Invariables.zig");
+const NetworkingQueue = @import("NetworkingQueue.zig");
 
 const minigames_list = @import("minigames/list.zig").list;
 const config = @import("config");
@@ -82,8 +83,8 @@ pub fn main() !void {
     var assets = AssetManager.init(static_allocator);
     defer assets.deinit();
 
-    var shared_simulation = simulation.SharedSimulation{ .rw_lock = .{}, .sim = .{} };
-    shared_simulation.sim.meta.minigame_id = starting_minigame_id; // TODO: Maybe sim.init() is a better place. Just add a new arg.
+    var sim = simulation.Simulation{};
+    sim.meta.minigame_id = starting_minigame_id; // TODO: Maybe sim.init() is a better place. Just add a new arg.
 
     var shared_input_timeline = try InputTimeline.init(std.heap.page_allocator);
 
@@ -91,11 +92,14 @@ pub fn main() !void {
     controllers[0].input_index = 0; // TODO: This is temporary.
     controllers[1].input_index = 1;
 
+    var main_thread_queue = NetworkingQueue{};
+    var net_thread_queue = NetworkingQueue{};
+
     // Networking
     // if (launch_options.start_as_role == .client) {
-    //     try networking.startClient(&shared_simulation);
+    //     try networking.startClient(&net_thread_queue);
     // } else {
-    //     try networking.startServer(&shared_simulation);
+    //     try networking.startServer(&net_thread_queue);
     // }
 
     const invariables = Invariables{
@@ -103,26 +107,26 @@ pub fn main() !void {
         .arena = frame_allocator,
     };
 
-    try simulation.init(&shared_simulation.sim, invariables);
+    try simulation.init(&sim, invariables);
 
     var benchmarker = try @import("Benchmarker.zig").init("Simulation");
 
     // Game loop
     while (window.running) {
-        // Make sure the main thread controls the world!
-        shared_simulation.rw_lock.lock();
 
         // Fetch input.
         shared_input_timeline.rw_lock.lock();
-        const tick = shared_simulation.sim.meta.ticks_elapsed;
+        const tick = sim.meta.ticks_elapsed;
         const current_input_timeline = try shared_input_timeline.localUpdate(std.heap.page_allocator, &controllers, tick);
         shared_input_timeline.rw_lock.unlock();
+
+        main_thread_queue.interchange(&net_thread_queue);
 
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure
         // is called in other places. Not doing so will lead to inconsistencies.
         benchmarker.start();
-        try simulation.simulate(&shared_simulation.sim, current_input_timeline, invariables);
+        try simulation.simulate(&sim, current_input_timeline, invariables);
         _ = static_arena.reset(.retain_capacity);
         benchmarker.stop();
         if (benchmarker.laps % 360 == 0) {
@@ -134,12 +138,9 @@ pub fn main() !void {
         window.update();
         rl.beginDrawing();
         rl.clearBackground(BC_COLOR);
-        render.update(&shared_simulation.sim.world, &assets, &window);
+        render.update(&sim.world, &assets, &window);
 
         // Stop rendering.
         rl.endDrawing();
-
-        // Give the networking threads a chance to manipulate the world.
-        shared_simulation.rw_lock.unlock();
     }
 }

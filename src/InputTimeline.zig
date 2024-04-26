@@ -10,10 +10,12 @@ timeline: InputStateArrayList,
 newest_remote_frame: u64,
 
 pub fn init(allocator: std.mem.Allocator) !Self {
+    var timeline = try InputStateArrayList.initCapacity(allocator, 1024);
+    try timeline.append(allocator, input.default_input_state);
     return .{
         .rw_lock = .{},
         .newest_remote_frame = 0,
-        .timeline = try InputStateArrayList.initCapacity(allocator, 1024),
+        .timeline = timeline,
     };
 }
 
@@ -28,7 +30,7 @@ fn extendTimeline(self: *Self, allocator: std.mem.Allocator, tick: u64) !void {
 }
 
 pub fn localUpdate(self: *Self, allocator: std.mem.Allocator, controllers: []Controller, tick: u64) ![]input.InputState {
-    if (tick > self.newest_remote_frame) {
+    if (tick >= self.newest_remote_frame) {
         try self.extendTimeline(allocator, tick);
         Controller.poll(controllers, &self.timeline.items[tick], tick);
     }
