@@ -3,17 +3,51 @@ const input = @import("input.zig");
 const Controller = @import("controller.zig");
 const Self = @This();
 
-timeline_index: usize = 0,
-rw_lock: std.Thread.RwLock = .{},
-recent_timeline: [40]input.InputState = [_]input.InputState{input.default_input_state} ** 40,
+const InputStateArrayList = std.ArrayListUnmanaged(input.InputState);
 
-pub fn localUpdate(self: *Self, controllers: []Controller, tick: usize) *input.InputState {
-    self.recent_timeline[tick % self.recent_timeline.len] = self.recent_timeline[(tick + self.recent_timeline.len - 1) % self.recent_timeline.len];
-    const state = &self.recent_timeline[tick % self.recent_timeline.len];
-    Controller.poll(controllers, state, tick);
-    return state;
+rw_lock: std.Thread.RwLock,
+timeline: InputStateArrayList,
+newest_remote_frame: u64,
+
+pub fn init(allocator: std.mem.Allocator) !Self {
+    return .{
+        .rw_lock = .{},
+        .newest_remote_frame = 0,
+        .timeline = try InputStateArrayList.initCapacity(allocator, 1024),
+    };
 }
 
-pub fn remoteUpdate(tick: usize) void {
-    _ = tick;
+fn extendTimeline(self: *Self, allocator: std.mem.Allocator, tick: u64) !void {
+    const start_frame = self.timeline.getLast();
+    const start = self.timeline.items.len;
+    try self.timeline.ensureTotalCapacity(allocator, tick + 1);
+    self.timeline.items.len = tick + 1;
+    for (self.timeline.items[start..]) |*frame| {
+        frame.* = start_frame;
+    }
+}
+
+pub fn localUpdate(self: *Self, allocator: std.mem.Allocator, controllers: []Controller, tick: u64) ![]input.InputState {
+    if (tick > self.newest_remote_frame) {
+        try self.extendTimeline(allocator, tick);
+        Controller.poll(controllers, &self.timeline.items[tick], tick);
+    }
+    return self.timeline.items[0..tick];
+}
+
+pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, new_state: input.InputState, tick: usize) ![]input.InputState {
+    if (tick < self.newest_remote_frame) {
+        @panic("the inputs came out of order");
+    }
+    try self.extendTimeline(allocator, allocator, tick);
+    for (self.timeline.items[tick..]) |*frame| {
+        for (frame, 0..) |*player, index| {
+            if (player.is_local) {
+                continue;
+            }
+            player = new_state[index];
+        }
+    }
+    self.newest_remote_frame = tick;
+    return self.timelie.items[0..tick];
 }

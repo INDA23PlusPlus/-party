@@ -10,7 +10,6 @@ const input = @import("../input.zig");
 const ecs = @import("../ecs/ecs.zig");
 const animator = @import("../animation/animator.zig");
 
-
 const PlayerChange = enum { remove, add, nothing };
 
 const colors: [8]rl.Color = .{
@@ -24,7 +23,7 @@ const colors: [8]rl.Color = .{
     rl.Color.white,
 };
 
-pub fn init(sim: *simulation.Simulation, _: *const input.InputState) simulation.SimulationError!void {
+pub fn init(sim: *simulation.Simulation, _: []const input.InputState) simulation.SimulationError!void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Ctr{ .id = 0, .counter = 180 }, // 3 second countdown
         ecs.component.Pos{ .pos = .{ 256, 144 } },
@@ -32,7 +31,8 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) simulation.
     });
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, _: Invariables) simulation.SimulationError!void {
+pub fn update(sim: *simulation.Simulation, inputs_timeline: []const input.InputState, _: Invariables) simulation.SimulationError!void {
+    const inputs = inputs_timeline[inputs_timeline.len - 1];
     var players = sim.world.query(&.{ecs.component.Plr}, &.{});
     var player_changes = [_]PlayerChange{.nothing} ** inputs.len;
     var player_ids: [inputs.len]?ecs.entity.Entity = [_]?ecs.entity.Entity{null} ** inputs.len;

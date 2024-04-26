@@ -85,7 +85,7 @@ pub fn main() !void {
     var shared_simulation = simulation.SharedSimulation{ .rw_lock = .{}, .sim = .{} };
     shared_simulation.sim.meta.minigame_id = starting_minigame_id; // TODO: Maybe sim.init() is a better place. Just add a new arg.
 
-    var shared_input_timeline = InputTimeline{};
+    var shared_input_timeline = try InputTimeline.init(std.heap.page_allocator);
 
     var controllers = Controller.DefaultControllers;
     controllers[0].input_index = 0; // TODO: This is temporary.
@@ -115,14 +115,14 @@ pub fn main() !void {
         // Fetch input.
         shared_input_timeline.rw_lock.lock();
         const tick = shared_simulation.sim.meta.ticks_elapsed;
-        const frame_input: input.InputState = shared_input_timeline.localUpdate(&controllers, tick).*;
+        const current_input_timeline = try shared_input_timeline.localUpdate(std.heap.page_allocator, &controllers, tick);
         shared_input_timeline.rw_lock.unlock();
 
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure
         // is called in other places. Not doing so will lead to inconsistencies.
         benchmarker.start();
-        try simulation.simulate(&shared_simulation.sim, &frame_input, invariables);
+        try simulation.simulate(&shared_simulation.sim, current_input_timeline, invariables);
         _ = static_arena.reset(.retain_capacity);
         benchmarker.stop();
         if (benchmarker.laps % 360 == 0) {

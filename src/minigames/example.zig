@@ -12,7 +12,7 @@ const animator = @import("../animation/animator.zig");
 const collision = @import("../physics/collision.zig");
 const movement = @import("../physics/movement.zig");
 
-pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
+pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{},
         ecs.component.Tex{
@@ -60,7 +60,8 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     });
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: Invariables) !void {
+pub fn update(sim: *simulation.Simulation, inputs_timeline: []const input.InputState, rt: Invariables) !void {
+    const inputs = &inputs_timeline[inputs_timeline.len - 1];
     var collisions = collision.CollisionQueue.init(rt.arena) catch @panic("collision");
 
     try inputSystem(&sim.world, inputs);

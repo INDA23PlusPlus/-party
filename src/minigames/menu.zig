@@ -18,9 +18,7 @@ const resolution_strings: [4][:0]const u8 = .{
     "Resolution: 1920 x 1080",
 };
 
-pub fn init(sim: *simulation.Simulation, inputs: *const input.InputState) simulation.SimulationError!void {
-    _ = inputs;
-
+pub fn init(sim: *simulation.Simulation, _: []const input.InputState) simulation.SimulationError!void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Txt{ .string = "++Party", .color = 0x00FF99FF, .font_size = 72 },
         ecs.component.Pos{ .pos = .{ 256, 36 } },
@@ -48,8 +46,8 @@ pub fn init(sim: *simulation.Simulation, inputs: *const input.InputState) simula
     };
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, _: Invariables) simulation.SimulationError!void {
-    try handleInputs(sim, inputs);
+pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, _: Invariables) simulation.SimulationError!void {
+    try handleInputs(sim, &inputs[inputs.len - 1]);
 }
 
 fn handleInputs(sim: *simulation.Simulation, inputs: *const input.InputState) !void {

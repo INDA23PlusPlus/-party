@@ -31,7 +31,7 @@ const obstacle_spawn_delay_delta: usize = 5;
 
 const ObstacleKind = enum { ObstacleUpper, ObstacleLower, ObstacleBoth };
 
-pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
+pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
     // try spawnWalls(&sim.world);
     for (0..1) |id| {
         //Condtion for only spawning player that are connected DOESN'T WORK AT THE MOMENT
@@ -41,8 +41,8 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     }
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, invar: Invariables) !void {
-    try jetpackSystem(&sim.world, inputs);
+pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, invar: Invariables) !void {
+    try jetpackSystem(&sim.world, &inputs[inputs.len - 1]);
 
     var collisions = collision.CollisionQueue.init(invar.arena) catch @panic("could not initialize collision queue");
 

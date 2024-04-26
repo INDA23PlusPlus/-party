@@ -29,7 +29,7 @@ fn generate_String() []const u8 {
     return "plusplusparty";
 }
 
-pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
+pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
     sim.meta.minigame_ticks_per_update = 8;
     // _ = sim;
     // jag tänker att det ska vara ett klassrum, och alla spelare är elever
@@ -65,9 +65,9 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     }
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, _: Invariables) !void {
+pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, _: Invariables) !void {
     rl.drawText("Morsecode Minigame", 64, 8, 32, rl.Color.blue);
-    try inputSystem(&sim.world, inputs);
+    try inputSystem(&sim.world, &inputs[inputs.len - 1]);
     // try wordSystem(&sim.world);
     animator.update(&sim.world);
 }

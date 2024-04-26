@@ -33,14 +33,14 @@ pub const SimulationError = ecs.world.WorldError;
 /// Should this be here?
 pub fn init(sim: *Simulation, rt: Invariables) !void {
     sim.meta.minigame_ticks_per_update = 1;
-    try rt.minigames_list[sim.meta.minigame_id].init(sim, &input.default_input_state);
+    try rt.minigames_list[sim.meta.minigame_id].init(sim, &.{input.default_input_state});
 }
 
 /// Simulate one tick in the game world.
 /// All generic game code will be called from this function and should not
 /// use anything outside of the world or the input frame. Failing to do so
 /// will lead to inconsistencies.
-pub fn simulate(sim: *Simulation, input_state: *const input.InputState, rt: Invariables) !void {
+pub fn simulate(sim: *Simulation, input_state: []const input.InputState, rt: Invariables) !void {
     const frame_start_minigame = sim.meta.minigame_id;
 
     sim.meta.ticks_elapsed += 1;

@@ -14,7 +14,7 @@ const constants = @import("../constants.zig");
 const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
 
-pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
+pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
     sim.meta.minigame_ticks_per_update = 16;
 
     // Background
@@ -57,10 +57,10 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     });
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, _: Invariables) !void {
+pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, _: Invariables) !void {
 
     // Set move direction.
-    inputSystem(&sim.world, inputs);
+    inputSystem(&sim.world, &inputs[inputs.len - 1]);
 
     try trailSystem(sim);
 

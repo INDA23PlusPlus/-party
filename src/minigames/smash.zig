@@ -34,7 +34,7 @@ const fall_speed = ecs.component.Vec2.init(0, ecs.component.F32.init(4, 1));
 const bounce_strength = ecs.component.F32.init(3, 2);
 const attack_strength = ecs.component.F32.init(5, 1);
 
-pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
+pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
     sim.meta.minigame_ticks_per_update = 16;
 
     // Background
@@ -100,10 +100,10 @@ pub fn init(sim: *simulation.Simulation, _: *const input.InputState) !void {
     _ = try sim.world.spawn(&.{ecs.component.Ctr});
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: Invariables) !void {
+pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, rt: Invariables) !void {
     var collisions = collision.CollisionQueue.init(rt.arena) catch @panic("collision");
 
-    inputSystem(&sim.world, inputs);
+    inputSystem(&sim.world, &inputs[inputs.len - 1]);
     gravitySystem(&sim.world);
 
     movement.update(&sim.world, &collisions, rt.arena) catch @panic("movement");

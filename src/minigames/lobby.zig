@@ -19,12 +19,12 @@ const ready_strings: [2][:0]const u8 = .{
     "Ready",
 };
 
-pub fn init(_: *simulation.Simulation, _: *const input.InputState) !void {}
+pub fn init(_: *simulation.Simulation, _: []const input.InputState) !void {}
 
-pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: Invariables) !void {
+pub fn update(sim: *simulation.Simulation, inputs_timeline: []const input.InputState, rt: Invariables) !void {
     var players = sim.world.query(&.{ecs.component.Plr}, &.{});
-    var player_changes = [_]PlayerChange{.nothing} ** inputs.len;
-    var player_ids: [inputs.len]?ecs.entity.Entity = [_]?ecs.entity.Entity{null} ** inputs.len;
+    var player_changes = [_]PlayerChange{.nothing} ** constants.max_player_count;
+    var player_ids: [constants.max_player_count]?ecs.entity.Entity = [_]?ecs.entity.Entity{null} ** constants.max_player_count;
     var player_count: u8 = 0;
 
     while (players.next()) |entity| {
@@ -32,6 +32,8 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, rt: 
         player_ids[plr.id] = entity;
         player_count += 1;
     }
+
+    const inputs = &inputs_timeline[inputs_timeline.len - 1];
 
     for (inputs, 0..) |ins, index| {
         if (ins.is_connected and player_ids[index] == null) {
