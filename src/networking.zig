@@ -140,6 +140,8 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
         // Perform the required re-simulations.
         // TODO: Copy the real world to the rendered world.
         networking_queue.rw_lock.unlock();
+
+        std.time.sleep(std.time.ns_per_ms * 20);
         //
         // TODO: Take clock timestamp
         // TODO: Compare these then sleep a bit to lock the ticks per second.
