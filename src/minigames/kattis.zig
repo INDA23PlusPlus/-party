@@ -62,7 +62,7 @@ pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, _: I
                 sim.meta.minigame_id = 3;
                 return;
             } else {
-                ctr.counter = 1;
+                ctr.counter -= 1;
             }
         }
     }
