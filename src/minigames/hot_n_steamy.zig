@@ -23,11 +23,8 @@ const obstacle_height_delta = 6;
 
 const player_gravity = Vec2.init(0, F32.init(1, 10));
 const player_boost = Vec2.init(0, F32.init(-1, 4));
-const vertical_obstacle_velocity = Vec2.init(-8, 0);
-const horizontal_obstacle_velocity = Vec2.init(-12, 0);
-const obstacle_spawn_delay_initial: usize = 120;
-const obstacle_spawn_delay_min: usize = 10;
-const obstacle_spawn_delay_delta: usize = 5;
+const vertical_obstacle_velocity = Vec2.init(-4, 0);
+const horizontal_obstacle_velocity = Vec2.init(-6, 0);
 
 const ObstacleKind = enum { ObstacleUpper, ObstacleLower, ObstacleBoth };
 
@@ -50,13 +47,14 @@ pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, inv
 
     try collisionSystem(&sim.world);
 
+    try pushSystemworld(&sim.world, &collisions);
+
     try spawnSystem(&sim.world, sim.meta.ticks_elapsed);
 
     try deathSystem(&sim.world, &collisions);
     animator.update(&sim.world);
 }
 
-// TODO: Fix so obstacles push players and not the other way around
 fn collisionSystem(world: *ecs.world.World) !void {
     var query = world.query(&.{ ecs.component.Plr, ecs.component.Col, ecs.component.Pos, ecs.component.Mov }, &.{});
     while (query.next()) |_| {
@@ -71,6 +69,23 @@ fn collisionSystem(world: *ecs.world.World) !void {
         } else if ((y + col.dim[1]) > constants.world_height) {
             mov.velocity.vector[1] = 0;
             pos.pos[1] = constants.world_height - col.dim[1];
+        }
+    }
+}
+
+fn pushSystemworld(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Col, ecs.component.Pos, ecs.component.Mov }, &.{});
+    while (query.next()) |_| {
+        var pos = try query.get(ecs.component.Pos);
+        const col = try query.get(ecs.component.Col);
+        var obst_query = world.query(&.{ ecs.component.Col, ecs.component.Pos, ecs.component.Mov }, &.{ecs.component.Plr});
+        while (obst_query.next()) |_| {
+            const obst_pos = try obst_query.get(ecs.component.Pos);
+            const obst_col = try obst_query.get(ecs.component.Col);
+            const obst_mov = try obst_query.get(ecs.component.Mov);
+            if (collision.intersectsAt(pos, col, obst_pos, obst_col, [_]i32{ 1, 0 })) {
+                pos.pos[0] += obst_mov.velocity.x().toInt();
+            }
         }
     }
 }
@@ -106,11 +121,11 @@ fn deathSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
 
 fn spawnSystem(world: *ecs.world.World, ticks: u64) !void {
     //The decrease causes an integer overflow. This will most likely not happen once players can die
-    if (ticks % @max(20, (80 - (ticks / 160))) == 0) {
+    if (ticks % @max(20, (80 -| (ticks / 160))) == 0) {
         spawnRandomObstacle(world);
     }
 
-    if (ticks % @max(10, (60 - (ticks / 120))) == 0) {
+    if (ticks % @max(10, (60 -| (ticks / 120))) == 0) {
         spawnHorizontalObstacle(world);
     }
 }
@@ -160,15 +175,15 @@ pub fn spawnRandomObstacle(world: *ecs.world.World) void {
     const kind = std.Random.enumValue(rand, ObstacleKind);
     switch (kind) {
         ObstacleKind.ObstacleLower => {
-            const length = std.Random.intRangeAtMost(rand, u32, 5, constants.world_height_tiles - 7);
+            const length = std.Random.intRangeAtMost(rand, u32, 7, constants.world_height_tiles - 5);
             spawnVerticalObstacleLower(world, length);
         },
         ObstacleKind.ObstacleUpper => {
-            const length = std.Random.intRangeAtMost(rand, u32, 5, constants.world_height_tiles - 7);
+            const length = std.Random.intRangeAtMost(rand, u32, 7, constants.world_height_tiles - 5);
             spawnVerticalObstacleUpper(world, length);
         },
         ObstacleKind.ObstacleBoth => {
-            const delta = std.Random.intRangeAtMost(rand, i32, 3, 8);
+            const delta = std.Random.intRangeAtMost(rand, i32, 4, 8);
             spawnVerticalObstacleBoth(world, delta);
         },
     }
@@ -201,33 +216,11 @@ fn spawnHorizontalObstacle(world: *ecs.world.World) void {
     }) catch unreachable;
 }
 
-fn spawnWalls(world: *ecs.world.World) !void {
-    _ = try world.spawnWith(.{
-        ecs.component.Pos{
-            .pos = .{ 0, -33 },
-        },
-        ecs.component.Col{
-            .dim = .{ constants.world_width, 32 },
-            .layer = .{ .base = true, .pushing = true },
-            .mask = .{ .base = false, .player = true },
-        },
-    });
-    _ = try world.spawnWith(.{
-        ecs.component.Pos{
-            .pos = .{ 0, constants.world_height + 1 },
-        },
-        ecs.component.Col{
-            .dim = .{ constants.world_width, 32 },
-            .layer = .{ .base = true, .pushing = true },
-            .mask = .{ .base = false, .player = true },
-        },
-    });
-}
-
 fn spawnPlayer(world: *ecs.world.World, id: u32) !void {
     _ = try world.spawnWith(.{
         ecs.component.Plr{ .id = @intCast(id) },
-        ecs.component.Pos{ .pos = .{ std.Random.intRangeAtMost(rand, i32, 8, 24), @divTrunc(constants.world_height, 2) } },
+        // ecs.component.Pos{ .pos = .{ std.Random.intRangeAtMost(rand, i32, 16, 48), @divTrunc(constants.world_height, 2) } },
+        ecs.component.Pos{ .pos = .{ constants.world_width - 16, 0 } },
         ecs.component.Mov{
             .acceleration = player_gravity,
         },
