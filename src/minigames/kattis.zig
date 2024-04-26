@@ -45,13 +45,13 @@ pub fn init(sim: *simulation.Simulation, inputs: *const input.InputState) !void 
 
     // Count down.
     _ = try sim.world.spawnWith(.{
-        ecs.component.Ctr{ .id = 100, .counter = 20 * 60 },
+        ecs.component.Ctr{ .id = 100, .counter = 30 * 60 },
     });
 }
 
 pub fn update(sim: *simulation.Simulation, inputs: *const input.InputState, _: Invariables) !void {
     inputSystem(&sim.world, inputs);
-    updateTestcasesTex(&sim.world, inputs);
+    updateTextures(&sim.world, inputs);
     animator.update(&sim.world);
 
     var query = sim.world.query(&.{ecs.component.Ctr}, &.{ ecs.component.Plr, ecs.component.Tex });
@@ -74,7 +74,7 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) void {
 
     while (query.next()) |_| {
         const plr = query.get(ecs.component.Plr) catch unreachable;
-        var ctr = query.get(ecs.component.Ctr) catch unreachable;
+        const ctr = query.get(ecs.component.Ctr) catch unreachable;
         const state = inputs[plr.id];
         var wrong = false;
 
@@ -101,7 +101,7 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) void {
     }
 }
 
-fn updateTestcasesTex(world: *ecs.world.World, inputs: *const input.InputState) void {
+fn updateTextures(world: *ecs.world.World, inputs: *const input.InputState) void {
     var query_p = world.query(&.{ ecs.component.Plr, ecs.component.Ctr }, &.{});
 
     while (query_p.next()) |_| {
