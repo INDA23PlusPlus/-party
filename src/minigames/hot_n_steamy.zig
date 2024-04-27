@@ -17,7 +17,9 @@ const F32 = ecs.component.F32;
 
 var prng = std.rand.DefaultPrng.init(555);
 const rand = prng.random();
-
+var player_finish_order: [8]u32 = [8]u32{ undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined };
+var current_placement: u32 = 0;
+var ticks_at_start = undefined;
 const obstacle_height_base = 7;
 const obstacle_height_delta = 6;
 
@@ -29,6 +31,9 @@ const horizontal_obstacle_velocity = Vec2.init(-6, 0);
 const ObstacleKind = enum { ObstacleUpper, ObstacleLower, ObstacleBoth };
 
 pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
+    ticks_at_start = sim.meta.ticks_elapsed;
+    current_placement = 0;
+    player_finish_order = [8]u32{ undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined };
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{},
         ecs.component.Tex{
@@ -37,7 +42,8 @@ pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
             .h = 18,
         },
     });
-    for (0..1) |id| {
+    //TODO Change so it spawns one player for all current active players
+    for (0..3) |id| {
         //Condtion for only spawning player that are connected DOESN'T WORK AT THE MOMENT
         // if (inputs[id].is_connected) {
         try spawnPlayer(&sim.world, @intCast(id));
@@ -56,10 +62,21 @@ pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, inv
 
     try pushSystemworld(&sim.world, &collisions);
 
-    try spawnSystem(&sim.world, sim.meta.ticks_elapsed);
+    try spawnSystem(&sim.world, sim.meta.ticks_elapsed - ticks_at_start);
 
     try deathSystem(&sim.world, &collisions);
     animator.update(&sim.world);
+    //TODO Change number so it uses current active players instead
+    if (current_placement == 3) {
+        sim.meta.score[player_finish_order[2]] += 10;
+        sim.meta.score[player_finish_order[1]] += 5;
+        sim.meta.score[player_finish_order[0]] += 2;
+        std.debug.print("{}\n", .{player_finish_order[2]});
+        std.debug.print("{}\n", .{sim.meta.score[player_finish_order[2]]});
+        std.debug.print("Moving to scoreboard\n", .{});
+        //TODO Change so it rdirect to the scoreboard once scoreboard mingame is implemented
+        sim.meta.minigame_id = 0;
+    }
 }
 
 fn collisionSystem(world: *ecs.world.World) !void {
@@ -72,7 +89,6 @@ fn collisionSystem(world: *ecs.world.World) !void {
         if (y < 0) {
             mov.velocity.vector[1] = 0;
             pos.pos[1] = 0;
-            // mov.acceleration = player_gravity;
         } else if ((y + col.dim[1]) > constants.world_height) {
             mov.velocity.vector[1] = 0;
             pos.pos[1] = constants.world_height - col.dim[1];
@@ -120,7 +136,11 @@ fn deathSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
         const pos = try query.get(ecs.component.Pos);
         const right = pos.pos[0] + col.dim[0];
         if (right < 0) {
-            if (world.checkSignature(entity, &.{ecs.component.Plr}, &.{})) {}
+            if (world.checkSignature(entity, &.{ecs.component.Plr}, &.{})) {
+                const plr = try world.inspect(entity, ecs.component.Plr);
+                player_finish_order[current_placement] = plr.id;
+                current_placement += 1;
+            }
             world.kill(entity);
             std.debug.print("entity {} died\n", .{entity.identifier});
         }
@@ -128,7 +148,6 @@ fn deathSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
 }
 
 fn spawnSystem(world: *ecs.world.World, ticks: u64) !void {
-    //The decrease causes an integer overflow. This will most likely not happen once players can die
     if (ticks % @max(20, (80 -| (ticks / 160))) == 0) {
         spawnRandomObstacle(world);
     }
