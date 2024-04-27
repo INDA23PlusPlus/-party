@@ -86,7 +86,7 @@ pub fn main() !void {
     var sim = simulation.Simulation{};
     sim.meta.minigame_id = starting_minigame_id; // TODO: Maybe sim.init() is a better place. Just add a new arg.
 
-    var shared_input_timeline = try InputTimeline.init(std.heap.page_allocator);
+    var input_timeline = try InputTimeline.init(std.heap.page_allocator);
 
     var controllers = Controller.DefaultControllers;
     controllers[0].input_index = 0; // TODO: This is temporary.
@@ -115,10 +115,8 @@ pub fn main() !void {
     while (window.running) {
 
         // Fetch input.
-        shared_input_timeline.rw_lock.lock();
         const tick = sim.meta.ticks_elapsed;
-        const current_input_timeline = try shared_input_timeline.localUpdate(std.heap.page_allocator, &controllers, tick);
-        shared_input_timeline.rw_lock.unlock();
+        const current_input_timeline = try input_timeline.localUpdate(std.heap.page_allocator, &controllers, tick);
 
         main_thread_queue.interchange(&net_thread_queue);
 
