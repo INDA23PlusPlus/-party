@@ -70,6 +70,7 @@ pub fn update(sim: *simulation.Simulation, inputs_timeline: []const input.InputS
     var collisions = collision.CollisionQueue.init(rt.arena) catch @panic("collision");
 
     try inputSystem(&sim.world, inputs);
+    try flipSystem(&sim.world, inputs);
     movement.update(&sim.world, &collisions, rt.arena) catch @panic("movement");
     animator.update(&sim.world); // I don't think this should be here
 
@@ -124,6 +125,18 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
         if (state.button_a.pressed()) {
             txt.string = ready_strings[0];
             ctr.counter = 0;
+        }
+    }
+}
+
+fn flipSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Tex }, &.{});
+    while (query.next()) |_| {
+        const plr = try query.get(ecs.component.Plr);
+        const tex = try query.get(ecs.component.Tex);
+        const state = inputs[plr.id];
+        if (state.horizontal() != 0) {
+            tex.flip_horizontal = state.horizontal() < 0;
         }
     }
 }
