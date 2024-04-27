@@ -19,7 +19,7 @@ var prng = std.rand.DefaultPrng.init(555);
 const rand = prng.random();
 var player_finish_order: [8]u32 = [8]u32{ undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined };
 var current_placement: u32 = 0;
-var ticks_at_start = undefined;
+var ticks_at_start: usize = undefined;
 const obstacle_height_base = 7;
 const obstacle_height_delta = 6;
 
@@ -78,19 +78,18 @@ fn spawnBackground(world: *ecs.world.World) !void {
 }
 
 pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
-    _ = try spawnBackground(&sim.world);
-    for (0..constants.max_player_count) |id| {
     ticks_at_start = sim.meta.ticks_elapsed;
     current_placement = 0;
     player_finish_order = [8]u32{ undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined };
-    _ = try sim.world.spawnWith(.{
-        ecs.component.Pos{},
-        ecs.component.Tex{
-            .texture_hash = AssetManager.pathHash("assets/hns_background.png"),
-            .w = 32,
-            .h = 18,
-        },
-    });
+    // _ = try sim.world.spawnWith(.{
+    //     ecs.component.Pos{},
+    //     ecs.component.Tex{
+    //         .texture_hash = AssetManager.pathHash("assets/hns_background.png"),
+    //         .w = 32,
+    //         .h = 18,
+    //     },
+    // });
+    _ = try spawnBackground(&sim.world);
     //TODO Change so it spawns one player for all current active players
     for (0..3) |id| {
         //Condtion for only spawning player that are connected DOESN'T WORK AT THE MOMENT
@@ -99,7 +98,6 @@ pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
         // }
     }
 }
-
 pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, invar: Invariables) !void {
     try jetpackSystem(&sim.world, &inputs[inputs.len - 1]);
 
@@ -126,7 +124,7 @@ pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, inv
         std.debug.print("{}\n", .{player_finish_order[2]});
         std.debug.print("{}\n", .{sim.meta.score[player_finish_order[2]]});
         std.debug.print("Moving to scoreboard\n", .{});
-        //TODO Change so it rdirect to the scoreboard once scoreboard mingame is implemented
+        //TODO Change so it redirects to the scoreboard once scoreboard mingame is implemented
         sim.meta.minigame_id = 0;
     }
 }
