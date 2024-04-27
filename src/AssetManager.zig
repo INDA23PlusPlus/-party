@@ -34,6 +34,7 @@ const map_type = std.HashMap(
 const paths = [_][:0]const u8{
     default_path,
     "assets/test.png",
+    "assets/hns_background.png",
     "assets/kattis.png",
     "assets/tron_map.png",
     "assets/smash_background_0.png",
@@ -43,7 +44,7 @@ const paths = [_][:0]const u8{
     "assets/tron_skull.png",
     "assets/smash_cat.png",
     "assets/error.png",
-    "assets/kattis_testcases.png"
+    "assets/kattis_testcases.png",
 };
 
 hashmap: map_type,

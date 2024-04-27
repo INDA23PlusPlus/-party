@@ -29,7 +29,14 @@ const horizontal_obstacle_velocity = Vec2.init(-6, 0);
 const ObstacleKind = enum { ObstacleUpper, ObstacleLower, ObstacleBoth };
 
 pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
-    // try spawnWalls(&sim.world);
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Pos{},
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/hns_background.png"),
+            .w = 32,
+            .h = 18,
+        },
+    });
     for (0..1) |id| {
         //Condtion for only spawning player that are connected DOESN'T WORK AT THE MOMENT
         // if (inputs[id].is_connected) {
@@ -113,6 +120,7 @@ fn deathSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
         const pos = try query.get(ecs.component.Pos);
         const right = pos.pos[0] + col.dim[0];
         if (right < 0) {
+            if (world.checkSignature(entity, &.{ecs.component.Plr}, &.{})) {}
             world.kill(entity);
             std.debug.print("entity {} died\n", .{entity.identifier});
         }
@@ -219,8 +227,8 @@ fn spawnHorizontalObstacle(world: *ecs.world.World) void {
 fn spawnPlayer(world: *ecs.world.World, id: u32) !void {
     _ = try world.spawnWith(.{
         ecs.component.Plr{ .id = @intCast(id) },
-        // ecs.component.Pos{ .pos = .{ std.Random.intRangeAtMost(rand, i32, 16, 48), @divTrunc(constants.world_height, 2) } },
-        ecs.component.Pos{ .pos = .{ constants.world_width - 16, 0 } },
+        ecs.component.Pos{ .pos = .{ std.Random.intRangeAtMost(rand, i32, 64, 112), @divTrunc(constants.world_height, 2) } },
+        // ecs.component.Pos{ .pos = .{ constants.world_width - 16, 0 } },
         ecs.component.Mov{
             .acceleration = player_gravity,
         },
