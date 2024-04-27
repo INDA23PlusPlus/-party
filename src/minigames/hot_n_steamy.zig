@@ -142,13 +142,12 @@ fn collisionSystem(world: *ecs.world.World) !void {
         const pos = try query.get(ecs.component.Pos);
         const mov = try query.get(ecs.component.Mov);
         const col = try query.get(ecs.component.Col);
-        const y = pos.pos[1];
-        if (y < 0) {
+        if (pos.pos[1] + col.off[1] < 0) {
             mov.velocity.vector[1] = 0;
-            pos.pos[1] = 0;
-        } else if ((y + col.dim[1]) > constants.world_height) {
+            pos.pos[1] = 0 - col.off[1];
+        } else if (pos.pos[1] + col.dim[1] + col.off[1] > constants.world_height) {
             mov.velocity.vector[1] = 0;
-            pos.pos[1] = constants.world_height - col.dim[1];
+            pos.pos[1] = constants.world_height - col.dim[1] - col.off[1];
         }
     }
 }
@@ -317,14 +316,14 @@ fn spawnPlayer(world: *ecs.world.World, id: u32) !void {
             .acceleration = player_gravity,
         },
         ecs.component.Col{
-            .dim = .{ 16, 12 },
+            .dim = .{ 12, 10 },
+            .off = .{ 0, 3 },
             .layer = collision.Layer{ .base = false, .player = true },
             .mask = collision.Layer{ .base = false, .player = false, .pushing = true },
         },
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/kattis.png"),
             .tint = constants.player_colors[id],
-            .subpos = .{ 0, -2 },
         },
         ecs.component.Anm{ .animation = Animation.KattisFly, .interval = 8, .looping = true },
     });
