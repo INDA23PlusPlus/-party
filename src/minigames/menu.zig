@@ -3,6 +3,8 @@ const rl = @import("raylib");
 const simulation = @import("../simulation.zig");
 const input = @import("../input.zig");
 const ecs = @import("../ecs/ecs.zig");
+const constants = @import("../constants.zig");
+const AssetManager = @import("../AssetManager.zig");
 
 const Invariables = @import("../Invariables.zig");
 
@@ -19,6 +21,17 @@ const resolution_strings: [4][:0]const u8 = .{
 };
 
 pub fn init(sim: *simulation.Simulation, _: []const input.InputState) simulation.SimulationError!void {
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/borggarden.png"),
+            .w = constants.world_width_tiles,
+            .h = constants.world_height_tiles,
+        },
+        ecs.component.Pos{
+            .pos = .{ 0, 0 },
+        },
+    });
+
     _ = try sim.world.spawnWith(.{
         ecs.component.Txt{ .string = "++Party", .color = 0x00FF99FF, .font_size = 72 },
         ecs.component.Pos{ .pos = .{ 256, 36 } },
