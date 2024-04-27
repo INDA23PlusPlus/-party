@@ -161,8 +161,8 @@ pub inline fn intersectsAt(
     col2: *ecs.component.Col,
     offset: @Vector(2, i32),
 ) bool {
-    const a = @intFromBool(pos1.pos + col1.dim + offset > pos2.pos);
-    const b = @intFromBool(pos2.pos + col2.dim > pos1.pos + offset);
+    const a = @intFromBool(pos1.pos + col1.dim + col1.off + offset > pos2.pos + col2.off);
+    const b = @intFromBool(pos2.pos + col2.dim + col2.off > pos1.pos + col1.off + offset);
     const c = (a & b) != [_]u1{ 0, 0 };
 
     return @reduce(.And, c);
