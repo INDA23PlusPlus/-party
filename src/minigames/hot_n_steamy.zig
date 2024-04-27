@@ -28,9 +28,56 @@ const horizontal_obstacle_velocity = Vec2.init(-6, 0);
 
 const ObstacleKind = enum { ObstacleUpper, ObstacleLower, ObstacleBoth };
 
+const background_layers = [_][]const u8{
+    "assets/sky_background_0.png",
+    "assets/sky_background_1.png",
+    "assets/sky_background_2.png",
+};
+
+const background_scroll = [_]i16{ -1, -2, -3 };
+
+const scrollable_uid = 0;
+const killable_uid = 1;
+
+// FIX: Find some other way to differentiate entities without the ugly Uid
+// TODO: Change obstacles and players to use the Bnd component for bounds checking
+
+fn spawnBackground(world: *ecs.world.World) !void {
+    const n = @min(background_layers.len, background_scroll.len);
+    for (0..n) |i| {
+        for (0..2) |ix| {
+            _ = try world.spawnWith(.{
+                ecs.component.Uid{ .uid = scrollable_uid },
+                ecs.component.Tex{
+                    .texture_hash = AssetManager.pathHash(background_layers[i]),
+                    .w = constants.world_width_tiles,
+                    .h = constants.world_height_tiles,
+                },
+                ecs.component.Pos{ .pos = .{ @intCast(constants.world_width * ix), 0 } },
+                ecs.component.Mov{
+                    .velocity = Vec2.init(background_scroll[i], 0),
+                },
+                ecs.component.Bnd{
+                    .bounds = .{
+                        .left = 0,
+                        .right = constants.world_width,
+                        .top = 0,
+                        .bottom = constants.world_height,
+                    },
+                },
+                ecs.component.Col{
+                    .dim = .{ constants.world_width, constants.world_height },
+                    .layer = .{ .base = false },
+                    .mask = .{ .base = false },
+                },
+            });
+        }
+    }
+}
+
 pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
-    // try spawnWalls(&sim.world);
-    for (0..1) |id| {
+    _ = try spawnBackground(&sim.world);
+    for (0..constants.max_player_count) |id| {
         //Condtion for only spawning player that are connected DOESN'T WORK AT THE MOMENT
         // if (inputs[id].is_connected) {
         try spawnPlayer(&sim.world, @intCast(id));
@@ -47,12 +94,29 @@ pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, inv
 
     try collisionSystem(&sim.world);
 
-    try pushSystemworld(&sim.world, &collisions);
+    try pushSystem(&sim.world, &collisions);
 
     try spawnSystem(&sim.world, sim.meta.ticks_elapsed);
 
     try deathSystem(&sim.world, &collisions);
+
+    try scrollSystem(&sim.world);
+
     animator.update(&sim.world);
+}
+
+fn scrollSystem(world: *ecs.world.World) !void {
+    var query = world.query(&.{ ecs.component.Pos, ecs.component.Bnd, ecs.component.Col, ecs.component.Uid }, &.{});
+    while (query.next()) |_| {
+        const uid = try query.get(ecs.component.Uid);
+        if (uid.uid != scrollable_uid) continue;
+        const pos = try query.get(ecs.component.Pos);
+        const bnd = try query.get(ecs.component.Bnd);
+        const col = try query.get(ecs.component.Col);
+        if (pos.pos[0] + col.dim[0] + col.off[0] <= bnd.bounds.left + 4) { // +4 to hide visible seams
+            pos.pos[0] = bnd.bounds.right - col.off[0];
+        }
+    }
 }
 
 fn collisionSystem(world: *ecs.world.World) !void {
@@ -73,13 +137,15 @@ fn collisionSystem(world: *ecs.world.World) !void {
     }
 }
 
-fn pushSystemworld(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
+fn pushSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
     var query = world.query(&.{ ecs.component.Plr, ecs.component.Col, ecs.component.Pos, ecs.component.Mov }, &.{});
     while (query.next()) |_| {
         var pos = try query.get(ecs.component.Pos);
         const col = try query.get(ecs.component.Col);
-        var obst_query = world.query(&.{ ecs.component.Col, ecs.component.Pos, ecs.component.Mov }, &.{ecs.component.Plr});
+        var obst_query = world.query(&.{ ecs.component.Col, ecs.component.Pos, ecs.component.Mov, ecs.component.Uid }, &.{ecs.component.Plr});
         while (obst_query.next()) |_| {
+            const uid = try obst_query.get(ecs.component.Uid);
+            if (uid.uid == scrollable_uid) continue;
             const obst_pos = try obst_query.get(ecs.component.Pos);
             const obst_col = try obst_query.get(ecs.component.Col);
             const obst_mov = try obst_query.get(ecs.component.Mov);
@@ -105,13 +171,15 @@ fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void
 }
 
 fn deathSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
-
-    // Entities die when they touch the back wall (eg. both obstacles and players)
-    var query = world.query(&.{ ecs.component.Pos, ecs.component.Col }, &.{});
+    var query = world.query(&.{ ecs.component.Pos, ecs.component.Col, ecs.component.Uid }, &.{});
     while (query.next()) |entity| {
+        const uid = try query.get(ecs.component.Uid);
+        if (uid.uid != killable_uid) continue;
+
         const col = try query.get(ecs.component.Col);
         const pos = try query.get(ecs.component.Pos);
-        const right = pos.pos[0] + col.dim[0];
+
+        const right = pos.pos[0] + col.dim[0] + col.off[0];
         if (right < 0) {
             world.kill(entity);
             std.debug.print("entity {} died\n", .{entity.identifier});
@@ -132,6 +200,7 @@ fn spawnSystem(world: *ecs.world.World, ticks: u64) !void {
 
 fn spawnVerticalObstacleUpper(world: *ecs.world.World, length: u32) void {
     _ = world.spawnWith(.{
+        ecs.component.Uid{ .uid = killable_uid },
         ecs.component.Pos{ .pos = .{ constants.world_width, 0 } },
         ecs.component.Col{
             .dim = .{ 1 * constants.asset_resolution, constants.asset_resolution * @as(i32, @intCast(length)) },
@@ -150,6 +219,7 @@ fn spawnVerticalObstacleUpper(world: *ecs.world.World, length: u32) void {
 
 fn spawnVerticalObstacleLower(world: *ecs.world.World, length: u32) void {
     _ = world.spawnWith(.{
+        ecs.component.Uid{ .uid = killable_uid },
         ecs.component.Pos{ .pos = .{ constants.world_width, constants.world_height - @as(i32, @intCast(length)) * constants.asset_resolution } },
         ecs.component.Col{
             .dim = .{ constants.asset_resolution, constants.asset_resolution * @as(i32, @intCast(length)) },
@@ -191,6 +261,7 @@ pub fn spawnRandomObstacle(world: *ecs.world.World) void {
 
 fn spawnHorizontalObstacle(world: *ecs.world.World) void {
     _ = world.spawnWith(.{
+        ecs.component.Uid{ .uid = killable_uid },
         ecs.component.Pos{
             .pos = .{
                 constants.world_width,
@@ -218,9 +289,9 @@ fn spawnHorizontalObstacle(world: *ecs.world.World) void {
 
 fn spawnPlayer(world: *ecs.world.World, id: u32) !void {
     _ = try world.spawnWith(.{
+        ecs.component.Uid{ .uid = killable_uid },
         ecs.component.Plr{ .id = @intCast(id) },
-        // ecs.component.Pos{ .pos = .{ std.Random.intRangeAtMost(rand, i32, 16, 48), @divTrunc(constants.world_height, 2) } },
-        ecs.component.Pos{ .pos = .{ constants.world_width - 16, 0 } },
+        ecs.component.Pos{ .pos = .{ constants.world_width - std.Random.intRangeAtMost(rand, i32, 16, 32), @divTrunc(constants.world_height, 2) } },
         ecs.component.Mov{
             .acceleration = player_gravity,
         },
