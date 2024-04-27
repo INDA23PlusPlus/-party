@@ -25,8 +25,8 @@ const obstacle_height_delta = 6;
 
 const player_gravity = Vec2.init(0, F32.init(1, 10));
 const player_boost = Vec2.init(0, F32.init(-1, 4));
-const vertical_obstacle_velocity = Vec2.init(-4, 0);
-const horizontal_obstacle_velocity = Vec2.init(-6, 0);
+const vertical_obstacle_velocity = Vec2.init(-5, 0);
+const horizontal_obstacle_velocity = Vec2.init(-8, 0);
 
 const ObstacleKind = enum { ObstacleUpper, ObstacleLower, ObstacleBoth };
 
@@ -81,14 +81,6 @@ pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
     ticks_at_start = sim.meta.ticks_elapsed;
     current_placement = 0;
     player_finish_order = [8]u32{ undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined };
-    // _ = try sim.world.spawnWith(.{
-    //     ecs.component.Pos{},
-    //     ecs.component.Tex{
-    //         .texture_hash = AssetManager.pathHash("assets/hns_background.png"),
-    //         .w = 32,
-    //         .h = 18,
-    //     },
-    // });
     _ = try spawnBackground(&sim.world);
     //TODO Change so it spawns one player for all current active players
     for (0..3) |id| {
@@ -121,11 +113,12 @@ pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, inv
         sim.meta.score[player_finish_order[2]] += 10;
         sim.meta.score[player_finish_order[1]] += 5;
         sim.meta.score[player_finish_order[0]] += 2;
+        //Remove the prints once game is finialized
         std.debug.print("{}\n", .{player_finish_order[2]});
         std.debug.print("{}\n", .{sim.meta.score[player_finish_order[2]]});
         std.debug.print("Moving to scoreboard\n", .{});
         //TODO Change so it redirects to the scoreboard once scoreboard mingame is implemented
-        sim.meta.minigame_id = 0;
+        sim.meta.minigame_id = 3;
     }
 }
 
