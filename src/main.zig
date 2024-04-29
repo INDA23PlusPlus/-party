@@ -12,8 +12,8 @@ const simulation = @import("simulation.zig");
 const minigames = @import("minigames/list.zig");
 
 const AssetManager = @import("AssetManager.zig");
-const Controller = @import("controller.zig");
-const InputTimeline = @import("InputTimeline.zig");
+const Controller = @import("Controller.zig");
+const InputConsolidation = @import("InputConsolidation.zig");
 const Invariables = @import("Invariables.zig");
 const NetworkingQueue = @import("NetworkingQueue.zig");
 
@@ -86,7 +86,7 @@ pub fn main() !void {
     var sim = simulation.Simulation{};
     sim.meta.minigame_id = starting_minigame_id; // TODO: Maybe sim.init() is a better place. Just add a new arg.
 
-    var input_timeline = try InputTimeline.init(std.heap.page_allocator);
+    var input_consolidation = try InputConsolidation.init(std.heap.page_allocator);
 
     var controllers = Controller.DefaultControllers;
     controllers[0].input_index = 0; // TODO: This is temporary.
@@ -116,7 +116,7 @@ pub fn main() !void {
 
         // Fetch input.
         const tick = sim.meta.ticks_elapsed;
-        const current_input_timeline = try input_timeline.localUpdate(std.heap.page_allocator, &controllers, tick);
+        const current_input_timeline = try input_consolidation.localUpdate(std.heap.page_allocator, &controllers, tick);
 
         main_thread_queue.interchange(&net_thread_queue);
 

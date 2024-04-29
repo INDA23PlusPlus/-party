@@ -2,12 +2,12 @@ const std = @import("std");
 const rl = @import("raylib");
 const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
+const input = @import("../input.zig");
 const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
 const constants = @import("../constants.zig");
 const Animation = @import("../animation/animations.zig").Animation;
 const animator = @import("../animation/animator.zig");
-const input = @import("../input.zig");
 
 // all morse characters are less than 8 long
 // 1 for * , 2 for -, 0 otherwise, could be done with bitmasks if we choose to not have a "new_word" key
@@ -34,7 +34,7 @@ fn set_string_info() void {
     // return "plusplusparty";
 }
 
-pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
+pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     sim.meta.minigame_ticks_per_update = 8;
     set_string_info();
     // _ = sim;
@@ -74,24 +74,25 @@ pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
     }
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, _: Invariables) !void {
+pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
     rl.drawText("Morsecode Minigame", 64, 8, 32, rl.Color.blue);
-    try inputSystem(&sim.world, &inputs[inputs.len - 1]);
+    try inputSystem(&sim.world, timeline.latest());
     // try wordSystem(&sim.world);
     animator.update(&sim.world);
 }
 
-fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
+fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
     var query = world.query(&.{ecs.component.Plr}, &.{});
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
         const state = inputs[plr.id];
-        if (state.is_connected) {
-            if (state.button_a.is_down) {
+        if (state.is_connected()) {
+            if (state.button_a == .Pressed) {
+                // TODO: Should it be is_pressed() or just .Pressed?
                 keystrokes[plr.id][typed_len[plr.id]] = 1;
                 typed_len[plr.id] += 1;
                 if (typed_len[plr.id] > morsecode_maxlen) typed_len[plr.id] = 0; // TODO: remove this when wordSystem added
-            } else if (state.button_b.is_down) {
+            } else if (state.button_b == .Pressed) {
                 keystrokes[plr.id][typed_len[plr.id]] = 2;
                 typed_len[plr.id] += 1;
                 if (typed_len[plr.id] > morsecode_maxlen) typed_len[plr.id] = 0; // TODO: remove this when wordSystem added
