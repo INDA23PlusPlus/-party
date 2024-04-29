@@ -118,7 +118,16 @@ pub fn main() !void {
         const tick = sim.meta.ticks_elapsed;
         const current_input_timeline = try input_timeline.localUpdate(std.heap.page_allocator, &controllers, tick);
 
+        // Add the inputs.
+        // TODO: Write this code.
+
         main_thread_queue.interchange(&net_thread_queue);
+
+        // Ingest the updates.
+        for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_len]) |change| {
+            try input_timeline.remoteUpdate(std.heap.page_allocator, change.data, change.tick);
+        }
+        main_thread_queue.incoming_data_len = 0;
 
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure
