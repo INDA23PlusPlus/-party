@@ -171,7 +171,7 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.AllPlayerButtons) v
                 }
             }
 
-            if (state.button_a == .Pressed and world.checkSignature(entity, &.{}, &.{ecs.component.Jmp})) blk: {
+            if (state.button_a.is_down() and world.checkSignature(entity, &.{}, &.{ecs.component.Jmp})) blk: {
                 // Coyote time
                 if (ctr.counter > 5 and world.checkSignature(entity, &.{ecs.component.Air}, &.{})) break :blk;
 
