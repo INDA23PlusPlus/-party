@@ -16,6 +16,9 @@ const input = @import("../input.zig");
 const morsecode_maxlen = 5;
 var keystrokes: [constants.max_player_count][morsecode_maxlen]u8 = undefined;
 var typed_len = std.mem.zeroes([constants.max_player_count]u8);
+var current_letter: [constants.max_player_count][20]u8 = undefined;
+var game_string: []const u8 = undefined;
+var game_string_len: usize = 20;
 
 fn assigned_pos(id: usize) @Vector(2, i32) {
     const top_left_x = 120;
@@ -24,13 +27,16 @@ fn assigned_pos(id: usize) @Vector(2, i32) {
     return pos;
 }
 
-fn generate_String() []const u8 {
+fn set_string_info() void {
     // TODO: generate a random string for gameplay
-    return "plusplusparty";
+    game_string = "plusplusparty";
+    game_string_len = game_string.len;
+    // return "plusplusparty";
 }
 
 pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
     sim.meta.minigame_ticks_per_update = 8;
+    set_string_info();
     // _ = sim;
     // jag tänker att det ska vara ett klassrum, och alla spelare är elever
     // de kommer först in i klassrummet genom en och samma rum och sedan står på angett plats
@@ -41,6 +47,9 @@ pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
     for (0..constants.max_player_count) |id| {
         for (0..morsecode_maxlen) |j| {
             keystrokes[id][j] = 0;
+        }
+        for (0..game_string_len) |j| {
+            current_letter[id][j] = 0;
         }
     }
 
@@ -111,10 +120,15 @@ fn wordSystem(world: *ecs.world.World) !void {
         const character: u8 = code_to_char(id);
         if (character != 0) {
             typed_len[id] = 0;
+            current_letter += 1;
             keystrokes[id] = .{ 0, 0, 0, 0, 0 };
             // TODO: check for all keystrokes arrays: equals a morse character ?
             // in which case:
             // go to next word if possible, else give player score
+            if (current_letter == game_string_len) {
+                // player has finished
+                // TODO: add score to metadata, based on time taken
+            }
         }
     }
 }
