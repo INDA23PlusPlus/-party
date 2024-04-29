@@ -1,7 +1,7 @@
 const std = @import("std");
 const input = @import("input.zig");
 
-const StampedInput = struct { tick: u64, player: u32, data: input.InputState };
+const StampedInput = struct { tick: u64, player: u32, data: input.PlayerInputState };
 const max_backlog = 1024;
 
 rw_lock: std.Thread.RwLock = .{},

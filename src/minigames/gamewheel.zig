@@ -15,7 +15,7 @@ const waiting = std.math.maxInt(u32);
 
 const title_id = std.math.maxInt(u32);
 
-pub fn init(_: *simulation.Simulation, _: []const input.InputState) !void {}
+pub fn init(_: *simulation.Simulation, _: input.Timeline) !void {}
 
 fn setup(sim: *simulation.Simulation, available_minigames: []const Minigame) !void {
     const pseudo = sim.meta.seed + sim.meta.ticks_elapsed;
@@ -48,8 +48,8 @@ fn setup(sim: *simulation.Simulation, available_minigames: []const Minigame) !vo
     }
 }
 
-pub fn update(sim: *simulation.Simulation, inputs_timeline: []const input.InputState, rt: Invariables) !void {
-    const inputs = inputs_timeline[inputs_timeline.len - 1];
+pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invariables) !void {
+    const inputs = timeline.latest();
     const available_minigames = rt.minigames_list[sim.meta.minigame_id + 1 ..];
 
     var query = sim.world.query(&.{ecs.component.Ctr}, &.{});
@@ -70,7 +70,7 @@ pub fn update(sim: *simulation.Simulation, inputs_timeline: []const input.InputS
     }
 
     for (inputs) |inp| {
-        if (inp.button_a.pressed() or inp.button_b.pressed()) {
+        if (inp.button_a == .Pressed or inp.button_b == .Pressed) {
             if (main_ctr.counter == waiting) {
                 main_ctr.counter = 500;
             }

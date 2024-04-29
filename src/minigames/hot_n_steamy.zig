@@ -4,9 +4,9 @@ const rl = @import("raylib");
 const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
 const render = @import("../render.zig");
+const input = @import("../input.zig");
 const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
-const input = @import("../input.zig");
 const Animation = @import("../animation/animations.zig").Animation;
 const animator = @import("../animation/animator.zig");
 const constants = @import("../constants.zig");
@@ -77,7 +77,7 @@ fn spawnBackground(world: *ecs.world.World) !void {
     }
 }
 
-pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
+pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     ticks_at_start = sim.meta.ticks_elapsed;
     current_placement = 0;
     player_finish_order = [8]u32{ undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined };
@@ -90,8 +90,8 @@ pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
         // }
     }
 }
-pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, invar: Invariables) !void {
-    try jetpackSystem(&sim.world, &inputs[inputs.len - 1]);
+pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invariables) !void {
+    try jetpackSystem(&sim.world, inputs.latest());
 
     var collisions = collision.CollisionQueue.init(invar.arena) catch @panic("could not initialize collision queue");
 
@@ -171,14 +171,14 @@ fn pushSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
     }
 }
 
-fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
+fn jetpackSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
     var query = world.query(&.{ ecs.component.Mov, ecs.component.Plr }, &.{});
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
         const mov = try query.get(ecs.component.Mov);
         const state = inputs[plr.id];
-        if (state.is_connected) {
-            if (state.button_up.is_down) {
+        if (state.is_connected()) {
+            if (state.vertical() == 1) {
                 mov.velocity = mov.velocity.add(player_boost);
             }
         }

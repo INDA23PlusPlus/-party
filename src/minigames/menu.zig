@@ -20,7 +20,7 @@ const resolution_strings: [4][:0]const u8 = .{
     "Resolution: 1920 x 1080",
 };
 
-pub fn init(sim: *simulation.Simulation, _: []const input.InputState) simulation.SimulationError!void {
+pub fn init(sim: *simulation.Simulation, _: input.Timeline) simulation.SimulationError!void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/borggarden.png"),
@@ -59,32 +59,34 @@ pub fn init(sim: *simulation.Simulation, _: []const input.InputState) simulation
     };
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, _: Invariables) simulation.SimulationError!void {
-    try handleInputs(sim, &inputs[inputs.len - 1]);
+pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) simulation.SimulationError!void {
+    try handleInputs(sim, timeline);
 }
 
-fn handleInputs(sim: *simulation.Simulation, inputs: *const input.InputState) !void {
-    for (inputs) |inp| {
-        if (inp.is_connected) {
-            if (inp.button_down.pressed()) {
+fn handleInputs(sim: *simulation.Simulation, timeline: input.Timeline) !void {
+    for (timeline.latest(), 0..) |inp, player_index| {
+        if (inp.is_connected()) {
+            const horizontal = timeline.horizontal_pressed(player_index);
+            const vertical = timeline.vertical_pressed(player_index);
+            if (vertical == -1) {
                 const previous = selected;
                 selected = @mod(selected + 1, 2);
                 try changeSelection(sim, selected, previous);
             }
-            if (inp.button_up.pressed()) {
+            if (vertical == 1) {
                 const previous = selected;
                 selected = @mod(selected - 1, 2);
                 try changeSelection(sim, selected, previous);
             }
-            if (inp.button_right.pressed() and selected == 1) {
+            if (horizontal == 1 and selected == 1) {
                 current_resolution = @mod(current_resolution + 1, 4);
                 try changeResolution(sim, current_resolution);
             }
-            if (inp.button_left.pressed() and selected == 1) {
+            if (horizontal == -1 and selected == 1) {
                 current_resolution = @mod(current_resolution - 1, 4);
                 try changeResolution(sim, current_resolution);
             }
-            if (inp.button_b.pressed() and selected == 0) {
+            if (inp.button_b == .Pressed and selected == 0) {
                 sim.meta.minigame_id = 1; // Send to lobby
             }
         }
