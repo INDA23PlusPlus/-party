@@ -4,9 +4,9 @@ const rl = @import("raylib");
 const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
 const render = @import("../render.zig");
+const input = @import("../input.zig");
 const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
-const input = @import("../input.zig");
 const Animation = @import("../animation/animations.zig").Animation;
 const animator = @import("../animation/animator.zig");
 const constants = @import("../constants.zig");
@@ -17,29 +17,81 @@ const F32 = ecs.component.F32;
 
 var prng = std.rand.DefaultPrng.init(555);
 const rand = prng.random();
-
+var player_finish_order: [8]u32 = [8]u32{ undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined };
+var current_placement: u32 = 0;
+var ticks_at_start: usize = undefined;
 const obstacle_height_base = 7;
 const obstacle_height_delta = 6;
 
 const player_gravity = Vec2.init(0, F32.init(1, 10));
 const player_boost = Vec2.init(0, F32.init(-1, 4));
-const vertical_obstacle_velocity = Vec2.init(-4, 0);
-const horizontal_obstacle_velocity = Vec2.init(-6, 0);
+const vertical_obstacle_velocity = Vec2.init(-5, 0);
+const horizontal_obstacle_velocity = Vec2.init(-8, 0);
 
 const ObstacleKind = enum { ObstacleUpper, ObstacleLower, ObstacleBoth };
 
-pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
-    // try spawnWalls(&sim.world);
-    for (0..1) |id| {
+const background_layers = [_][]const u8{
+    "assets/sky_background_0.png",
+    "assets/sky_background_1.png",
+    "assets/sky_background_2.png",
+};
+
+const background_scroll = [_]i16{ -1, -2, -3 };
+
+const scrollable_uid = 0;
+const killable_uid = 1;
+
+// FIX: Find some other way to differentiate entities without the ugly Uid
+// TODO: Change obstacles and players to use the Bnd component for bounds checking
+
+fn spawnBackground(world: *ecs.world.World) !void {
+    const n = @min(background_layers.len, background_scroll.len);
+    for (0..n) |i| {
+        for (0..2) |ix| {
+            _ = try world.spawnWith(.{
+                ecs.component.Uid{ .uid = scrollable_uid },
+                ecs.component.Tex{
+                    .texture_hash = AssetManager.pathHash(background_layers[i]),
+                    .w = constants.world_width_tiles,
+                    .h = constants.world_height_tiles,
+                },
+                ecs.component.Pos{ .pos = .{ @intCast(constants.world_width * ix), 0 } },
+                ecs.component.Mov{
+                    .velocity = Vec2.init(background_scroll[i], 0),
+                },
+                ecs.component.Bnd{
+                    .bounds = .{
+                        .left = 0,
+                        .right = constants.world_width,
+                        .top = 0,
+                        .bottom = constants.world_height,
+                    },
+                },
+                ecs.component.Col{
+                    .dim = .{ constants.world_width, constants.world_height },
+                    .layer = .{ .base = false },
+                    .mask = .{ .base = false },
+                },
+            });
+        }
+    }
+}
+
+pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
+    ticks_at_start = sim.meta.ticks_elapsed;
+    current_placement = 0;
+    player_finish_order = [8]u32{ undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined };
+    _ = try spawnBackground(&sim.world);
+    //TODO Change so it spawns one player for all current active players
+    for (0..3) |id| {
         //Condtion for only spawning player that are connected DOESN'T WORK AT THE MOMENT
         // if (inputs[id].is_connected) {
         try spawnPlayer(&sim.world, @intCast(id));
         // }
     }
 }
-
-pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, invar: Invariables) !void {
-    try jetpackSystem(&sim.world, &inputs[inputs.len - 1]);
+pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invariables) !void {
+    try jetpackSystem(&sim.world, inputs.latest());
 
     var collisions = collision.CollisionQueue.init(invar.arena) catch @panic("could not initialize collision queue");
 
@@ -47,12 +99,41 @@ pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, inv
 
     try collisionSystem(&sim.world);
 
-    try pushSystemworld(&sim.world, &collisions);
+    try pushSystem(&sim.world, &collisions);
 
-    try spawnSystem(&sim.world, sim.meta.ticks_elapsed);
+    try spawnSystem(&sim.world, sim.meta.ticks_elapsed - ticks_at_start);
 
     try deathSystem(&sim.world, &collisions);
+
+    try scrollSystem(&sim.world);
+
     animator.update(&sim.world);
+    //TODO Change number so it uses current active players instead
+    if (current_placement == 3) {
+        sim.meta.score[player_finish_order[2]] += 10;
+        sim.meta.score[player_finish_order[1]] += 5;
+        sim.meta.score[player_finish_order[0]] += 2;
+        //Remove the prints once game is finialized
+        std.debug.print("{}\n", .{player_finish_order[2]});
+        std.debug.print("{}\n", .{sim.meta.score[player_finish_order[2]]});
+        std.debug.print("Moving to scoreboard\n", .{});
+        //TODO Change so it redirects to the scoreboard once scoreboard mingame is implemented
+        sim.meta.minigame_id = 3;
+    }
+}
+
+fn scrollSystem(world: *ecs.world.World) !void {
+    var query = world.query(&.{ ecs.component.Pos, ecs.component.Bnd, ecs.component.Col, ecs.component.Uid }, &.{});
+    while (query.next()) |_| {
+        const uid = try query.get(ecs.component.Uid);
+        if (uid.uid != scrollable_uid) continue;
+        const pos = try query.get(ecs.component.Pos);
+        const bnd = try query.get(ecs.component.Bnd);
+        const col = try query.get(ecs.component.Col);
+        if (pos.pos[0] + col.dim[0] + col.off[0] <= bnd.bounds.left + 4) { // +4 to hide visible seams
+            pos.pos[0] = bnd.bounds.right - col.off[0];
+        }
+    }
 }
 
 fn collisionSystem(world: *ecs.world.World) !void {
@@ -61,25 +142,25 @@ fn collisionSystem(world: *ecs.world.World) !void {
         const pos = try query.get(ecs.component.Pos);
         const mov = try query.get(ecs.component.Mov);
         const col = try query.get(ecs.component.Col);
-        const y = pos.pos[1];
-        if (y < 0) {
+        if (pos.pos[1] + col.off[1] < 0) {
             mov.velocity.vector[1] = 0;
-            pos.pos[1] = 0;
-            // mov.acceleration = player_gravity;
-        } else if ((y + col.dim[1]) > constants.world_height) {
+            pos.pos[1] = 0 - col.off[1];
+        } else if (pos.pos[1] + col.dim[1] + col.off[1] > constants.world_height) {
             mov.velocity.vector[1] = 0;
-            pos.pos[1] = constants.world_height - col.dim[1];
+            pos.pos[1] = constants.world_height - col.dim[1] - col.off[1];
         }
     }
 }
 
-fn pushSystemworld(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
+fn pushSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
     var query = world.query(&.{ ecs.component.Plr, ecs.component.Col, ecs.component.Pos, ecs.component.Mov }, &.{});
     while (query.next()) |_| {
         var pos = try query.get(ecs.component.Pos);
         const col = try query.get(ecs.component.Col);
-        var obst_query = world.query(&.{ ecs.component.Col, ecs.component.Pos, ecs.component.Mov }, &.{ecs.component.Plr});
+        var obst_query = world.query(&.{ ecs.component.Col, ecs.component.Pos, ecs.component.Mov, ecs.component.Uid }, &.{ecs.component.Plr});
         while (obst_query.next()) |_| {
+            const uid = try obst_query.get(ecs.component.Uid);
+            if (uid.uid == scrollable_uid) continue;
             const obst_pos = try obst_query.get(ecs.component.Pos);
             const obst_col = try obst_query.get(ecs.component.Col);
             const obst_mov = try obst_query.get(ecs.component.Mov);
@@ -90,14 +171,14 @@ fn pushSystemworld(world: *ecs.world.World, _: *collision.CollisionQueue) !void 
     }
 }
 
-fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
+fn jetpackSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
     var query = world.query(&.{ ecs.component.Mov, ecs.component.Plr }, &.{});
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
         const mov = try query.get(ecs.component.Mov);
         const state = inputs[plr.id];
-        if (state.is_connected) {
-            if (state.button_up.is_down) {
+        if (state.is_connected()) {
+            if (state.vertical() == 1) {
                 mov.velocity = mov.velocity.add(player_boost);
             }
         }
@@ -105,14 +186,21 @@ fn jetpackSystem(world: *ecs.world.World, inputs: *const input.InputState) !void
 }
 
 fn deathSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
-
-    // Entities die when they touch the back wall (eg. both obstacles and players)
-    var query = world.query(&.{ ecs.component.Pos, ecs.component.Col }, &.{});
+    var query = world.query(&.{ ecs.component.Pos, ecs.component.Col, ecs.component.Uid }, &.{});
     while (query.next()) |entity| {
+        const uid = try query.get(ecs.component.Uid);
+        if (uid.uid != killable_uid) continue;
+
         const col = try query.get(ecs.component.Col);
         const pos = try query.get(ecs.component.Pos);
-        const right = pos.pos[0] + col.dim[0];
+
+        const right = pos.pos[0] + col.dim[0] + col.off[0];
         if (right < 0) {
+            if (world.checkSignature(entity, &.{ecs.component.Plr}, &.{})) {
+                const plr = try world.inspect(entity, ecs.component.Plr);
+                player_finish_order[current_placement] = plr.id;
+                current_placement += 1;
+            }
             world.kill(entity);
             std.debug.print("entity {} died\n", .{entity.identifier});
         }
@@ -120,7 +208,6 @@ fn deathSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
 }
 
 fn spawnSystem(world: *ecs.world.World, ticks: u64) !void {
-    //The decrease causes an integer overflow. This will most likely not happen once players can die
     if (ticks % @max(20, (80 -| (ticks / 160))) == 0) {
         spawnRandomObstacle(world);
     }
@@ -132,6 +219,7 @@ fn spawnSystem(world: *ecs.world.World, ticks: u64) !void {
 
 fn spawnVerticalObstacleUpper(world: *ecs.world.World, length: u32) void {
     _ = world.spawnWith(.{
+        ecs.component.Uid{ .uid = killable_uid },
         ecs.component.Pos{ .pos = .{ constants.world_width, 0 } },
         ecs.component.Col{
             .dim = .{ 1 * constants.asset_resolution, constants.asset_resolution * @as(i32, @intCast(length)) },
@@ -150,6 +238,7 @@ fn spawnVerticalObstacleUpper(world: *ecs.world.World, length: u32) void {
 
 fn spawnVerticalObstacleLower(world: *ecs.world.World, length: u32) void {
     _ = world.spawnWith(.{
+        ecs.component.Uid{ .uid = killable_uid },
         ecs.component.Pos{ .pos = .{ constants.world_width, constants.world_height - @as(i32, @intCast(length)) * constants.asset_resolution } },
         ecs.component.Col{
             .dim = .{ constants.asset_resolution, constants.asset_resolution * @as(i32, @intCast(length)) },
@@ -191,6 +280,7 @@ pub fn spawnRandomObstacle(world: *ecs.world.World) void {
 
 fn spawnHorizontalObstacle(world: *ecs.world.World) void {
     _ = world.spawnWith(.{
+        ecs.component.Uid{ .uid = killable_uid },
         ecs.component.Pos{
             .pos = .{
                 constants.world_width,
@@ -218,21 +308,22 @@ fn spawnHorizontalObstacle(world: *ecs.world.World) void {
 
 fn spawnPlayer(world: *ecs.world.World, id: u32) !void {
     _ = try world.spawnWith(.{
+        ecs.component.Uid{ .uid = killable_uid },
         ecs.component.Plr{ .id = @intCast(id) },
-        // ecs.component.Pos{ .pos = .{ std.Random.intRangeAtMost(rand, i32, 16, 48), @divTrunc(constants.world_height, 2) } },
-        ecs.component.Pos{ .pos = .{ constants.world_width - 16, 0 } },
+        ecs.component.Pos{ .pos = .{ std.Random.intRangeAtMost(rand, i32, 64, 112), @divTrunc(constants.world_height, 2) } },
+        // ecs.component.Pos{ .pos = .{ constants.world_width - 16, 0 } },
         ecs.component.Mov{
             .acceleration = player_gravity,
         },
         ecs.component.Col{
-            .dim = .{ 16, 12 },
+            .dim = .{ 12, 10 },
+            .off = .{ 0, 3 },
             .layer = collision.Layer{ .base = false, .player = true },
             .mask = collision.Layer{ .base = false, .player = false, .pushing = true },
         },
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/kattis.png"),
             .tint = constants.player_colors[id],
-            .subpos = .{ 0, -2 },
         },
         ecs.component.Anm{ .animation = Animation.KattisFly, .interval = 8, .looping = true },
     });

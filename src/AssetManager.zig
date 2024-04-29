@@ -43,7 +43,11 @@ const paths = [_][:0]const u8{
     "assets/tron_skull.png",
     "assets/smash_cat.png",
     "assets/error.png",
-    "assets/kattis_testcases.png"
+    "assets/borggarden.png",
+    "assets/kattis_testcases.png",
+    "assets/sky_background_0.png",
+    "assets/sky_background_1.png",
+    "assets/sky_background_2.png",
 };
 
 hashmap: map_type,

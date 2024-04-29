@@ -4,11 +4,11 @@ const rl = @import("raylib");
 const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
 const render = @import("../render.zig");
-const input = @import("../input.zig");
 const movement = @import("../physics/movement.zig");
 const collision = @import("../physics/collision.zig");
 const animator = @import("../animation/animator.zig");
 const constants = @import("../constants.zig");
+const input = @import("../input.zig");
 const Animation = @import("../animation/animations.zig").Animation;
 const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
@@ -34,7 +34,7 @@ const fall_speed = ecs.component.Vec2.init(0, ecs.component.F32.init(4, 1));
 const bounce_strength = ecs.component.F32.init(3, 2);
 const attack_strength = ecs.component.F32.init(5, 1);
 
-pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
+pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     sim.meta.minigame_ticks_per_update = 16;
 
     // Background
@@ -100,10 +100,11 @@ pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
     _ = try sim.world.spawn(&.{ecs.component.Ctr});
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, rt: Invariables) !void {
+pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invariables) !void {
     var collisions = collision.CollisionQueue.init(rt.arena) catch @panic("collision");
+    const inputs = timeline.latest();
 
-    inputSystem(&sim.world, &inputs[inputs.len - 1]);
+    inputSystem(&sim.world, &inputs);
     gravitySystem(&sim.world);
 
     movement.update(&sim.world, &collisions, rt.arena) catch @panic("movement");
@@ -116,7 +117,7 @@ pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, rt:
     animator.update(&sim.world);
 }
 
-fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) void {
+fn inputSystem(world: *ecs.world.World, inputs: *const input.AllPlayerButtons) void {
     var query = world.query(&.{
         ecs.component.Plr,
         ecs.component.Mov,
@@ -133,11 +134,11 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) void {
         const dir = query.get(ecs.component.Dir) catch unreachable;
 
         const state = inputs[plr.id];
-        if (state.is_connected) {
-            if (state.button_left.is_down and !state.button_right.is_down) {
-                if (state.button_up.is_down) {
+        if (state.is_connected()) {
+            if (state.dpad == .West) {
+                if (state.dpad == .North) {
                     dir.facing = .Northwest;
-                } else if (state.button_down.is_down) {
+                } else if (state.dpad == .South) {
                     dir.facing = .Southwest;
                 } else {
                     dir.facing = .West;
@@ -147,10 +148,10 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) void {
                     tex.flip_horizontal = true;
                     tex.subpos = left_texture_offset;
                 }
-            } else if (!state.button_left.is_down and state.button_right.is_down) {
-                if (state.button_up.is_down) {
+            } else if (state.dpad == .East) {
+                if (state.dpad == .North) {
                     dir.facing = .Northeast;
-                } else if (state.button_down.is_down) {
+                } else if (state.dpad == .South) {
                     dir.facing = .Southeast;
                 } else {
                     dir.facing = .East;
@@ -161,16 +162,16 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) void {
                     tex.subpos = right_texture_offset;
                 }
             } else {
-                if (state.button_up.is_down) {
+                if (state.dpad == .North) {
                     dir.facing = .North;
-                } else if (state.button_down.is_down) {
+                } else if (state.dpad == .South) {
                     dir.facing = .South;
                 } else {
                     dir.facing = .None;
                 }
             }
 
-            if (state.button_a.pressed() and world.checkSignature(entity, &.{}, &.{ecs.component.Jmp})) blk: {
+            if (state.button_a.is_down() and world.checkSignature(entity, &.{}, &.{ecs.component.Jmp})) blk: {
                 // Coyote time
                 if (ctr.counter > 5 and world.checkSignature(entity, &.{ecs.component.Air}, &.{})) break :blk;
 
@@ -178,9 +179,9 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) void {
                 world.promote(entity, &.{ecs.component.Jmp});
             }
 
-            if (state.button_a.pressed()) ctr.counter = 0;
+            if (state.button_a == .Pressed) ctr.counter = 0;
 
-            if ((!state.button_a.is_down or mov.velocity.vector[1] > 0) and world.checkSignature(entity, &.{ecs.component.Jmp}, &.{})) {
+            if ((!state.button_a.is_down() or mov.velocity.vector[1] > 0) and world.checkSignature(entity, &.{ecs.component.Jmp}, &.{})) {
                 world.demote(entity, &.{ecs.component.Jmp});
             }
         }

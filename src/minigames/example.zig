@@ -4,15 +4,15 @@ const rl = @import("raylib");
 const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
 const render = @import("../render.zig");
+const input = @import("../input.zig");
 const AssetManager = @import("../AssetManager.zig");
 const Animation = @import("../animation/animations.zig").Animation;
 const Invariables = @import("../Invariables.zig");
-const input = @import("../input.zig");
 const animator = @import("../animation/animator.zig");
 const collision = @import("../physics/collision.zig");
 const movement = @import("../physics/movement.zig");
 
-pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
+pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{},
         ecs.component.Tex{
@@ -60,8 +60,8 @@ pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
     });
 }
 
-pub fn update(sim: *simulation.Simulation, inputs_timeline: []const input.InputState, rt: Invariables) !void {
-    const inputs = &inputs_timeline[inputs_timeline.len - 1];
+pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invariables) !void {
+    const inputs = timeline.latest();
     var collisions = collision.CollisionQueue.init(rt.arena) catch @panic("collision");
 
     try inputSystem(&sim.world, inputs);
@@ -73,20 +73,20 @@ pub fn update(sim: *simulation.Simulation, inputs_timeline: []const input.InputS
     rl.drawText("++party :3", 64, 8, 32, rl.Color.blue);
 }
 
-fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
+fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
     var query = world.query(&.{ ecs.component.Mov, ecs.component.Plr, ecs.component.Anm }, &.{});
     while (query.next()) |_| {
         const mov = try query.get(ecs.component.Mov);
         const plr = try query.get(ecs.component.Plr);
         const state = inputs[plr.id];
-        if (state.is_connected) {
+        if (state.is_connected()) {
             mov.velocity.set([_]i16{
-                @intCast(3 * state.horizontal()),
-                @intCast(3 * state.vertical_inv()),
+                @intCast(state.horizontal() * 3),
+                @intCast(state.vertical() * -3),
             });
 
             const anm = try query.get(ecs.component.Anm);
-            if (state.direction() == input.InputDirection.None) {
+            if (state.dpad == input.InputDirection.None) {
                 anm.animation = Animation.KattisIdle;
                 anm.interval = 16;
             } else {

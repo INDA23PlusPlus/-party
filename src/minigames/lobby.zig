@@ -19,9 +19,9 @@ const ready_strings: [2][:0]const u8 = .{
     "Ready",
 };
 
-pub fn init(_: *simulation.Simulation, _: []const input.InputState) !void {}
+pub fn init(_: *simulation.Simulation, _: input.Timeline) !void {}
 
-pub fn update(sim: *simulation.Simulation, inputs_timeline: []const input.InputState, rt: Invariables) !void {
+pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invariables) !void {
     var players = sim.world.query(&.{ecs.component.Plr}, &.{});
     var player_changes = [_]PlayerChange{.nothing} ** constants.max_player_count;
     var player_ids: [constants.max_player_count]?ecs.entity.Entity = [_]?ecs.entity.Entity{null} ** constants.max_player_count;
@@ -33,15 +33,15 @@ pub fn update(sim: *simulation.Simulation, inputs_timeline: []const input.InputS
         player_count += 1;
     }
 
-    const inputs = &inputs_timeline[inputs_timeline.len - 1];
+    const inputs = timeline.latest();
 
     for (inputs, 0..) |ins, index| {
-        if (ins.is_connected and player_ids[index] == null) {
+        if (ins.is_connected() and player_ids[index] == null) {
             player_changes[index] = .add;
             player_count += 1;
         }
 
-        if (!ins.is_connected and player_ids[index] != null) {
+        if (!ins.is_connected() and player_ids[index] != null) {
             player_changes[index] = .remove;
         }
     }
@@ -70,6 +70,7 @@ pub fn update(sim: *simulation.Simulation, inputs_timeline: []const input.InputS
     var collisions = collision.CollisionQueue.init(rt.arena) catch @panic("collision");
 
     try inputSystem(&sim.world, inputs);
+    try flipSystem(&sim.world, inputs);
     movement.update(&sim.world, &collisions, rt.arena) catch @panic("movement");
     animator.update(&sim.world); // I don't think this should be here
 
@@ -95,7 +96,7 @@ pub fn update(sim: *simulation.Simulation, inputs_timeline: []const input.InputS
     }
 }
 
-fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
+fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
     var query = world.query(&.{ ecs.component.Mov, ecs.component.Plr, ecs.component.Anm, ecs.component.Ctr, ecs.component.Txt }, &.{});
     while (query.next()) |_| {
         const mov = try query.get(ecs.component.Mov);
@@ -104,12 +105,12 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
         const txt = try query.get(ecs.component.Txt);
         const state = inputs[plr.id];
         mov.velocity.set([_]i16{
-            @intCast(3 * state.horizontal()),
-            @intCast(3 * state.vertical_inv()),
+            @intCast(state.horizontal() * 3),
+            @intCast(state.vertical() * -3),
         });
 
         const anm = try query.get(ecs.component.Anm);
-        if (state.direction() != input.InputDirection.None) {
+        if (state.dpad != input.InputDirection.None) {
             anm.animation = Animation.KattisRun;
             anm.interval = 8;
         } else {
@@ -117,13 +118,25 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) !void {
             anm.interval = 16;
         }
 
-        if (state.button_b.pressed()) {
+        if (state.button_b == .Pressed) {
             txt.string = ready_strings[1];
             ctr.counter = 1;
         }
-        if (state.button_a.pressed()) {
+        if (state.button_a == .Pressed) {
             txt.string = ready_strings[0];
             ctr.counter = 0;
+        }
+    }
+}
+
+fn flipSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Tex }, &.{});
+    while (query.next()) |_| {
+        const plr = try query.get(ecs.component.Plr);
+        const tex = try query.get(ecs.component.Tex);
+        const state = inputs[plr.id];
+        if (state.horizontal() != 0) {
+            tex.flip_horizontal = state.horizontal() < 0;
         }
     }
 }

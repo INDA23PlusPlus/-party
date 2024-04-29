@@ -14,7 +14,7 @@ const constants = @import("../constants.zig");
 const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
 
-pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
+pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     sim.meta.minigame_ticks_per_update = 16;
 
     // Background
@@ -57,10 +57,10 @@ pub fn init(sim: *simulation.Simulation, _: []const input.InputState) !void {
     });
 }
 
-pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, _: Invariables) !void {
+pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
 
     // Set move direction.
-    inputSystem(&sim.world, &inputs[inputs.len - 1]);
+    inputSystem(&sim.world, timeline);
 
     try trailSystem(sim);
 
@@ -83,7 +83,8 @@ pub fn update(sim: *simulation.Simulation, inputs: []const input.InputState, _: 
     animator.update(&sim.world);
 }
 
-fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) void {
+fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) void {
+    const inputs = timeline.latest();
     var query = world.query(&.{
         ecs.component.Plr,
         ecs.component.Dir,
@@ -94,14 +95,14 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) void {
 
         const state = inputs[plr.id];
 
-        if (!state.is_connected) continue;
+        if (!state.is_connected()) continue;
 
         const dir = query.get(ecs.component.Dir) catch unreachable;
 
-        if (state.button_left.is_down) dir.facing = .West;
-        if (state.button_right.is_down) dir.facing = .East;
-        if (state.button_up.is_down) dir.facing = .North;
-        if (state.button_down.is_down) dir.facing = .South;
+        if (state.dpad == .West) dir.facing = .West;
+        if (state.dpad == .East) dir.facing = .East;
+        if (state.dpad == .North) dir.facing = .North;
+        if (state.dpad == .South) dir.facing = .South;
     }
 }
 

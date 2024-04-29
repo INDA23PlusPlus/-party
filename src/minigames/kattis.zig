@@ -2,24 +2,24 @@ const std = @import("std");
 const rl = @import("raylib");
 const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
+const constants = @import("../constants.zig");
 const input = @import("../input.zig");
 const AssetManager = @import("../AssetManager.zig");
 const animator = @import("../animation/animator.zig");
 const Animation = @import("../animation/animations.zig").Animation;
-const constants = @import("../constants.zig");
 const Invariables = @import("../Invariables.zig");
 
 // Hey, nice code you got there!   (^‿^ )
 // Would be a shame if someone deleted everything...   (0‿0  )
 
-pub fn init(sim: *simulation.Simulation, inputs_timeline: []const input.InputState) !void {
-    const inputs = &inputs_timeline[inputs_timeline.len - 1];
+pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
+    const inputs = timeline.latest();
     var rng = std.rand.DefaultPrng.init(sim.meta.seed + sim.meta.ticks_elapsed);
     var player_count: u8 = 0;
 
     // Players
     for (inputs, 0..) |inp, id| {
-        if (inp.is_connected) {
+        if (inp.is_connected()) {
             const bitset: u32 = @truncate(rng.next());
             std.debug.print("{b}\n", .{bitset});
             player_count += 1;
@@ -50,10 +50,9 @@ pub fn init(sim: *simulation.Simulation, inputs_timeline: []const input.InputSta
     });
 }
 
-pub fn update(sim: *simulation.Simulation, inputs_timeline: []const input.InputState, _: Invariables) !void {
-    const inputs = &inputs_timeline[inputs_timeline.len - 1];
-    inputSystem(&sim.world, inputs);
-    updateTextures(&sim.world, inputs);
+pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
+    inputSystem(&sim.world, timeline);
+    updateTextures(&sim.world, timeline);
     animator.update(&sim.world);
 
     var query = sim.world.query(&.{ecs.component.Ctr}, &.{ ecs.component.Plr, ecs.component.Tex });
@@ -70,7 +69,8 @@ pub fn update(sim: *simulation.Simulation, inputs_timeline: []const input.InputS
     }
 }
 
-fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) void {
+fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) void {
+    const inputs = timeline.latest();
     var query = world.query(&.{ ecs.component.Plr, ecs.component.Ctr }, &.{});
     var ended = false;
 
@@ -80,10 +80,10 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) void {
         const state = inputs[plr.id];
         var wrong = false;
 
-        if (state.button_a.pressed()) {
+        if (state.button_a == .Pressed) {
             ctr.counter <<= 1;
             wrong = ctr.counter & ctr.id != 0;
-        } else if (state.button_b.pressed()) {
+        } else if (state.button_b == .Pressed) {
             ctr.counter <<= 1;
             wrong = ctr.counter & ctr.id == 0;
         }
@@ -103,12 +103,13 @@ fn inputSystem(world: *ecs.world.World, inputs: *const input.InputState) void {
     }
 }
 
-fn updateTextures(world: *ecs.world.World, inputs: *const input.InputState) void {
+fn updateTextures(world: *ecs.world.World, timeline: input.Timeline) void {
+    const inputs = timeline.latest();
     var query_p = world.query(&.{ ecs.component.Plr, ecs.component.Ctr }, &.{});
 
     while (query_p.next()) |_| {
         const plr = query_p.get(ecs.component.Plr) catch unreachable;
-        if (!(inputs[plr.id].button_a.pressed() or inputs[plr.id].button_b.pressed())) continue;
+        if (!(inputs[plr.id].button_a == .Pressed or inputs[plr.id].button_b == .Pressed)) continue;
 
         const pctr = query_p.get(ecs.component.Ctr) catch unreachable;
 
