@@ -19,6 +19,8 @@ var typed_len = std.mem.zeroes([constants.max_player_count]u8);
 var current_letter = std.mem.zeroes([constants.max_player_count]u8);
 var game_string: []const u8 = undefined;
 var game_string_len: usize = 20;
+var current_placement: usize = 0;
+var player_finish_order: [constants.max_player_count]u32 = [constants.max_player_count]u32{ undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined };
 
 fn assigned_pos(id: usize) @Vector(2, i32) {
     const top_left_x = 120;
@@ -29,7 +31,7 @@ fn assigned_pos(id: usize) @Vector(2, i32) {
 
 fn set_string_info() void {
     // TODO: generate a random string for gameplay
-    game_string = "plusplusparty";
+    game_string = "BABBA";
     game_string_len = game_string.len;
     // return "plusplusparty";
 }
@@ -76,6 +78,12 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
     try inputSystem(&sim.world, timeline.latest());
     try wordSystem(&sim.world);
     animator.update(&sim.world);
+    if (current_placement == constants.max_player_count) {
+        // everyone should be finished
+        for (0..constants.max_player_count) |rank| {
+            sim.meta.score[player_finish_order[rank]] = 20 - @as(u32, @intCast(rank)) * 2;
+        }
+    }
 }
 
 fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
@@ -91,8 +99,16 @@ fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
                 keystrokes[plr.id][typed_len[plr.id]] = 2;
                 typed_len[plr.id] += 1;
                 if (typed_len[plr.id] > morsecode_maxlen) typed_len[plr.id] = 0; // TODO: remove this when wordSystem added
+            } else if (state.dpad == .East) {
+                // TODO POTENTIAL: for now this should works as an end of cha
+                // however, maybe we want to do it another way
+                keystrokes[plr.id][typed_len[plr.id]] = 3;
+                typed_len[plr.id] += 1;
+            } else if (state.dpad == .West) {
+                // should work as a backspace / undo
+                typed_len[plr.id] -= 1;
+                keystrokes[plr.id][typed_len[plr.id]] = 0;
             }
-            // TODO: add support for end of character (maybe)
         }
     }
 }
@@ -107,6 +123,7 @@ fn code_to_char(id: usize) u8 {
     } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 1, 1, 0 })) {
         res = @intCast('B' - 'A' + 1);
     }
+    // TODO finish the rest of this conversion
     return res;
 }
 
@@ -118,12 +135,12 @@ fn wordSystem(world: *ecs.world.World) !void {
             typed_len[id] = 0;
             current_letter[id] += 1;
             keystrokes[id] = .{ 0, 0, 0, 0, 0 };
-            // TODO: check for all keystrokes arrays: equals a morse character ?
-            // in which case:
-            // go to next word if possible, else give player score
+            // TODO: check that the typed letter is the correct one, not just any letter
             if (current_letter[id] == game_string_len) {
+                // There is a small problem with this, lower ids get prioritized in this check
+                player_finish_order[current_placement] = @intCast(id);
+                current_placement += 1;
                 // player has finished
-                // TODO: add score to metadata, based on time taken
             }
         }
     }
