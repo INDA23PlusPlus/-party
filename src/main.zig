@@ -87,6 +87,7 @@ pub fn main() !void {
     sim.meta.minigame_id = starting_minigame_id; // TODO: Maybe sim.init() is a better place. Just add a new arg.
 
     var input_consolidation = try InputConsolidation.init(std.heap.page_allocator);
+    var input_frames_sent: u64 = 0;
 
     var controllers = Controller.DefaultControllers;
     controllers[0].input_index = 0; // TODO: This is temporary.
@@ -121,11 +122,30 @@ pub fn main() !void {
         // Add the inputs.
         // TODO: Write this code.
 
+        for(input_frames_sent .. input_consolidation.buttons.items.len) |tick_number| {
+            const all_buttons = input_consolidation.buttons.items[tick_number];
+            const local = input_consolidation.local.items[tick_number];
+            for (all_buttons, 0..) |buttons, i| {
+                if (main_thread_queue.outgoing_data_len >= main_thread_queue.outgoing_data.len) {
+                    continue;
+                }
+                if (local.isSet(i)) {
+                    main_thread_queue.outgoing_data[main_thread_queue.outgoing_data_len] = .{
+                        .data = buttons,
+                        .tick = tick_number,
+                        .player = @truncate(i),
+                    };
+                    main_thread_queue.outgoing_data_len += 1;
+                }
+            }
+        }
+        input_frames_sent = input_consolidation.buttons.items.len;
+
         main_thread_queue.interchange(&net_thread_queue);
 
         // Ingest the updates.
         for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_len]) |change| {
-            try input_timeline.remoteUpdate(std.heap.page_allocator, change.data, change.tick);
+            _ = try input_consolidation.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick);
         }
         main_thread_queue.incoming_data_len = 0;
 

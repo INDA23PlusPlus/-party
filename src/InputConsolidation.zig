@@ -14,7 +14,6 @@ buttons: InputStateArrayList,
 local: LocalArrayList,
 
 newest_remote_frame: u64 = 0,
-frames_sent: u64 = 0,
 
 pub fn init(allocator: std.mem.Allocator) !Self {
     var buttons = try InputStateArrayList.initCapacity(allocator, 1024);
@@ -54,18 +53,16 @@ pub fn localUpdate(self: *Self, allocator: std.mem.Allocator, controllers: []Con
     };
 }
 
-pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, new_state: input.InputState, tick: usize) !input.Timeline {
+pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, player: u32, new_state: input.PlayerInputState, tick: u64) !input.Timeline {
     if (tick < self.newest_remote_frame) {
         @panic("the inputs came out of order");
     }
-    try self.extendTimeline(allocator, allocator, tick);
-    for (self.timeline.items[tick..]) |*frame| {
-        for (frame, 0..) |*player, index| {
-            if (player.is_local) {
-                continue;
-            }
-            player = new_state[index];
-        }
+    try self.extendTimeline(allocator, tick);
+    for (self.buttons.items[tick..]) |*frame| {
+        //if (player.is_local) {
+        //    continue;
+        //}
+        frame[player] = new_state;
     }
     self.newest_remote_frame = tick;
     return .{

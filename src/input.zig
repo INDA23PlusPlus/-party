@@ -2,9 +2,10 @@ const constants = @import("constants.zig");
 const std = @import("std");
 
 // TODO: We could add a NoneHeld in order to skip checking previous frames for 'instant' dpad movement.
+// TODO: Fix the naming convention to follow Zig 0.12 (lowercase)...
 pub const InputDirection = enum(u4) { None, East, North, West, South, NorthEast, NorthWest, SouthWest, SouthEast, Disconnected };
 pub const ButtonState = enum(u2) {
-    Pressed,
+    Pressed, // TODO: Fix the naming convention to follow Zig 0.12 (lowercase)...
     Held,
     Released,
     pub fn is_down(self: ButtonState) bool {

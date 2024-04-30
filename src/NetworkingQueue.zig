@@ -1,15 +1,16 @@
 const std = @import("std");
 const input = @import("input.zig");
 
-const StampedInput = struct { tick: u64, player: u32, data: input.PlayerInputState };
+// TODO: make data an array and replace player with player_bitset
+pub const Packet = struct { tick: u64, data: input.PlayerInputState, player: u32,  };
 const max_backlog = 1024;
 
 rw_lock: std.Thread.RwLock = .{},
 
-incoming_data: [max_backlog]StampedInput = undefined,
+incoming_data: [max_backlog]Packet = undefined,
 incoming_data_len: u64 = 0,
 
-outgoing_data: [max_backlog]StampedInput = undefined,
+outgoing_data: [max_backlog]Packet = undefined,
 outgoing_data_len: u64 = 0,
 
 const Self = @This();
