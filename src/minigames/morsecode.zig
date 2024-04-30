@@ -16,6 +16,9 @@ const animator = @import("../animation/animator.zig");
 const morsecode_maxlen = 5;
 var keystrokes: [constants.max_player_count][morsecode_maxlen]u8 = undefined;
 var typed_len = std.mem.zeroes([constants.max_player_count]u8);
+var current_letter = std.mem.zeroes([constants.max_player_count]u8);
+var game_string: []const u8 = undefined;
+var game_string_len: usize = 20;
 
 fn assigned_pos(id: usize) @Vector(2, i32) {
     const top_left_x = 120;
@@ -24,13 +27,16 @@ fn assigned_pos(id: usize) @Vector(2, i32) {
     return pos;
 }
 
-fn generate_String() []const u8 {
+fn set_string_info() void {
     // TODO: generate a random string for gameplay
-    return "plusplusparty";
+    game_string = "plusplusparty";
+    game_string_len = game_string.len;
+    // return "plusplusparty";
 }
 
 pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     sim.meta.minigame_ticks_per_update = 8;
+    set_string_info();
     // _ = sim;
     // jag tänker att det ska vara ett klassrum, och alla spelare är elever
     // de kommer först in i klassrummet genom en och samma rum och sedan står på angett plats
@@ -68,7 +74,7 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
     rl.drawText("Morsecode Minigame", 64, 8, 32, rl.Color.blue);
     try inputSystem(&sim.world, timeline.latest());
-    // try wordSystem(&sim.world);
+    try wordSystem(&sim.world);
     animator.update(&sim.world);
 }
 
@@ -81,8 +87,6 @@ fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
             if (state.button_a == .Pressed) {
                 // TODO: Should it be is_pressed() or just .Pressed?
                 keystrokes[plr.id][typed_len[plr.id]] = 1;
-                typed_len[plr.id] += 1;
-                if (typed_len[plr.id] > morsecode_maxlen) typed_len[plr.id] = 0; // TODO: remove this when wordSystem added
             } else if (state.button_b == .Pressed) {
                 keystrokes[plr.id][typed_len[plr.id]] = 2;
                 typed_len[plr.id] += 1;
@@ -96,7 +100,7 @@ fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
 fn code_to_char(id: usize) u8 {
     //
     // _ = a;
-    var a = &keystrokes[id];
+    var a = keystrokes[id];
     var res: u8 = 0;
     if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 0, 0, 0 })) {
         res = @intCast('A' - 'A' + 1);
@@ -112,10 +116,15 @@ fn wordSystem(world: *ecs.world.World) !void {
         const character: u8 = code_to_char(id);
         if (character != 0) {
             typed_len[id] = 0;
+            current_letter[id] += 1;
             keystrokes[id] = .{ 0, 0, 0, 0, 0 };
             // TODO: check for all keystrokes arrays: equals a morse character ?
             // in which case:
             // go to next word if possible, else give player score
+            if (current_letter[id] == game_string_len) {
+                // player has finished
+                // TODO: add score to metadata, based on time taken
+            }
         }
     }
 }
