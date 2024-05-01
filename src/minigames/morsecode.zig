@@ -37,7 +37,7 @@ fn set_string_info() void {
 }
 
 pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
-    sim.meta.minigame_ticks_per_update = 8;
+    sim.meta.minigame_ticks_per_update = 16;
     set_string_info();
     // _ = sim;
     // jag tänker att det ska vara ett klassrum, och alla spelare är elever
@@ -54,7 +54,7 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
 
     for (0..constants.max_player_count) |id| {
         _ = try sim.world.spawnWith(.{
-            ecs.component.Plr{ .id = @intCast(id) },
+            // ecs.component.Plr{ .id = @intCast(id) }, // only use this to name the players
             ecs.component.Txt{
                 .string = "Player x",
                 .font_size = 10,
@@ -69,6 +69,16 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
             },
             ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
             // animations för spelarna?
+        });
+        var button_position: @Vector(2, i32) = assigned_pos(id);
+        // button_position[0] += @intCast(-10);
+        button_position[1] += @intCast(-17);
+
+        _ = try sim.world.spawnWith(.{
+            ecs.component.Plr{ .id = @intCast(id) },
+            ecs.component.Pos{ .pos = .{ button_position[0], button_position[1] } },
+            ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis_testcases.png") },
+            ecs.component.Ctr{ .id = @intCast(id), .counter = @intCast(id + 1) },
         });
     }
 }
@@ -87,27 +97,35 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
 }
 
 fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
-    var query = world.query(&.{ecs.component.Plr}, &.{});
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Tex }, &.{});
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
         const state = inputs[plr.id];
+        var tex = query.get(ecs.component.Tex) catch unreachable;
         if (state.is_connected()) {
+            std.debug.print("typed len: {}, id: {}\n", .{ typed_len[plr.id], plr.id });
             if (state.button_a == .Pressed) {
                 // TODO: Should it be is_pressed() or just .Pressed?
                 keystrokes[plr.id][typed_len[plr.id]] = 1;
+                typed_len[plr.id] += 1;
+                tex.u = 1;
             } else if (state.button_b == .Pressed) {
                 keystrokes[plr.id][typed_len[plr.id]] = 2;
                 typed_len[plr.id] += 1;
-                if (typed_len[plr.id] > morsecode_maxlen) typed_len[plr.id] = 0; // TODO: remove this when wordSystem added
+                tex.u = 2;
+                if (typed_len[plr.id] == morsecode_maxlen) typed_len[plr.id] = 0; // TODO: remove this when wordSystem added
             } else if (state.dpad == .East) {
                 // TODO POTENTIAL: for now this should works as an end of cha
                 // however, maybe we want to do it another way
                 keystrokes[plr.id][typed_len[plr.id]] = 3;
                 typed_len[plr.id] += 1;
+                tex.u = 0;
             } else if (state.dpad == .West) {
+                std.debug.print("tried to backspace", .{});
                 // should work as a backspace / undo
-                typed_len[plr.id] -= 1;
+                typed_len[plr.id] = @max(0, typed_len[plr.id] - 1);
                 keystrokes[plr.id][typed_len[plr.id]] = 0;
+                tex.u = 0;
             }
         }
     }
@@ -132,6 +150,7 @@ fn wordSystem(world: *ecs.world.World) !void {
     for (0..constants.max_player_count) |id| {
         const character: u8 = code_to_char(id);
         if (character != 0) {
+            // TODO: go into this forloop iff the end of character button has been typed
             typed_len[id] = 0;
             current_letter[id] += 1;
             keystrokes[id] = .{ 0, 0, 0, 0, 0 };
