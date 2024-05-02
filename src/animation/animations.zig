@@ -15,6 +15,9 @@ pub const Animation = enum {
     SmashJump,
     SmashFall,
     SmashLand,
+    SmashCrouch,
+    SmashHit,
+    SmashJumpSmoke,
 };
 
 pub fn data(animation: Animation) []const Frame {
@@ -29,6 +32,9 @@ pub fn data(animation: Animation) []const Frame {
         .SmashJump => &frames_smash_jump,
         .SmashFall => &frames_smash_fall,
         .SmashLand => &frames_smash_land,
+        .SmashCrouch => &frames_smash_crouch,
+        .SmashHit => &frames_smash_hit,
+        .SmashJumpSmoke => &frames_smash_jump_smoke,
     };
 }
 
@@ -97,6 +103,24 @@ const frames_smash_land: [2]Frame = .{
     Frame.init(12, 8),
 };
 
+const frames_smash_jump_smoke: [4]Frame = .{
+    Frame.init(0, 0),
+    Frame.init(2, 0),
+    Frame.init(4, 0),
+    Frame.init(6, 0),
+};
+
+const frames_smash_crouch: [4]Frame = .{
+    Frame.init(0, 6),
+    Frame.init(2, 6),
+    Frame.init(4, 6),
+    Frame.init(6, 6),
+};
+
+const frames_smash_hit: [1]Frame = .{
+    Frame.init(8, 9),
+};
+
 pub const Frame = struct {
     u: u32,
     v: u32,
@@ -105,7 +129,3 @@ pub const Frame = struct {
         return Frame{ .u = u, .v = v };
     }
 };
-
-// 0  1  2  3  4
-// 5  6
-// 10 11

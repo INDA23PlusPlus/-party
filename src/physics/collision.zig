@@ -14,6 +14,7 @@ pub const Layer = packed struct {
 
     base: bool = true,
     player: bool = false,
+    platform: bool = false,
     damaging: bool = false,
     killing: bool = false,
     pushing: bool = false,
@@ -50,18 +51,18 @@ pub const CollisionQueue = struct {
     pub const Key = packed struct { a: ecs.entity.Entity, b: ecs.entity.Entity };
     const Map = std.AutoArrayHashMapUnmanaged(Key, void);
 
-    collisions: Map,
+    data: Map,
 
     pub fn init(arena: std.mem.Allocator) !Self {
-        const collisions = try Map.init(arena, &.{}, &.{});
+        const data = try Map.init(arena, &.{}, &.{});
 
         return Self{
-            .collisions = collisions,
+            .data = data,
         };
     }
 
     pub fn put(self: *Self, arena: std.mem.Allocator, pair: Key) !void {
-        try self.collisions.put(arena, pair, {});
+        try self.data.put(arena, pair, {});
     }
 };
 

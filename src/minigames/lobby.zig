@@ -57,7 +57,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
                 },
                 ecs.component.Mov{},
                 ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
-                ecs.component.Ctr{ .id = @truncate(index), .counter = 0 },
+                ecs.component.Ctr{ .id = @truncate(index), .count = 0 },
                 ecs.component.Txt{ .string = ready_strings[0], .color = 0x666666FF, .subpos = .{ 0, -10 }, .font_size = 12 },
             });
         } else if (change == .remove) {
@@ -79,7 +79,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
     for (player_ids) |player| {
         if (player) |p| {
             const ctr = try sim.world.inspect(p, ecs.component.Ctr);
-            if (ctr.counter == 1) ready_count += 1;
+            if (ctr.count == 1) ready_count += 1;
         }
     }
 
@@ -120,11 +120,11 @@ fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
 
         if (state.button_b == .Pressed) {
             txt.string = ready_strings[1];
-            ctr.counter = 1;
+            ctr.count = 1;
         }
         if (state.button_a == .Pressed) {
             txt.string = ready_strings[0];
-            ctr.counter = 0;
+            ctr.count = 0;
         }
     }
 }

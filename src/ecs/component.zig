@@ -28,8 +28,14 @@ pub const components: []const type = &.{
     Anm,
     Lnk,
     Ctr,
+    Tmr,
+    // Tags
+    Dbg,
     Air,
     Jmp,
+    Atk,
+    Hit,
+    Blk,
 };
 
 /// Entities with this component are positionable.
@@ -108,17 +114,30 @@ pub const Anm = struct {
 };
 
 /// Entities with this component can count.
-/// To model a timer that calls a function after a certain number of ticks, set the id to correspond to a specific function.
-/// Then, create a ticker system that updates the counter and calls the correct function if the id matches and if the counter is high enough.
-/// Resetting the counter should then result in a looping timer.
 pub const Ctr = struct {
     id: u32 = 0,
-    counter: u32 = 0,
+    count: u32 = 0,
 };
 
-/// Entities with this component are airborne.
+/// Entities with this component can time.
+pub const Tmr = struct {
+    ticks: u32 = 0,
+};
+
+/// Entities with this component can exert unique behaviour for debugging purposes.
+pub const Dbg = struct {};
+
+/// Entities with this component are in an airborne state.
 pub const Air = struct {};
 
-/// Entities with this component are jumping.
-/// Should be removed in favor of input buffering.
+/// Entities with this component are in a jumping state.
 pub const Jmp = struct {};
+
+/// Entities with this component are in an attacking state.
+pub const Atk = struct {};
+
+/// Entities with this component are in a hit state.
+pub const Hit = struct {};
+
+/// Entities with this component are in a blocking state.
+pub const Blk = struct {};

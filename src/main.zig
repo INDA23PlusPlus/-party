@@ -69,7 +69,7 @@ const LaunchOptions = struct {
 pub fn main() !void {
     // const launch_options = try LaunchOptions.parse();
 
-    var window = win.Window.init(960, 540);
+    var window = win.Window.init(960, 540); // 960, 540
     defer window.deinit();
 
     var static_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -90,7 +90,7 @@ pub fn main() !void {
     var input_frames_sent: u64 = 0;
 
     var controllers = Controller.DefaultControllers;
-    controllers[0].input_index = 0; // TODO: This is temporary.
+    controllers[2].input_index = 0; // TODO: This is temporary.
     controllers[1].input_index = 1;
 
     var main_thread_queue = NetworkingQueue{};

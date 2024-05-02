@@ -285,6 +285,7 @@ fn spawnPlayer(world: *ecs.world.World, id: u32) !void {
             .mask = collision.Layer{ .base = false, .player = false, .pushing = true },
         },
         ecs.component.Tex{
+            .subpos = .{ 0, -3 },
             .texture_hash = AssetManager.pathHash("assets/kattis.png"),
             .tint = constants.player_colors[id],
         },

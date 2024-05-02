@@ -10,6 +10,7 @@ const lobby = @import("lobby.zig");
 const gamewheel = @import("gamewheel.zig");
 const shuffle = @import("shuffle.zig");
 const example = @import("example.zig");
+const scoreboard = @import("scoreboard.zig");
 
 /// Create a list of Minigames.
 pub const list = [_]Minigame{
@@ -28,6 +29,12 @@ pub const list = [_]Minigame{
         .update = example.update,
         .init = example.init,
     },
+    .{
+        .name = "scoreboard",
+        .update = scoreboard.update,
+        .init = scoreboard.init,
+    },
+
     .{
         .name = "gamewheel",
         .update = gamewheel.update,
