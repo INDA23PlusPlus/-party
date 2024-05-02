@@ -5,7 +5,7 @@ const collision = @import("collision.zig");
 /// Moves entities.
 /// Entities with Pos and Mov components, and lacking a Col component, are moved without collision detection.
 /// Entities with Pos, Mov, and Col components are moved so they never overlap; if a collision occurs, it is added to the collision queue.
-/// Beware, collidable entities occypying the same space are unable to move in most cases.
+/// Beware, collidable entities with intersecting layers, occypying the same space are unable to move.
 pub fn update(world: *ecs.world.World, collisions: *collision.CollisionQueue, allocator: std.mem.Allocator) !void {
     try updateVelocity(world);
     try updateIncorporeal(world);

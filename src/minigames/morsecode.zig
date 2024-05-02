@@ -78,7 +78,7 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
             ecs.component.Plr{ .id = @intCast(id) },
             ecs.component.Pos{ .pos = .{ button_position[0], button_position[1] } },
             ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis_testcases.png") },
-            ecs.component.Ctr{ .id = @intCast(id), .counter = @intCast(id + 1) },
+            ecs.component.Ctr{ .id = @intCast(id), .count = @intCast(id + 1) },
         });
     }
 }

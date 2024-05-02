@@ -72,4 +72,33 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
 
         rl.drawText(text_c.string, dst_x, dst_y, @intFromFloat(font_size_scaled), color);
     }
+
+    var player_query = world.query(&.{ ecs.component.Plr, ecs.component.Pos }, &.{});
+
+    while (player_query.next()) |_| {}
+
+    var debug_query = world.query(&.{ ecs.component.Pos, ecs.component.Col, ecs.component.Dbg }, &.{});
+
+    while (debug_query.next()) |entity| {
+        const pos_component = debug_query.get(ecs.component.Pos) catch unreachable;
+        const col_component = debug_query.get(ecs.component.Col) catch unreachable;
+
+        const x = @as(f32, @floatFromInt(pos_component.pos[0] * window.width)) / constants.world_width;
+        const y = @as(f32, @floatFromInt(pos_component.pos[1] * window.height)) / constants.world_height;
+        const w = @as(f32, @floatFromInt(col_component.dim[1] * window.width)) / constants.world_width;
+        const h = @as(f32, @floatFromInt(col_component.dim[1] * window.height)) / constants.world_height;
+
+        const rec = rl.Rectangle.init(x, y, w, h);
+        var color = undefined;
+
+        if (world.checkSignature(entity, &.{ecs.component.Plr}, &.{})) {
+            color = rl.Color.green.alpha(0.5);
+        } else if (world.checkSignature(entity, &.{ecs.component.Atk}, &.{})) {
+            color = rl.Color.red.alpha(0.5);
+        } else {
+            color = rl.Color.blue.alpha(0.5);
+        }
+
+        rl.drawRectangleRec(rec, color);
+    }
 }

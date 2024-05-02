@@ -25,7 +25,7 @@ const colors: [8]rl.Color = .{
 
 pub fn init(sim: *simulation.Simulation, _: input.Timeline) simulation.SimulationError!void {
     _ = try sim.world.spawnWith(.{
-        ecs.component.Ctr{ .id = 0, .counter = 180 }, // 3 second countdown
+        ecs.component.Ctr{ .id = 0, .count = 180 }, // 3 second countdown
         ecs.component.Pos{ .pos = .{ 256, 144 } },
         ecs.component.Txt{ .string = "Shuffling...", .color = 0x000000FF, .font_size = 54 },
     });
@@ -35,9 +35,9 @@ pub fn update(sim: *simulation.Simulation, _: input.Timeline, _: Invariables) si
     var counters = sim.world.query(&.{ecs.component.Ctr}, &.{});
     while (counters.next()) |_| {
         var ticks_left = counters.get(ecs.component.Ctr) catch unreachable;
-        ticks_left.counter -= 1;
+        ticks_left.count -= 1;
 
-        if (ticks_left.counter == 0) {
+        if (ticks_left.count == 0) {
             var rng = std.rand.DefaultPrng.init(sim.meta.seed);
             sim.meta.minigame_id = @mod(rng.next(), game_list.list.len - 3) + 3;
         }

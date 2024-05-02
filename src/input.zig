@@ -8,9 +8,14 @@ pub const ButtonState = enum(u2) {
     Pressed, // TODO: Fix the naming convention to follow Zig 0.12 (lowercase)...
     Held,
     Released,
-    pub fn is_down(self: ButtonState) bool {
+    NotHeld,
+    pub inline fn is_down(self: ButtonState) bool {
         // Currently only used in one place...
         return self == .Pressed or self == .Held;
+    }
+    pub inline fn is_up(self: ButtonState) bool {
+        // Currently only used in one place...
+        return self == .Released or self == .NotHeld;
     }
 };
 pub const PlayerInputState = packed struct {
@@ -67,6 +72,7 @@ pub const Timeline = struct {
         }
         return resulting;
     }
+
     pub fn vertical_pressed(time: Timeline, player: usize) i32 {
         std.debug.assert(player < constants.max_player_count);
         if (time.buttons.len < 2) {
@@ -79,5 +85,29 @@ pub const Timeline = struct {
             return 0;
         }
         return resulting;
+    }
+
+    /// Returns the tick of the last time `button` was in `state`. Only queries `search_depth` ticks.
+    pub fn buttonStateTick(time: Timeline, player: usize, comptime button: enum { a, b }, comptime state: ButtonState) ?usize {
+        std.debug.assert(player < constants.max_player_count);
+
+        const search_depth = 120;
+
+        var i: usize = time.buttons.len;
+        var j: usize = 0;
+
+        while (i > 0 or j < search_depth) {
+            i -= 1;
+            j += 1;
+
+            const s = switch (button) {
+                .a => time.buttons[i][player].button_a,
+                .b => time.buttons[i][player].button_b,
+            };
+
+            if (s == state) return i;
+        }
+
+        return null;
     }
 };

@@ -225,7 +225,7 @@ fn trailSystem(sim: *simulation.Simulation) !void {
         const ctr = despawn_query.get(ecs.component.Ctr) catch unreachable;
         const Tex = despawn_query.get(ecs.component.Tex) catch unreachable;
 
-        if (ctr.counter > 10) sim.world.kill(entity) else ctr.counter += 1;
+        if (ctr.count > 10) sim.world.kill(entity) else ctr.count += 1;
 
         Tex.tint.a -= 15;
     }

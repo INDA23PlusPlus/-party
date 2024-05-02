@@ -40,6 +40,7 @@ const paths = [_][:0]const u8{
     "assets/smash_background_1.png",
     "assets/smash_background_2.png",
     "assets/smash_platform.png",
+    "assets/smash_jump_smoke.png",
     "assets/tron_skull.png",
     "assets/smash_cat.png",
     "assets/error.png",
