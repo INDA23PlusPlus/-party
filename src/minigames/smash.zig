@@ -217,41 +217,66 @@ fn actionSystem(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
         const state = timeline.latest()[plr.id];
         if (state.is_connected()) {
-            if (state.dpad == .West) {
-                if (state.dpad == .North) {
-                    dir.facing = .Northwest;
-                } else if (state.dpad == .South) {
-                    dir.facing = .Southwest;
-                } else {
-                    dir.facing = .West;
-                }
+            dir.facing = switch (state.dpad) {
+                .None => .None,
+                .East => .East,
+                .North => .North,
+                .West => .West,
+                .South => .South,
+                .NorthEast => .Northeast,
+                .NorthWest => .Northwest,
+                .SouthEast => .Southeast,
+                .SouthWest => .Southwest,
+                else => .None,
+            };
 
-                if (mov.velocity.vector[0] < 0) {
-                    tex.flip_horizontal = true;
-                    tex.subpos = left_texture_offset;
-                }
-            } else if (state.dpad == .East) {
-                if (state.dpad == .North) {
-                    dir.facing = .Northeast;
-                } else if (state.dpad == .South) {
-                    dir.facing = .Southeast;
-                } else {
-                    dir.facing = .East;
-                }
-
-                if (mov.velocity.vector[0] > 0) {
+            switch (state.dpad) {
+                .East, .NorthEast, .SouthEast => if (mov.velocity.vector[0] > 0) {
                     tex.flip_horizontal = false;
                     tex.subpos = right_texture_offset;
-                }
-            } else {
-                if (state.dpad == .North) {
-                    dir.facing = .North;
-                } else if (state.dpad == .South) {
-                    dir.facing = .South;
-                } else {
-                    dir.facing = .None;
-                }
+                },
+                .West, .NorthWest, .SouthWest => if (mov.velocity.vector[0] < 0) {
+                    tex.flip_horizontal = true;
+                    tex.subpos = left_texture_offset;
+                },
+                else => {},
             }
+
+            // if (state.dpad == .West) {
+            //     if (state.dpad == .North) {
+            //         dir.facing = .Northwest;
+            //     } else if (state.dpad == .South) {
+            //         dir.facing = .Southwest;
+            //     } else {
+            //         dir.facing = .West;
+            //     }
+
+            //     if (mov.velocity.vector[0] < 0) {
+            //         tex.flip_horizontal = true;
+            //         tex.subpos = left_texture_offset;
+            //     }
+            // } else if (state.dpad == .East) {
+            //     if (state.dpad == .North) {
+            //         dir.facing = .Northeast;
+            //     } else if (state.dpad == .South) {
+            //         dir.facing = .Southeast;
+            //     } else {
+            //         dir.facing = .East;
+            //     }
+
+            //     if (mov.velocity.vector[0] > 0) {
+            //         tex.flip_horizontal = false;
+            //         tex.subpos = right_texture_offset;
+            //     }
+            // } else {
+            //     if (state.dpad == .North) {
+            //         dir.facing = .North;
+            //     } else if (state.dpad == .South) {
+            //         dir.facing = .South;
+            //     } else {
+            //         dir.facing = .None;
+            //     }
+            // }
 
             const grounded = sim.world.checkSignature(entity, &.{}, &.{ecs.component.Air});
             const not_jumping = sim.world.checkSignature(entity, &.{}, &.{ecs.component.Jmp});

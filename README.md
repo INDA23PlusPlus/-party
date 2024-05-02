@@ -22,3 +22,9 @@ To run as a server, use run-server:
 zig build run-server
 ```
 can also use the `-Dminigame=<name>` flag to run a specific minigame as a server.
+
+# Credits
+GUI Assets:
+  * License Link: https://creativecommons.org/licenses/by/4.0/
+  * Licensor Owner: Crusenho Agus Hennihuno
+  * Licensor Store Link: https://crusenho.itch.io

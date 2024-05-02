@@ -17,7 +17,7 @@ pub const ButtonState = enum(u2) {
         return self == .Released or self == .NotHeld;
     }
 };
-pub const PlayerInputState = packed struct {
+pub const PlayerInputState = packed struct(u8) {
     dpad: InputDirection = .Disconnected,
     button_a: ButtonState = .NotHeld,
     button_b: ButtonState = .NotHeld,
@@ -58,6 +58,7 @@ pub const Timeline = struct {
         }
         return self.buttons[self.buttons.len - 1];
     }
+
     pub fn horizontal_pressed(time: Timeline, player: usize) i32 {
         std.debug.assert(player < constants.max_player_count);
         if (time.buttons.len < 2) {
