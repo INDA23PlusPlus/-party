@@ -56,7 +56,7 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
 
     for (0..constants.max_player_count) |id| {
         // std.debug.print("{any}", .{buf});
-        std.debug.print("{any}", .{id});
+        //std.debug.print("{any}", .{id});
         const temp: []const u8 = std.fmt.bufPrint(&buf, "Player {}", .{id}) catch @panic("cock");
         const temp2 = buf[0..temp.len :0];
         _ = try sim.world.spawnWith(.{
@@ -75,10 +75,8 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
                 .tint = constants.player_colors[id],
             },
             ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
-            // animations för spelarna?
         });
         var button_position: @Vector(2, i32) = assigned_pos(id);
-        // button_position[0] += @intCast(-10);
         button_position[1] += @intCast(-17);
 
         _ = try sim.world.spawnWith(.{
@@ -93,8 +91,6 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
     rl.drawText("Morsecode Minigame", 300, 8, 32, rl.Color.blue);
     // rl.drawText(game_string, 300, 50, 32, rl.Color.blue);
-    // try inputSystem(&sim.world, timeline.latest());
-    std.debug.print("Current placement: {any}\n", .{current_placement});
     try inputSystem(&sim.world, timeline);
     try wordSystem(&sim.world);
     animator.update(&sim.world);
@@ -108,16 +104,13 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
 
 fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
     const inputs: input.AllPlayerButtons = timeline.latest();
-    std.debug.print("{any}\n", .{keystrokes[0]});
-    std.debug.print("{any}\n", .{keystrokes[1]});
     var query = world.query(&.{ ecs.component.Plr, ecs.component.Tex }, &.{});
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
         const state = inputs[plr.id];
         var tex = query.get(ecs.component.Tex) catch unreachable;
-        // std.debug.print("{any}\n", .{state});
+
         if (state.is_connected()) {
-            // std.debug.print("typed len: {}, id: {}\n", .{ typed_len[plr.id], plr.id });
             if (state.button_a.is_down()) {
                 keystrokes[plr.id][typed_len[plr.id]] = 1;
                 typed_len[plr.id] += 1;
@@ -126,14 +119,13 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
                 keystrokes[plr.id][typed_len[plr.id]] = 2;
                 typed_len[plr.id] += 1;
                 tex.u = 2;
-                if (typed_len[plr.id] == morsecode_maxlen) typed_len[plr.id] = 0; // TODO: remove this when wordSystem added
             } else if (timeline.vertical_pressed(plr.id) != 0) {
                 keystrokes[plr.id][typed_len[plr.id]] = 3;
                 typed_len[plr.id] += 1;
                 tex.u = 0;
-            } else if (timeline.vertical_pressed(plr.id) != 0) {
+            } else if (timeline.horizontal_pressed(plr.id) != 0) {
                 // should work as a backspace / undo
-                typed_len[plr.id] = @max(0, typed_len[plr.id] - 1);
+                typed_len[plr.id] = @max(0, @as(i8, @intCast(typed_len[plr.id])) - 1);
                 keystrokes[plr.id][typed_len[plr.id]] = 0;
                 tex.u = 0;
             }
@@ -141,36 +133,91 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
     }
 }
 
-fn code_to_char(id: usize) u8 {
-    //
-    // _ = a;
-    var a = keystrokes[id];
-    var res: u8 = 0;
-    if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 3, 0, 0, 0 })) {
-        res = @intCast('A' - 'A' + 1);
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 1, 1, 3, 0 })) {
-        res = @intCast('B' - 'A' + 1);
-    }
-    // TODO finish the rest of this conversion
-    return res;
-}
-
 fn wordSystem(world: *ecs.world.World) !void {
     _ = world;
     for (0..constants.max_player_count) |id| {
-        const character: u8 = code_to_char(id);
-        if (character != 0) {
-            // TODO: go into this forloop iff the end of character button has been typed
-            typed_len[id] = 0;
-            current_letter[id] += 1;
-            keystrokes[id] = .{ 0, 0, 0, 0, 0, 0 };
-            // TODO: check that the typed letter is the correct one, not just any letter
-            if (current_letter[id] == game_string_len) {
-                // There is a small problem with this, lower ids get prioritized in this check
-                player_finish_order[current_placement] = @intCast(id);
-                current_placement += 1;
-                // player has finished
+        if (typed_len[id] == 0) continue;
+
+        if (keystrokes[id][typed_len[id] - 1] == 3) {
+            const character: u8 = code_to_char(id);
+            std.debug.print("{}", .{character});
+            if (character != 0) {
+                typed_len[id] = 0;
+                current_letter[id] += 1;
+                keystrokes[id] = .{ 0, 0, 0, 0, 0, 0 };
+                // TODO: check that the typed letter is the correct one, not just any letter
+                if (current_letter[id] == game_string_len) {
+                    // There is a small problem with this, lower ids get prioritized in this check
+                    player_finish_order[current_placement] = @intCast(id);
+                    current_placement += 1;
+                    // player has finished
+                }
+            } else {
+                typed_len[id] = 0;
+                keystrokes[id] = .{ 0, 0, 0, 0, 0, 0 };
             }
+        } else if (typed_len[id] == morsecode_maxlen) {
+            keystrokes[id] = .{ 0, 0, 0, 0, 0, 0 };
+            typed_len[id] = 0;
         }
     }
+}
+
+fn code_to_char(id: usize) u8 {
+    var a = keystrokes[id];
+    var res: u8 = 0;
+    if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 3, 0, 0, 0 })) {
+        res = @intCast('A' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 1, 1, 3, 0 })) {
+        res = @intCast('B' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 2, 1, 3, 0 })) {
+        res = @intCast('C' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 1, 3, 0, 0 })) {
+        res = @intCast('D' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 3, 0, 0, 0, 0 })) {
+        res = @intCast('E' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 2, 1, 3, 0 })) {
+        res = @intCast('F' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 1, 3, 0, 0 })) {
+        res = @intCast('G' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 1, 1, 3, 0 })) {
+        res = @intCast('H' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 3, 0, 0, 0 })) {
+        res = @intCast('I' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 2, 2, 3, 0 })) {
+        res = @intCast('J' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 2, 3, 0, 0 })) {
+        res = @intCast('K' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 1, 1, 3, 0 })) {
+        res = @intCast('L' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 3, 0, 0, 0 })) {
+        res = @intCast('M' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 3, 0, 0, 0 })) {
+        res = @intCast('N' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 2, 3, 0, 0 })) {
+        res = @intCast('O' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 2, 1, 3, 0 })) {
+        res = @intCast('P' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 1, 2, 3, 0 })) {
+        res = @intCast('Q' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 1, 3, 0, 0 })) {
+        res = @intCast('R' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 1, 3, 0, 0 })) {
+        res = @intCast('S' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 3, 0, 0, 0, 0 })) {
+        res = @intCast('T' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 2, 3, 0, 0 })) {
+        res = @intCast('U' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 1, 2, 3, 0 })) {
+        res = @intCast('V' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 2, 3, 0, 0 })) {
+        res = @intCast('W' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 1, 2, 3, 0 })) {
+        res = @intCast('X' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 2, 2, 3, 0 })) {
+        res = @intCast('Y' - 'A');
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 1, 1, 3, 0 })) {
+        res = @intCast('Z' - 'A');
+    }
+    return res;
 }
