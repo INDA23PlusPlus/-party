@@ -90,7 +90,7 @@ pub fn main() !void {
     var input_frames_sent: u64 = 0;
 
     var controllers = Controller.DefaultControllers;
-    controllers[2].input_index = 0; // TODO: This is temporary.
+    controllers[0].input_index = 0;
     controllers[1].input_index = 1;
 
     var main_thread_queue = NetworkingQueue{};
@@ -122,7 +122,7 @@ pub fn main() !void {
         // Add the inputs.
         // TODO: Write this code.
 
-        for(input_frames_sent .. input_consolidation.buttons.items.len) |tick_number| {
+        for (input_frames_sent..input_consolidation.buttons.items.len) |tick_number| {
             const all_buttons = input_consolidation.buttons.items[tick_number];
             const local = input_consolidation.local.items[tick_number];
             for (all_buttons, 0..) |buttons, i| {

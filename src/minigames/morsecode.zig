@@ -108,20 +108,21 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
 
 fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
     const inputs: input.AllPlayerButtons = timeline.latest();
-    // std.debug.print("{any}\n", .{keystrokes[0]});
-    // std.debug.print("{any}\n", .{keystrokes[1]});
+    std.debug.print("{any}\n", .{keystrokes[0]});
+    std.debug.print("{any}\n", .{keystrokes[1]});
     var query = world.query(&.{ ecs.component.Plr, ecs.component.Tex }, &.{});
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
         const state = inputs[plr.id];
         var tex = query.get(ecs.component.Tex) catch unreachable;
+        // std.debug.print("{any}\n", .{state});
         if (state.is_connected()) {
             // std.debug.print("typed len: {}, id: {}\n", .{ typed_len[plr.id], plr.id });
-            if (state.button_a == .Pressed) {
+            if (state.button_a.is_down()) {
                 keystrokes[plr.id][typed_len[plr.id]] = 1;
                 typed_len[plr.id] += 1;
                 tex.u = 1;
-            } else if (state.button_b == .Pressed) {
+            } else if (state.button_b.is_down()) {
                 keystrokes[plr.id][typed_len[plr.id]] = 2;
                 typed_len[plr.id] += 1;
                 tex.u = 2;
