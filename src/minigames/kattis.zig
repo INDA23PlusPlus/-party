@@ -125,3 +125,31 @@ fn updateTextures(world: *ecs.world.World, timeline: input.Timeline) void {
         }
     }
 }
+
+fn updateRankings(sim: *simulation.Simulation, timeline: input.Timeline) void {
+    var player_scores = [_]u32{0} ** constants.max_player_count;
+    const inputs = timeline.latest();
+
+    var query = sim.world.query(&.{ecs.component.Plr, ecs.component.Ctr}, &.{});
+
+    while (query.next()) |_| {
+        const plr = query.get(ecs.component.Plr) catch unreachable;
+        const ctr = query.get(ecs.component.Ctr) catch unreachable;
+
+        player_scores[plr.id] = (@as(u32, 8) << @truncate(ctr.counter)) + plr.id;
+    }
+
+    std.mem.sort(u32, &player_scores, {}, std.sort.desc(u32));
+
+    var current_rank = 0;
+    for (0..constants.max_player_count) |i| {
+
+        if (!inputs[i].is_connected()) continue;
+
+        if (i != 0 and player_scores[i] != player_scores[i - 1]) {
+            current_rank += 1;
+        }
+
+        sim.meta.score[player_scores[i] % 8] += 8 - current_rank;
+    }
+}
