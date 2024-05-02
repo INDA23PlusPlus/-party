@@ -108,8 +108,8 @@ pub fn checkCollisions(
             continue;
         }
 
-        const a = @intFromBool(pos1.pos + col1.dim + col1.off + velocity > pos2.pos + col2.off);
-        const b = @intFromBool(pos2.pos + col2.dim + col2.off > pos1.pos + col1.off + velocity);
+        const a = @intFromBool(pos1.pos + col1.dim + velocity > pos2.pos);
+        const b = @intFromBool(pos2.pos + col2.dim > pos1.pos + velocity);
         const c = (a & b) != [_]u1{ 0, 0 };
         const d = @reduce(.And, c);
 
@@ -121,16 +121,16 @@ pub fn checkCollisions(
             });
 
             const x_velocity = velocity & [_]i32{ ~@as(i32, 0), 0 };
-            const x_a = @intFromBool(pos1.pos + col1.dim + col1.off + x_velocity > pos2.pos + col2.off);
-            const x_b = @intFromBool(pos2.pos + col2.dim + col2.off > pos1.pos + col1.off + x_velocity);
+            const x_a = @intFromBool(pos1.pos + col1.dim + x_velocity > pos2.pos);
+            const x_b = @intFromBool(pos2.pos + col2.dim > pos1.pos + x_velocity);
             const x_c = (x_a & x_b) != [_]u1{ 0, 0 };
             const x_d = @reduce(.And, x_c);
 
             if (x_d) collided.x = true;
 
             const y_velocity = velocity & [_]i32{ 0, ~@as(i32, 0) };
-            const y_a = @intFromBool(pos1.pos + col1.dim + col1.off + y_velocity > pos2.pos + col2.off);
-            const y_b = @intFromBool(pos2.pos + col2.dim + col2.off > pos1.pos + col1.off + y_velocity);
+            const y_a = @intFromBool(pos1.pos + col1.dim + y_velocity > pos2.pos);
+            const y_b = @intFromBool(pos2.pos + col2.dim > pos1.pos + y_velocity);
             const y_c = (y_a & y_b) != [_]u1{ 0, 0 };
             const y_d = @reduce(.And, y_c);
 
@@ -147,8 +147,8 @@ pub inline fn intersects(
     pos2: *ecs.component.Pos,
     col2: *ecs.component.Col,
 ) bool {
-    const a = @intFromBool(pos1.pos + col1.dim + col1.off > pos2.pos + col2.off);
-    const b = @intFromBool(pos2.pos + col2.dim + col2.off > pos1.pos + col1.off);
+    const a = @intFromBool(pos1.pos + col1.dim > pos2.pos);
+    const b = @intFromBool(pos2.pos + col2.dim > pos1.pos);
     const c = (a & b) != [_]u1{ 0, 0 };
 
     return @reduce(.And, c);
@@ -161,8 +161,8 @@ pub inline fn intersectsAt(
     col2: *ecs.component.Col,
     offset: @Vector(2, i32),
 ) bool {
-    const a = @intFromBool(pos1.pos + col1.dim + col1.off + offset > pos2.pos + col2.off);
-    const b = @intFromBool(pos2.pos + col2.dim + col2.off > pos1.pos + col1.off + offset);
+    const a = @intFromBool(pos1.pos + col1.dim + offset > pos2.pos);
+    const b = @intFromBool(pos2.pos + col2.dim > pos1.pos + offset);
     const c = (a & b) != [_]u1{ 0, 0 };
 
     return @reduce(.And, c);
