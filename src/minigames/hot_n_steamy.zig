@@ -38,18 +38,11 @@ const background_layers = [_][]const u8{
 
 const background_scroll = [_]i16{ -1, -2, -3 };
 
-const scrollable_uid = 0;
-const killable_uid = 1;
-
-// FIX: Find some other way to differentiate entities without the ugly Uid
-// TODO: Change obstacles and players to use the Bnd component for bounds checking
-
 fn spawnBackground(world: *ecs.world.World) !void {
     const n = @min(background_layers.len, background_scroll.len);
     for (0..n) |i| {
         for (0..2) |ix| {
             _ = try world.spawnWith(.{
-                ecs.component.Uid{ .uid = scrollable_uid },
                 ecs.component.Tex{
                     .texture_hash = AssetManager.pathHash(background_layers[i]),
                     .w = constants.world_width_tiles,
@@ -58,19 +51,6 @@ fn spawnBackground(world: *ecs.world.World) !void {
                 ecs.component.Pos{ .pos = .{ @intCast(constants.world_width * ix), 0 } },
                 ecs.component.Mov{
                     .velocity = Vec2.init(background_scroll[i], 0),
-                },
-                ecs.component.Bnd{
-                    .bounds = .{
-                        .left = 0,
-                        .right = constants.world_width,
-                        .top = 0,
-                        .bottom = constants.world_height,
-                    },
-                },
-                ecs.component.Col{
-                    .dim = .{ constants.world_width, constants.world_height },
-                    .layer = .{ .base = false },
-                    .mask = .{ .base = false },
                 },
             });
         }
@@ -122,16 +102,13 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
     }
 }
 
+/// Scroll background
 fn scrollSystem(world: *ecs.world.World) !void {
-    var query = world.query(&.{ ecs.component.Pos, ecs.component.Bnd, ecs.component.Col, ecs.component.Uid }, &.{});
+    var query = world.query(&.{ecs.component.Pos}, &.{ecs.component.Col});
     while (query.next()) |_| {
-        const uid = try query.get(ecs.component.Uid);
-        if (uid.uid != scrollable_uid) continue;
         const pos = try query.get(ecs.component.Pos);
-        const bnd = try query.get(ecs.component.Bnd);
-        const col = try query.get(ecs.component.Col);
-        if (pos.pos[0] + col.dim[0] + col.off[0] <= bnd.bounds.left + 4) { // +4 to hide visible seams
-            pos.pos[0] = bnd.bounds.right - col.off[0];
+        if (pos.pos[0] + constants.world_width <= 4) { // +4 to hide visible seams
+            pos.pos[0] = constants.world_width;
         }
     }
 }
@@ -142,12 +119,12 @@ fn collisionSystem(world: *ecs.world.World) !void {
         const pos = try query.get(ecs.component.Pos);
         const mov = try query.get(ecs.component.Mov);
         const col = try query.get(ecs.component.Col);
-        if (pos.pos[1] + col.off[1] < 0) {
+        if (pos.pos[1] < 0) {
             mov.velocity.vector[1] = 0;
-            pos.pos[1] = 0 - col.off[1];
-        } else if (pos.pos[1] + col.dim[1] + col.off[1] > constants.world_height) {
+            pos.pos[1] = 0;
+        } else if (pos.pos[1] + col.dim[1] > constants.world_height) {
             mov.velocity.vector[1] = 0;
-            pos.pos[1] = constants.world_height - col.dim[1] - col.off[1];
+            pos.pos[1] = constants.world_height - col.dim[1];
         }
     }
 }
@@ -157,10 +134,8 @@ fn pushSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
     while (query.next()) |_| {
         var pos = try query.get(ecs.component.Pos);
         const col = try query.get(ecs.component.Col);
-        var obst_query = world.query(&.{ ecs.component.Col, ecs.component.Pos, ecs.component.Mov, ecs.component.Uid }, &.{ecs.component.Plr});
+        var obst_query = world.query(&.{ ecs.component.Col, ecs.component.Pos, ecs.component.Mov }, &.{ecs.component.Plr});
         while (obst_query.next()) |_| {
-            const uid = try obst_query.get(ecs.component.Uid);
-            if (uid.uid == scrollable_uid) continue;
             const obst_pos = try obst_query.get(ecs.component.Pos);
             const obst_col = try obst_query.get(ecs.component.Col);
             const obst_mov = try obst_query.get(ecs.component.Mov);
@@ -178,7 +153,7 @@ fn jetpackSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void 
         const mov = try query.get(ecs.component.Mov);
         const state = inputs[plr.id];
         if (state.is_connected()) {
-            if (state.vertical() == 1) {
+            if (state.vertical() > 0) {
                 mov.velocity = mov.velocity.add(player_boost);
             }
         }
@@ -186,15 +161,12 @@ fn jetpackSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void 
 }
 
 fn deathSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
-    var query = world.query(&.{ ecs.component.Pos, ecs.component.Col, ecs.component.Uid }, &.{});
+    var query = world.query(&.{ ecs.component.Pos, ecs.component.Col }, &.{});
     while (query.next()) |entity| {
-        const uid = try query.get(ecs.component.Uid);
-        if (uid.uid != killable_uid) continue;
-
         const col = try query.get(ecs.component.Col);
         const pos = try query.get(ecs.component.Pos);
 
-        const right = pos.pos[0] + col.dim[0] + col.off[0];
+        const right = pos.pos[0] + col.dim[0];
         if (right < 0) {
             if (world.checkSignature(entity, &.{ecs.component.Plr}, &.{})) {
                 const plr = try world.inspect(entity, ecs.component.Plr);
@@ -219,7 +191,6 @@ fn spawnSystem(world: *ecs.world.World, ticks: u64) !void {
 
 fn spawnVerticalObstacleUpper(world: *ecs.world.World, length: u32) void {
     _ = world.spawnWith(.{
-        ecs.component.Uid{ .uid = killable_uid },
         ecs.component.Pos{ .pos = .{ constants.world_width, 0 } },
         ecs.component.Col{
             .dim = .{ 1 * constants.asset_resolution, constants.asset_resolution * @as(i32, @intCast(length)) },
@@ -232,13 +203,11 @@ fn spawnVerticalObstacleUpper(world: *ecs.world.World, length: u32) void {
             .w = 1,
             .h = length,
         },
-        ecs.component.Ctr{},
     }) catch unreachable;
 }
 
 fn spawnVerticalObstacleLower(world: *ecs.world.World, length: u32) void {
     _ = world.spawnWith(.{
-        ecs.component.Uid{ .uid = killable_uid },
         ecs.component.Pos{ .pos = .{ constants.world_width, constants.world_height - @as(i32, @intCast(length)) * constants.asset_resolution } },
         ecs.component.Col{
             .dim = .{ constants.asset_resolution, constants.asset_resolution * @as(i32, @intCast(length)) },
@@ -251,7 +220,6 @@ fn spawnVerticalObstacleLower(world: *ecs.world.World, length: u32) void {
             .w = 1,
             .h = length,
         },
-        ecs.component.Ctr{},
     }) catch unreachable;
 }
 
@@ -280,7 +248,6 @@ pub fn spawnRandomObstacle(world: *ecs.world.World) void {
 
 fn spawnHorizontalObstacle(world: *ecs.world.World) void {
     _ = world.spawnWith(.{
-        ecs.component.Uid{ .uid = killable_uid },
         ecs.component.Pos{
             .pos = .{
                 constants.world_width,
@@ -302,22 +269,18 @@ fn spawnHorizontalObstacle(world: *ecs.world.World) void {
             .layer = .{ .base = true, .pushing = true },
             .mask = .{ .base = false, .player = true },
         },
-        ecs.component.Ctr{},
     }) catch unreachable;
 }
 
 fn spawnPlayer(world: *ecs.world.World, id: u32) !void {
     _ = try world.spawnWith(.{
-        ecs.component.Uid{ .uid = killable_uid },
         ecs.component.Plr{ .id = @intCast(id) },
         ecs.component.Pos{ .pos = .{ std.Random.intRangeAtMost(rand, i32, 64, 112), @divTrunc(constants.world_height, 2) } },
-        // ecs.component.Pos{ .pos = .{ constants.world_width - 16, 0 } },
         ecs.component.Mov{
             .acceleration = player_gravity,
         },
         ecs.component.Col{
             .dim = .{ 12, 10 },
-            .off = .{ 0, 3 },
             .layer = collision.Layer{ .base = false, .player = true },
             .mask = collision.Layer{ .base = false, .player = false, .pushing = true },
         },
