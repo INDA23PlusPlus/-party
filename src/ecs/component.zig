@@ -30,8 +30,6 @@ pub const components: []const type = &.{
     Ctr,
     Air,
     Jmp,
-    Bnd,
-    Uid,
 };
 
 /// Entities with this component are positionable.
@@ -48,7 +46,6 @@ pub const Mov = struct {
 
 /// Entities with this component are collidable.
 pub const Col = struct {
-    off: @Vector(2, i32) = .{ 0, 0 }, // x, y
     dim: @Vector(2, i32) = .{ 0, 0 }, // w, h
     layer: Layer = Layer{}, // Determines what entities collide with this entity.
     mask: Layer = Layer{}, // Determines what entities this entity collides with.
@@ -125,19 +122,3 @@ pub const Air = struct {};
 /// Entities with this component are jumping.
 /// Should be removed in favor of input buffering.
 pub const Jmp = struct {};
-
-/// Entities with this component are bounded.
-/// Can be used to model box-like containers such as level bounds for players or wrapping bounds for scrolling backgrounds and text.
-pub const Bnd = struct {
-    bounds: struct { left: i32, right: i32, top: i32, bottom: i32 } = .{
-        .left = 0,
-        .right = 0,
-        .top = 0,
-        .bottom = 0,
-    },
-};
-
-/// Entities with this component have a unique identifier.
-pub const Uid = struct {
-    uid: u32 = 0,
-};
