@@ -60,6 +60,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
         const ctr = query.get(ecs.component.Ctr) catch unreachable;
         if (ctr.id == 100) {
             if (ctr.counter == 0) {
+                updateRankings(sim, timeline);
                 sim.meta.minigame_id = 3;
                 return;
             } else {
