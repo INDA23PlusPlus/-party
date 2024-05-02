@@ -89,14 +89,12 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
         const h = @as(f32, @floatFromInt(col_component.dim[1] * window.height)) / constants.world_height;
 
         const rec = rl.Rectangle.init(x, y, w, h);
-        var color = undefined;
+        var color = rl.Color.blue.alpha(0.5);
 
         if (world.checkSignature(entity, &.{ecs.component.Plr}, &.{})) {
             color = rl.Color.green.alpha(0.5);
         } else if (world.checkSignature(entity, &.{ecs.component.Atk}, &.{})) {
             color = rl.Color.red.alpha(0.5);
-        } else {
-            color = rl.Color.blue.alpha(0.5);
         }
 
         rl.drawRectangleRec(rec, color);

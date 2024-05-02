@@ -31,14 +31,14 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                     .tint = constants.player_colors[id],
                 },
                 ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
-                ecs.component.Ctr{ .id = bitset, .counter = 1 },
+                ecs.component.Ctr{ .id = bitset, .count = 1 },
             });
 
             for (0..26) |i| {
                 _ = try sim.world.spawnWith(.{
                     ecs.component.Pos{ .pos = .{ 48 + 16 * @as(i32, @intCast(i)), 32 + 28 * @as(i32, @intCast(id)) } },
                     ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis_testcases.png") },
-                    ecs.component.Ctr{ .id = @intCast(id), .counter = @intCast(i + 1) },
+                    ecs.component.Ctr{ .id = @intCast(id), .count = @intCast(i + 1) },
                 });
             }
         }
@@ -46,7 +46,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
     // Count down.
     _ = try sim.world.spawnWith(.{
-        ecs.component.Ctr{ .id = 100, .counter = 30 * 60 },
+        ecs.component.Ctr{ .id = 100, .count = 30 * 60 },
     });
 }
 
@@ -59,12 +59,12 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
     while (query.next()) |_| {
         const ctr = query.get(ecs.component.Ctr) catch unreachable;
         if (ctr.id == 100) {
-            if (ctr.counter == 0) {
+            if (ctr.count == 0) {
                 updateRankings(sim, timeline);
                 sim.meta.minigame_id = 3;
                 return;
             } else {
-                ctr.counter -= 1;
+                ctr.count -= 1;
             }
         }
     }
@@ -82,15 +82,15 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) void {
         var wrong = false;
 
         if (state.button_a == .Pressed) {
-            ctr.counter <<= 1;
-            wrong = ctr.counter & ctr.id != 0;
+            ctr.count <<= 1;
+            wrong = ctr.count & ctr.id != 0;
         } else if (state.button_b == .Pressed) {
-            ctr.counter <<= 1;
-            wrong = ctr.counter & ctr.id == 0;
+            ctr.count <<= 1;
+            wrong = ctr.count & ctr.id == 0;
         }
 
-        if (wrong) ctr.counter = 1;
-        if (std.math.log2(ctr.counter) >= 26) ended = true;
+        if (wrong) ctr.count = 1;
+        if (std.math.log2(ctr.count) >= 26) ended = true;
     }
 
     if (ended) {
@@ -98,7 +98,7 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) void {
         while (query_c.next()) |_| {
             const ctr = query_c.get(ecs.component.Ctr) catch unreachable;
             if (ctr.id == 100) {
-                ctr.counter = 0;
+                ctr.count = 0;
             }
         }
     }
@@ -118,7 +118,7 @@ fn updateTextures(world: *ecs.world.World, timeline: input.Timeline) void {
         while (query_c.next()) |_| {
             const ctr = query_c.get(ecs.component.Ctr) catch unreachable;
             var tex = query_c.get(ecs.component.Tex) catch unreachable;
-            if (ctr.id == plr.id and ctr.counter <= std.math.log2(pctr.counter)) {
+            if (ctr.id == plr.id and ctr.count <= std.math.log2(pctr.count)) {
                 tex.u = 1;
             } else if (ctr.id == plr.id) {
                 tex.u = 0;
@@ -131,20 +131,19 @@ fn updateRankings(sim: *simulation.Simulation, timeline: input.Timeline) void {
     var player_scores = [_]u32{0} ** constants.max_player_count;
     const inputs = timeline.latest();
 
-    var query = sim.world.query(&.{ecs.component.Plr, ecs.component.Ctr}, &.{});
+    var query = sim.world.query(&.{ ecs.component.Plr, ecs.component.Ctr }, &.{});
 
     while (query.next()) |_| {
         const plr = query.get(ecs.component.Plr) catch unreachable;
         const ctr = query.get(ecs.component.Ctr) catch unreachable;
 
-        player_scores[plr.id] = (@as(u32, 8) << @truncate(ctr.counter)) + plr.id;
+        player_scores[plr.id] = (@as(u32, 8) << @truncate(ctr.count)) + plr.id;
     }
 
     std.mem.sort(u32, &player_scores, {}, std.sort.desc(u32));
 
     var current_rank: u8 = 0;
     for (0..constants.max_player_count) |i| {
-
         if (!inputs[i].is_connected()) continue;
 
         if (i != 0 and player_scores[i] != player_scores[i - 1]) {

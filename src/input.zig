@@ -14,14 +14,13 @@ pub const ButtonState = enum(u2) {
         return self == .Pressed or self == .Held;
     }
     pub inline fn is_up(self: ButtonState) bool {
-        // Currently only used in one place...
         return self == .Released or self == .NotHeld;
     }
 };
 pub const PlayerInputState = packed struct {
     dpad: InputDirection = .Disconnected,
-    button_a: ButtonState = .Released,
-    button_b: ButtonState = .Released,
+    button_a: ButtonState = .NotHeld,
+    button_b: ButtonState = .NotHeld,
 
     pub fn is_connected(self: PlayerInputState) bool {
         // TODO: Maybe it should be removed in the future once we've settled into an input struct we like...
@@ -96,7 +95,7 @@ pub const Timeline = struct {
         var i: usize = time.buttons.len;
         var j: usize = 0;
 
-        while (i > 0 or j < search_depth) {
+        while (i > 0 and j < search_depth) {
             i -= 1;
             j += 1;
 
