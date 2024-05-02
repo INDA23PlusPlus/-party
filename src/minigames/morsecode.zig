@@ -13,7 +13,7 @@ const animator = @import("../animation/animator.zig");
 // 1 for * , 2 for -, 0 otherwise, could be done with bitmasks if we choose to not have a "new_word" key
 //var keystrokes: [constants.max_player_count][8]u8 = undefined;
 //std.mem.zero(keystrokes[0..]);
-const morsecode_maxlen = 5;
+const morsecode_maxlen = 6;
 var keystrokes: [constants.max_player_count][morsecode_maxlen]u8 = undefined;
 var typed_len = std.mem.zeroes([constants.max_player_count]u8);
 var current_letter = std.mem.zeroes([constants.max_player_count]u8);
@@ -21,6 +21,7 @@ var game_string: []const u8 = undefined;
 var game_string_len: usize = 20;
 var current_placement: usize = 0;
 var player_finish_order: [constants.max_player_count]u32 = [constants.max_player_count]u32{ undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined };
+var buf: [30]u8 = std.mem.zeroes([30]u8);
 
 fn assigned_pos(id: usize) @Vector(2, i32) {
     const top_left_x = 120;
@@ -37,8 +38,9 @@ fn set_string_info() void {
 }
 
 pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
-    sim.meta.minigame_ticks_per_update = 16;
+    sim.meta.minigame_ticks_per_update = 50;
     set_string_info();
+
     // _ = sim;
     // jag tänker att det ska vara ett klassrum, och alla spelare är elever
     // de kommer först in i klassrummet genom en och samma rum och sedan står på angett plats
@@ -53,10 +55,15 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     }
 
     for (0..constants.max_player_count) |id| {
+        // std.debug.print("{any}", .{buf});
+        std.debug.print("{any}", .{id});
+        const temp: []const u8 = std.fmt.bufPrint(&buf, "Player {}", .{id}) catch @panic("cock");
+        const temp2 = buf[0..temp.len :0];
         _ = try sim.world.spawnWith(.{
             // ecs.component.Plr{ .id = @intCast(id) }, // only use this to name the players
             ecs.component.Txt{
-                .string = "Player x",
+                .string = temp2,
+                // .string = "Player x",
                 .font_size = 10,
                 .color = 0xff0066ff,
                 .subpos = .{ 10, 20 },
@@ -84,8 +91,11 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
-    rl.drawText("Morsecode Minigame", 64, 8, 32, rl.Color.blue);
-    try inputSystem(&sim.world, timeline.latest());
+    rl.drawText("Morsecode Minigame", 300, 8, 32, rl.Color.blue);
+    // rl.drawText(game_string, 300, 50, 32, rl.Color.blue);
+    // try inputSystem(&sim.world, timeline.latest());
+    std.debug.print("Current placement: {any}\n", .{current_placement});
+    try inputSystem(&sim.world, timeline);
     try wordSystem(&sim.world);
     animator.update(&sim.world);
     if (current_placement == constants.max_player_count) {
@@ -96,16 +106,18 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
     }
 }
 
-fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
+fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
+    const inputs: input.AllPlayerButtons = timeline.latest();
+    // std.debug.print("{any}\n", .{keystrokes[0]});
+    // std.debug.print("{any}\n", .{keystrokes[1]});
     var query = world.query(&.{ ecs.component.Plr, ecs.component.Tex }, &.{});
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
         const state = inputs[plr.id];
         var tex = query.get(ecs.component.Tex) catch unreachable;
         if (state.is_connected()) {
-            std.debug.print("typed len: {}, id: {}\n", .{ typed_len[plr.id], plr.id });
+            // std.debug.print("typed len: {}, id: {}\n", .{ typed_len[plr.id], plr.id });
             if (state.button_a == .Pressed) {
-                // TODO: Should it be is_pressed() or just .Pressed?
                 keystrokes[plr.id][typed_len[plr.id]] = 1;
                 typed_len[plr.id] += 1;
                 tex.u = 1;
@@ -114,14 +126,11 @@ fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
                 typed_len[plr.id] += 1;
                 tex.u = 2;
                 if (typed_len[plr.id] == morsecode_maxlen) typed_len[plr.id] = 0; // TODO: remove this when wordSystem added
-            } else if (state.dpad == .East) {
-                // TODO POTENTIAL: for now this should works as an end of cha
-                // however, maybe we want to do it another way
+            } else if (timeline.vertical_pressed(plr.id) != 0) {
                 keystrokes[plr.id][typed_len[plr.id]] = 3;
                 typed_len[plr.id] += 1;
                 tex.u = 0;
-            } else if (state.dpad == .West) {
-                std.debug.print("tried to backspace", .{});
+            } else if (timeline.vertical_pressed(plr.id) != 0) {
                 // should work as a backspace / undo
                 typed_len[plr.id] = @max(0, typed_len[plr.id] - 1);
                 keystrokes[plr.id][typed_len[plr.id]] = 0;
@@ -136,9 +145,9 @@ fn code_to_char(id: usize) u8 {
     // _ = a;
     var a = keystrokes[id];
     var res: u8 = 0;
-    if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 0, 0, 0 })) {
+    if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 3, 0, 0, 0 })) {
         res = @intCast('A' - 'A' + 1);
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 1, 1, 0 })) {
+    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 1, 1, 3, 0 })) {
         res = @intCast('B' - 'A' + 1);
     }
     // TODO finish the rest of this conversion
@@ -153,7 +162,7 @@ fn wordSystem(world: *ecs.world.World) !void {
             // TODO: go into this forloop iff the end of character button has been typed
             typed_len[id] = 0;
             current_letter[id] += 1;
-            keystrokes[id] = .{ 0, 0, 0, 0, 0 };
+            keystrokes[id] = .{ 0, 0, 0, 0, 0, 0 };
             // TODO: check that the typed letter is the correct one, not just any letter
             if (current_letter[id] == game_string_len) {
                 // There is a small problem with this, lower ids get prioritized in this check
