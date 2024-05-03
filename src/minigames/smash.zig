@@ -18,6 +18,7 @@ const Invariables = @import("../Invariables.zig");
 // TODO: Attack animation and effect
 // TODO: Knockback increase over time
 // TODO: Blocking action, animation and effect
+// TODO: Fix bug where players are not being push away when attacking very close.
 
 const left_texture_offset = [_]i32{ -5, -10 };
 const right_texture_offset = [_]i32{ -21, -10 };
@@ -208,6 +209,7 @@ fn actionSystem(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                 },
                 ecs.component.Tmr{},
                 ecs.component.Anm{ .interval = 8, .animation = .SmashJumpSmoke },
+                ecs.component.Jmp{},
             });
         }
 
@@ -220,25 +222,71 @@ fn actionSystem(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
         if (wants_attack and can_attack) {
             sim.world.promote(entity, &.{ecs.component.Atk});
+
+            _ = try sim.world.spawnWith(.{
+                ecs.component.Pos{ .pos = pos.pos + attack_player_offset + switch (timeline.latest()[plr.id].dpad) {
+                    .North => @Vector(2, i32){ 0, -attack_directional_offset },
+                    .South => @Vector(2, i32){ 0, attack_directional_offset },
+                    .West => @Vector(2, i32){ -attack_directional_offset, 0 },
+                    .East => @Vector(2, i32){ attack_directional_offset, 0 },
+                    .NorthWest => @Vector(2, i32){ -attack_directional_offset, -attack_directional_offset },
+                    .NorthEast => @Vector(2, i32){ attack_directional_offset, -attack_directional_offset },
+                    .SouthWest => @Vector(2, i32){ -attack_directional_offset, attack_directional_offset },
+                    .SouthEast => @Vector(2, i32){ attack_directional_offset, attack_directional_offset },
+                    else => @Vector(2, i32){ 0, 0 },
+                } },
+                ecs.component.Tex{
+                    .texture_hash = AssetManager.pathHash("assets/smash_attack_smoke.png"),
+                    .subpos = [_]i32{ -8, -8 },
+                    .w = 2,
+                    .h = 2,
+                    .tint = rl.Color.init(100, 100, 100, 100),
+                },
+                ecs.component.Tmr{},
+                ecs.component.Anm{ .interval = 8, .animation = .SmashAttackSmoke },
+                ecs.component.Atk{},
+            });
         }
     }
 }
 
 fn particleSystem(world: *ecs.world.World) void {
-    var query = world.query(&.{
+    var jump_query = world.query(&.{
         ecs.component.Tmr,
         ecs.component.Pos,
         ecs.component.Tex,
         ecs.component.Anm,
+        ecs.component.Jmp,
     }, &.{
         ecs.component.Col,
         ecs.component.Plr,
     });
 
-    while (query.next()) |entity| {
-        const tmr = query.get(ecs.component.Tmr) catch unreachable;
+    while (jump_query.next()) |entity| {
+        const tmr = jump_query.get(ecs.component.Tmr) catch unreachable;
 
         if (tmr.ticks == 32) {
+            world.kill(entity);
+        } else {
+            tmr.ticks += 1;
+        }
+    }
+
+    var attack_query = world.query(&.{
+        ecs.component.Tmr,
+        ecs.component.Pos,
+        ecs.component.Tex,
+        ecs.component.Anm,
+        ecs.component.Atk,
+    }, &.{
+        ecs.component.Col,
+        ecs.component.Plr,
+    });
+
+    while (attack_query.next()) |entity| {
+        const tmr = attack_query.get(ecs.component.Tmr) catch unreachable;
+
+        if (tmr.ticks == 40) {
             world.kill(entity);
         } else {
             tmr.ticks += 1;
@@ -262,7 +310,6 @@ fn attackSystem(world: *ecs.world.World, inputs: *const input.AllPlayerButtons) 
         if (ctr.count == 0) _ = try world.spawnWith(.{
             ecs.component.Atk{},
             ecs.component.Ctr{},
-            ecs.component.Anm{},
             ecs.component.Dir{ .facing = switch (inputs[plr.id].dpad) {
                 .North => .North,
                 .South => .South,
@@ -274,7 +321,6 @@ fn attackSystem(world: *ecs.world.World, inputs: *const input.AllPlayerButtons) 
                 .SouthEast => .Southeast,
                 else => .None,
             } },
-            // ecs.component.Tex{}, TODO
             ecs.component.Col{
                 .dim = attack_dimensions,
                 .layer = collision.Layer{ .base = false, .damaging = true },
@@ -292,7 +338,6 @@ fn attackSystem(world: *ecs.world.World, inputs: *const input.AllPlayerButtons) 
                 else => @Vector(2, i32){ 0, 0 },
             } },
             ecs.component.Lnk{ .child = entity },
-            ecs.component.Dbg{},
         });
 
         ctr.count += 1;
@@ -438,11 +483,10 @@ fn animationSystem(world: *ecs.world.World, inputs: *const input.AllPlayerButton
         const airborne = world.checkSignature(entity, &.{ecs.component.Air}, &.{});
         const falling = !jumping and airborne and mov.velocity.vector[1] > 0;
         const crouching = mov.velocity.vector[0] == 0 and mov.velocity.vector[1] == 0 and state.dpad == .South and !airborne;
+        const attacking = world.checkSignature(entity, &.{ecs.component.Atk}, &.{});
         const hit = world.checkSignature(entity, &.{ecs.component.Hit}, &.{});
 
-        if (hit) {
-            anm.animation = .SmashHit;
-        } else if (moving) {
+        if (moving) {
             anm.animation = .SmashRun;
         } else if (crouching) {
             anm.animation = .SmashCrouch;
@@ -459,6 +503,14 @@ fn animationSystem(world: *ecs.world.World, inputs: *const input.AllPlayerButton
             anm.animation = .SmashFall;
         } else {
             anm.looping = true;
+        }
+
+        if (attacking) {
+            anm.animation = .SmashAttack;
+        }
+
+        if (hit) {
+            anm.animation = .SmashHit;
         }
 
         if (anm.animation != previous) anm.subframe = 0;
