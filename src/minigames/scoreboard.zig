@@ -27,7 +27,7 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     }
 
     _ = try sim.world.spawnWith(.{
-        ecs.component.Ctr{ .id = 100, .count = 30 * 60 },
+        ecs.component.Ctr{ .id = 100, .count = 20 * 60 },
     });
     _ = try sim.world.spawnWith(.{
         ecs.component.Ctr{ .id = 101, .count = 10 * 60 },
