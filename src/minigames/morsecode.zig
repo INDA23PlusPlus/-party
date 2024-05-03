@@ -98,8 +98,9 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
     if (current_placement == constants.max_player_count) {
         // everyone should be finished
         for (0..constants.max_player_count) |rank| {
-            sim.meta.score[player_finish_order[rank]] = 20 - @as(u32, @intCast(rank)) * 2;
+            sim.meta.minigame_placements[player_finish_order[rank]] = 8 - @as(u32, @intCast(rank));
         }
+        sim.meta.minigame_id = 3;
     }
 }
 

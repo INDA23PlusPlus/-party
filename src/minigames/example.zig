@@ -71,6 +71,13 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
 
     // Draw debug text (should not be here)
     rl.drawText("++party :3", 64, 8, 32, rl.Color.blue);
+
+    // Onn minigame end set sim.meta.mingame_placements to the placement the player achived
+    // Example:
+    // for (0..connected_player_count)|id|{
+    //      sim.meta.minigame_placements[player_finish_order[id]] = 8 - @as(u32, @intCast(id)); player_finish_order should be by the minigame somehow
+    // }
+    //  This code goes through all the connected players. Sets place 0 of mingame_placement array to the placemnts of PLayer 0 and should do the same for all connected players
 }
 
 fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {

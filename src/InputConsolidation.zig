@@ -30,13 +30,17 @@ fn extendTimeline(self: *Self, allocator: std.mem.Allocator, tick: u64) !void {
     const guess_buttons = self.buttons.getLast();
     const guess_local = self.local.getLast();
     const start = self.buttons.items.len;
+
     try self.buttons.ensureTotalCapacity(allocator, tick + 1);
     try self.local.ensureTotalCapacity(allocator, tick + 1);
+
     self.buttons.items.len = tick + 1;
     self.local.items.len = tick + 1;
+
     for (self.buttons.items[start..]) |*frame| {
         frame.* = guess_buttons;
     }
+
     for (self.local.items[start..]) |*frame| {
         frame.* = guess_local;
     }

@@ -12,38 +12,52 @@ inline fn fourBoolsToDirection(up: bool, down: bool, left: bool, right: bool) in
     if (up and !down) {
         if (left and !right) {
             return .NorthWest;
-        }
-        if (right and !left) {
+        } else if (right and !left) {
             return .NorthEast;
+        } else {
+            return .North;
         }
-        return .North;
     } else if (down and !up) {
         if (left and !right) {
             return .SouthWest;
-        }
-        if (right and !left) {
+        } else if (right and !left) {
             return .SouthEast;
+        } else {
+            return .South;
         }
-        return .South;
+    } else {
+        if (left and !right) {
+            return .West;
+        } else if (right and !left) {
+            return .East;
+        } else {
+            return .None;
+        }
     }
-
-    if (left and !right) {
-        return .West;
-    }
-    if (right and !left) {
-        return .East;
-    }
-    return .None;
 }
 
-inline fn pressedToButtonState(pressed: bool, previous: input.ButtonState) input.ButtonState {
-    if (previous.is_down() and pressed) {
-        return .Held;
+inline fn keyboardKeyToButtonState(key: rl.KeyboardKey) input.ButtonState {
+    if (rl.isKeyUp(key)) {
+        if (rl.isKeyReleased(key)) return .Released;
+
+        return .NotHeld;
     }
-    if (pressed) {
-        return .Pressed;
+
+    if (rl.isKeyPressed(key)) return .Pressed;
+
+    return .Held;
+}
+
+inline fn gamepadButtonToButtonState(gamepad: i32, button: rl.GamepadButton) input.ButtonState {
+    if (rl.isGamepadButtonUp(gamepad, button)) {
+        if (rl.isGamepadButtonReleased(gamepad, button)) return .Released;
+
+        return .NotHeld;
     }
-    return .Released;
+
+    if (rl.isGamepadButtonPressed(gamepad, button)) return .Pressed;
+
+    return .Held;
 }
 
 inline fn pollKeyboardDPads(key_up: rl.KeyboardKey, key_down: rl.KeyboardKey, key_left: rl.KeyboardKey, key_right: rl.KeyboardKey) input.InputDirection {
@@ -51,14 +65,14 @@ inline fn pollKeyboardDPads(key_up: rl.KeyboardKey, key_down: rl.KeyboardKey, ke
     const down = rl.isKeyDown(key_down);
     const left = rl.isKeyDown(key_left);
     const right = rl.isKeyDown(key_right);
-    //std.debug.print("{} {} {} {}\n", .{ up, down, left, right });
     return fourBoolsToDirection(up, down, left, right);
 }
 
 fn pollKeyboard1(previous: input.PlayerInputState) input.PlayerInputState {
+    _ = previous;
     const dpad = pollKeyboardDPads(rl.KeyboardKey.key_w, rl.KeyboardKey.key_s, rl.KeyboardKey.key_a, rl.KeyboardKey.key_d);
-    const a = pressedToButtonState(rl.isKeyPressed(rl.KeyboardKey.key_z), previous.button_a); // Support the button being released and pressed again inbetween frames using isKeyPressed.
-    const b = pressedToButtonState(rl.isKeyPressed(rl.KeyboardKey.key_x), previous.button_b);
+    const a = keyboardKeyToButtonState(rl.KeyboardKey.key_z); // pressedToButtonState(rl.isKeyPressed(rl.KeyboardKey.key_z), previous.button_a);
+    const b = keyboardKeyToButtonState(rl.KeyboardKey.key_x); // pressedToButtonState(rl.isKeyPressed(rl.KeyboardKey.key_x), previous.button_b);
     return .{
         .dpad = dpad,
         .button_a = a,
@@ -67,9 +81,10 @@ fn pollKeyboard1(previous: input.PlayerInputState) input.PlayerInputState {
 }
 
 fn pollKeyboard2(previous: input.PlayerInputState) input.PlayerInputState {
+    _ = previous;
     const dpad = pollKeyboardDPads(rl.KeyboardKey.key_i, rl.KeyboardKey.key_k, rl.KeyboardKey.key_j, rl.KeyboardKey.key_l);
-    const a = pressedToButtonState(rl.isKeyPressed(rl.KeyboardKey.key_n), previous.button_a);
-    const b = pressedToButtonState(rl.isKeyPressed(rl.KeyboardKey.key_m), previous.button_b);
+    const a = keyboardKeyToButtonState(rl.KeyboardKey.key_n);
+    const b = keyboardKeyToButtonState(rl.KeyboardKey.key_m);
     return .{
         .dpad = dpad,
         .button_a = a,
@@ -78,14 +93,12 @@ fn pollKeyboard2(previous: input.PlayerInputState) input.PlayerInputState {
 }
 
 fn pollGamepad(gamepad: i32, previous: input.PlayerInputState) input.PlayerInputState {
-    if (!rl.isGamepadAvailable(gamepad)) {
-        return .{
-            .dpad = .Disconnected,
-        };
-    }
+    _ = previous;
+    if (!rl.isGamepadAvailable(gamepad)) return .{ .dpad = .Disconnected };
 
-    const a = pressedToButtonState(rl.isGamepadButtonDown(gamepad, rl.GamepadButton.gamepad_button_right_face_down), previous.button_a);
-    const b = pressedToButtonState(rl.isGamepadButtonDown(gamepad, rl.GamepadButton.gamepad_button_right_face_right), previous.button_b);
+    const a = gamepadButtonToButtonState(gamepad, rl.GamepadButton.gamepad_button_right_face_down); // pressedToButtonState(rl.isGamepadButtonDown(gamepad, rl.GamepadButton.gamepad_button_right_face_down), previous.button_a);
+    const b = gamepadButtonToButtonState(gamepad, rl.GamepadButton.gamepad_button_right_face_right); // pressedToButtonState(rl.isGamepadButtonDown(gamepad, rl.GamepadButton.gamepad_button_right_face_right), previous.button_b);
+
     const up = rl.isGamepadButtonDown(gamepad, rl.GamepadButton.gamepad_button_left_face_up);
     const down = rl.isGamepadButtonDown(gamepad, rl.GamepadButton.gamepad_button_left_face_down);
     const left = rl.isGamepadButtonDown(gamepad, rl.GamepadButton.gamepad_button_left_face_left);

@@ -63,7 +63,7 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     player_finish_order = [8]u32{ undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined };
     _ = try spawnBackground(&sim.world);
     //TODO Change so it spawns one player for all current active players
-    for (0..3) |id| {
+    for (0..constants.max_player_count) |id| {
         //Condtion for only spawning player that are connected DOESN'T WORK AT THE MOMENT
         // if (inputs[id].is_connected) {
         try spawnPlayer(&sim.world, @intCast(id));
@@ -89,15 +89,11 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
 
     animator.update(&sim.world);
     //TODO Change number so it uses current active players instead
-    if (current_placement == 3) {
-        sim.meta.score[player_finish_order[2]] += 10;
-        sim.meta.score[player_finish_order[1]] += 5;
-        sim.meta.score[player_finish_order[0]] += 2;
-        //Remove the prints once game is finialized
-        std.debug.print("{}\n", .{player_finish_order[2]});
-        std.debug.print("{}\n", .{sim.meta.score[player_finish_order[2]]});
-        std.debug.print("Moving to scoreboard\n", .{});
-        //TODO Change so it redirects to the scoreboard once scoreboard mingame is implemented
+    if (current_placement == constants.max_player_count) {
+        // everyone should be finished
+        for (0..constants.max_player_count) |rank| {
+            sim.meta.minigame_placements[player_finish_order[rank]] = 8 - @as(u32, @intCast(rank));
+        }
         sim.meta.minigame_id = 3;
     }
 }

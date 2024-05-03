@@ -91,7 +91,7 @@ pub const Timeline = struct {
     pub fn buttonStateTick(time: Timeline, player: usize, comptime button: enum { a, b }, comptime state: ButtonState) ?usize {
         std.debug.assert(player < constants.max_player_count);
 
-        const search_depth = 120;
+        const search_depth = 60;
 
         var i: usize = time.buttons.len;
         var j: usize = 0;

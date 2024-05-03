@@ -110,7 +110,7 @@ pub fn main() !void {
 
     try simulation.init(&sim, invariables);
 
-    var benchmarker = try @import("Benchmarker.zig").init("Simulation");
+    // var benchmarker = try @import("Benchmarker.zig").init("Simulation");
 
     // Game loop
     while (window.running) {
@@ -152,14 +152,14 @@ pub fn main() !void {
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure
         // is called in other places. Not doing so will lead to inconsistencies.
-        benchmarker.start();
+        // benchmarker.start();
         try simulation.simulate(&sim, current_input_timeline, invariables);
         _ = static_arena.reset(.retain_capacity);
-        benchmarker.stop();
-        if (benchmarker.laps % 360 == 0) {
-            try benchmarker.write();
-            benchmarker.reset();
-        }
+        // benchmarker.stop();
+        // if (benchmarker.laps % 360 == 0) {
+        //     try benchmarker.write();
+        //     benchmarker.reset();
+        // }
 
         // Begin rendering.
         window.update();

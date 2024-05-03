@@ -137,19 +137,19 @@ fn updateRankings(sim: *simulation.Simulation, timeline: input.Timeline) void {
         const plr = query.get(ecs.component.Plr) catch unreachable;
         const ctr = query.get(ecs.component.Ctr) catch unreachable;
 
-        player_scores[plr.id] = (@as(u32, 8) << @truncate(ctr.count)) + plr.id;
+        player_scores[plr.id] = plr.id | ctr.count << 3;
     }
 
     std.mem.sort(u32, &player_scores, {}, std.sort.desc(u32));
 
-    var current_rank: u8 = 0;
+    var current_rank: u8 = 1;
     for (0..constants.max_player_count) |i| {
         if (!inputs[i].is_connected()) continue;
 
-        if (i != 0 and player_scores[i] != player_scores[i - 1]) {
+        if (i != 0 and player_scores[i] >> 3 != player_scores[i - 1] >> 3) {
             current_rank += 1;
         }
 
-        sim.meta.score[player_scores[i] % 8] += 8 - current_rank;
+        sim.meta.minigame_placements[player_scores[i] % 8] = current_rank;
     }
 }
