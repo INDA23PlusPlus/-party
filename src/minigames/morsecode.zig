@@ -91,7 +91,8 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
     rl.drawText("Morsecode Minigame", 300, 8, 32, rl.Color.blue);
     // rl.drawText(game_string, 300, 50, 32, rl.Color.blue);
-    //std.debug.print("cur: {}\n", .{current_placement});
+    std.debug.print("{any}\n", .{keystrokes[0]});
+    std.debug.print("cur: {}\n", .{current_placement});
     try inputSystem(&sim.world, timeline);
     try wordSystem(&sim.world);
     animator.update(&sim.world);
@@ -113,11 +114,11 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
         var tex = query.get(ecs.component.Tex) catch unreachable;
 
         if (state.is_connected()) {
-            if (state.button_a.is_down()) {
+            if (state.button_a == .Pressed) {
                 keystrokes[plr.id][typed_len[plr.id]] = 1;
                 typed_len[plr.id] += 1;
                 tex.u = 1;
-            } else if (state.button_b.is_down()) {
+            } else if (state.button_b == .Pressed) {
                 keystrokes[plr.id][typed_len[plr.id]] = 2;
                 typed_len[plr.id] += 1;
                 tex.u = 2;
@@ -142,7 +143,7 @@ fn wordSystem(world: *ecs.world.World) !void {
 
         if (keystrokes[id][typed_len[id] - 1] == 3) {
             const character: u8 = code_to_char(id);
-            std.debug.print("{}", .{character});
+            std.debug.print("{}", .{std.ascii.toUpper(character)});
             if (character == game_string[current_letter[id]]) {
                 typed_len[id] = 0;
                 current_letter[id] += 1;
