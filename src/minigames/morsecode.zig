@@ -91,7 +91,7 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
     rl.drawText("Morsecode Minigame", 300, 8, 32, rl.Color.blue);
     // rl.drawText(game_string, 300, 50, 32, rl.Color.blue);
-    std.debug.print("cur: {}\n", .{current_placement});
+    //std.debug.print("cur: {}\n", .{current_placement});
     try inputSystem(&sim.world, timeline);
     try wordSystem(&sim.world);
     animator.update(&sim.world);
