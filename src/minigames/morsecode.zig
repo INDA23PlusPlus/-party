@@ -91,6 +91,7 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
     rl.drawText("Morsecode Minigame", 300, 8, 32, rl.Color.blue);
     // rl.drawText(game_string, 300, 50, 32, rl.Color.blue);
+    std.debug.print("cur: {}\n", .{current_placement});
     try inputSystem(&sim.world, timeline);
     try wordSystem(&sim.world);
     animator.update(&sim.world);
@@ -141,7 +142,7 @@ fn wordSystem(world: *ecs.world.World) !void {
         if (keystrokes[id][typed_len[id] - 1] == 3) {
             const character: u8 = code_to_char(id);
             std.debug.print("{}", .{character});
-            if (character != 0) {
+            if (character == game_string[current_letter[id]]) {
                 typed_len[id] = 0;
                 current_letter[id] += 1;
                 keystrokes[id] = .{ 0, 0, 0, 0, 0, 0 };
@@ -165,59 +166,59 @@ fn wordSystem(world: *ecs.world.World) !void {
 
 fn code_to_char(id: usize) u8 {
     var a = keystrokes[id];
-    var res: u8 = 0;
+    var res: u8 = '0';
     if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 3, 0, 0, 0 })) {
-        res = @intCast('A' - 'A');
+        res = 'A';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 1, 1, 3, 0 })) {
-        res = @intCast('B' - 'A');
+        res = 'B';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 2, 1, 3, 0 })) {
-        res = @intCast('C' - 'A');
+        res = 'C';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 1, 3, 0, 0 })) {
-        res = @intCast('D' - 'A');
+        res = 'D';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 3, 0, 0, 0, 0 })) {
-        res = @intCast('E' - 'A');
+        res = 'E';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 2, 1, 3, 0 })) {
-        res = @intCast('F' - 'A');
+        res = 'F';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 1, 3, 0, 0 })) {
-        res = @intCast('G' - 'A');
+        res = 'G';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 1, 1, 3, 0 })) {
-        res = @intCast('H' - 'A');
+        res = 'H';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 3, 0, 0, 0 })) {
-        res = @intCast('I' - 'A');
+        res = 'I';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 2, 2, 3, 0 })) {
-        res = @intCast('J' - 'A');
+        res = 'J';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 2, 3, 0, 0 })) {
-        res = @intCast('K' - 'A');
+        res = 'K';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 1, 1, 3, 0 })) {
-        res = @intCast('L' - 'A');
+        res = 'L';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 3, 0, 0, 0 })) {
-        res = @intCast('M' - 'A');
+        res = 'M';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 3, 0, 0, 0 })) {
-        res = @intCast('N' - 'A');
+        res = 'N';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 2, 3, 0, 0 })) {
-        res = @intCast('O' - 'A');
+        res = 'O';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 2, 1, 3, 0 })) {
-        res = @intCast('P' - 'A');
+        res = 'P';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 1, 2, 3, 0 })) {
-        res = @intCast('Q' - 'A');
+        res = 'Q';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 1, 3, 0, 0 })) {
-        res = @intCast('R' - 'A');
+        res = 'R';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 1, 3, 0, 0 })) {
-        res = @intCast('S' - 'A');
+        res = 'S';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 3, 0, 0, 0, 0 })) {
-        res = @intCast('T' - 'A');
+        res = 'T';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 2, 3, 0, 0 })) {
-        res = @intCast('U' - 'A');
+        res = 'U';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 1, 2, 3, 0 })) {
-        res = @intCast('V' - 'A');
+        res = 'V';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 2, 3, 0, 0 })) {
-        res = @intCast('W' - 'A');
+        res = 'W';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 1, 2, 3, 0 })) {
-        res = @intCast('X' - 'A');
+        res = 'X';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 2, 2, 3, 0 })) {
-        res = @intCast('Y' - 'A');
+        res = 'Y';
     } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 1, 1, 3, 0 })) {
-        res = @intCast('Z' - 'A');
+        res = 'Z';
     }
     return res;
 }
