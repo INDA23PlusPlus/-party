@@ -6,7 +6,8 @@ const Invariables = @import("Invariables.zig");
 
 /// Data that is kept between minigames (such as seed, scores, etc)
 pub const Metadata = struct {
-    score: [constants.max_player_count]u32 = [_]u32{0} ** constants.max_player_count,
+    global_score: [constants.max_player_count]u32 = [_]u32{0} ** constants.max_player_count,
+    minigame_placements: [constants.max_player_count]u32 = [_]u32{0} ** constants.max_player_count,
     seed: usize = 555,
     ticks_elapsed: usize = 1,
     minigame_id: usize = 0,

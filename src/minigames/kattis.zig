@@ -150,6 +150,6 @@ fn updateRankings(sim: *simulation.Simulation, timeline: input.Timeline) void {
             current_rank += 1;
         }
 
-        sim.meta.score[player_scores[i] % 8] += 8 - current_rank;
+        sim.meta.minigame_placements[player_scores[i] % 8] += 8 - current_rank;
     }
 }
