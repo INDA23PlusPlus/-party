@@ -36,18 +36,6 @@ inline fn fourBoolsToDirection(up: bool, down: bool, left: bool, right: bool) in
     }
 }
 
-inline fn pressedToButtonState(pressed: bool, previous: input.ButtonState) input.ButtonState {
-    if (previous.is_down() and pressed) {
-        return .Held;
-    }
-
-    if (pressed) {
-        return .Pressed;
-    }
-
-    return .Released;
-}
-
 inline fn keyboardKeyToButtonState(key: rl.KeyboardKey) input.ButtonState {
     if (rl.isKeyUp(key)) {
         if (rl.isKeyReleased(key)) return .Released;
