@@ -19,7 +19,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
     // Players
     for (inputs, 0..) |inp, id| {
-        if (inp.is_connected() or true) {
+        if (inp.is_connected()) {
             const bitset: u32 = @truncate(rng.next());
             std.debug.print("{b}\n", .{bitset});
             player_count += 1;
@@ -137,7 +137,7 @@ fn updateRankings(sim: *simulation.Simulation, timeline: input.Timeline) void {
         const plr = query.get(ecs.component.Plr) catch unreachable;
         const ctr = query.get(ecs.component.Ctr) catch unreachable;
 
-        player_scores[plr.id] = (@as(u32, 8) << @truncate(ctr.count)) + plr.id;
+        player_scores[plr.id] = plr.id | ctr.count << 3;
     }
 
     std.mem.sort(u32, &player_scores, {}, std.sort.desc(u32));
