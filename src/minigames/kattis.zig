@@ -19,7 +19,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
     // Players
     for (inputs, 0..) |inp, id| {
-        if (inp.is_connected()) {
+        if (inp.is_connected() or true) {
             const bitset: u32 = @truncate(rng.next());
             std.debug.print("{b}\n", .{bitset});
             player_count += 1;
@@ -142,14 +142,14 @@ fn updateRankings(sim: *simulation.Simulation, timeline: input.Timeline) void {
 
     std.mem.sort(u32, &player_scores, {}, std.sort.desc(u32));
 
-    var current_rank: u8 = 0;
+    var current_rank: u8 = 1;
     for (0..constants.max_player_count) |i| {
         if (!inputs[i].is_connected()) continue;
 
-        if (i != 0 and player_scores[i] != player_scores[i - 1]) {
+        if (i != 0 and player_scores[i] >> 3 != player_scores[i - 1] >> 3) {
             current_rank += 1;
         }
 
-        sim.meta.minigame_placements[player_scores[i] % 8] += 8 - current_rank;
+        sim.meta.minigame_placements[player_scores[i] % 8] = current_rank;
     }
 }
