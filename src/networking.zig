@@ -9,6 +9,8 @@ const xev = @import("xev");
 
 const sim = @import("simulation.zig");
 const ecs = @import("ecs/world.zig");
+const cbor = @import("cbor.zig");
+
 const NetworkingQueue = @import("NetworkingQueue.zig");
 const InputConsolidation = @import("InputConsolidation.zig");
 
@@ -32,6 +34,8 @@ const ConnectionType = enum(u8) {
     remote,
 };
 
+const max_net_packet_size = 32768;
+
 const NetServerData = struct {
     common: NetData = NetData{},
     input_history: InputConsolidation,
@@ -39,6 +43,8 @@ const NetServerData = struct {
     conns_list: [constants.max_connected_count]ConnectedClient = undefined,
     conns_type: [constants.max_connected_count]ConnectionType = [_]ConnectionType{.Unused} ** constants.max_connected_count,
     conns_packets: [constants.max_connected_count][20]InputConsolidation.Packet = undefined,
+    conns_write_buffers: [constants.max_connected_count][1024]u8 = undefined,
+    conns_read_buffers: [constants.max_connected_count][1024]u8 = undefined,
 
     loop: xev.Loop,
     accept_completion: xev.Completion = undefined,
@@ -187,7 +193,7 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
         }
 
         // Send the updates to the clients.
-        inline for (server_data.conns_list, server_data.conns_type) |connection, conn_type| {
+        inline for (server_data.conns_list, server_data.conns_type, server_data.conns_writer_buffers) |connection, conn_type, *write_buffer| {
             // Send the missing inputs. But only N at the time.
             const send_until = @min(server_data.input_history.buttons.items.len, connection.consistent_until + 40);
 
@@ -205,6 +211,11 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
                 // We are still writing data.
                 continue;
             }
+
+
+            const fb = std.io.fixedBufferStream(write_buffer);
+            const writer = fb.writer();
+            cbor.writeArrayHeader(writer, 2);
 
             // TODO: Actually send the data to remote peers.
         }
