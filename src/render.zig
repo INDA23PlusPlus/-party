@@ -73,15 +73,73 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
         rl.drawText(text_c.string, dst_x, dst_y, @intFromFloat(font_size_scaled), color);
     }
 
-    var player_query = world.query(&.{ ecs.component.Plr, ecs.component.Pos }, &.{});
+    var debug_position_query = world.query(&.{
+        ecs.component.Pos,
+        ecs.component.Dbg,
+    }, &.{});
 
-    while (player_query.next()) |_| {}
+    while (debug_position_query.next()) |_| {
+        const pos_component = debug_position_query.get(ecs.component.Pos) catch unreachable;
 
-    var debug_query = world.query(&.{ ecs.component.Pos, ecs.component.Col, ecs.component.Dbg }, &.{});
+        const x = @as(f32, @floatFromInt(pos_component.pos[0] * window.width)) / constants.world_width;
+        const y = @as(f32, @floatFromInt(pos_component.pos[1] * window.height)) / constants.world_height;
 
-    while (debug_query.next()) |entity| {
-        const pos_component = debug_query.get(ecs.component.Pos) catch unreachable;
-        const col_component = debug_query.get(ecs.component.Col) catch unreachable;
+        const start_1 = rl.Vector2.init(x - 10.0, y);
+        const end_1 = rl.Vector2.init(x + 10.0, y);
+        const start_2 = rl.Vector2.init(x, y - 10.0);
+        const end_2 = rl.Vector2.init(x, y + 10.0);
+
+        const color = rl.Color.black.alpha(0.5);
+
+        rl.drawLineV(start_1, end_1, color);
+        rl.drawLineV(start_2, end_2, color);
+    }
+
+    var debug_movement_query = world.query(&.{
+        ecs.component.Pos,
+        ecs.component.Mov,
+        ecs.component.Dbg,
+    }, &.{});
+
+    while (debug_movement_query.next()) |_| {
+        const pos_component = debug_movement_query.get(ecs.component.Pos) catch unreachable;
+        const mov_component = debug_movement_query.get(ecs.component.Mov) catch unreachable;
+
+        const x = @as(f32, @floatFromInt(pos_component.pos[0] * window.width)) / constants.world_width;
+        const y = @as(f32, @floatFromInt(pos_component.pos[1] * window.height)) / constants.world_height;
+
+        const start = rl.Vector2.init(x, y);
+        const subpixel_end = rl.Vector2.init(
+            x + @as(f32, @floatCast(mov_component.subpixel.x().toFloat())),
+            y + @as(f32, @floatCast(mov_component.subpixel.y().toFloat())),
+        );
+        const velocity_end = rl.Vector2.init(
+            x + @as(f32, @floatCast(mov_component.velocity.x().toFloat())) * 20.0,
+            y + @as(f32, @floatCast(mov_component.velocity.y().toFloat())) * 20.0,
+        );
+        const acceleration_end = rl.Vector2.init(
+            x + @as(f32, @floatCast(mov_component.acceleration.x().toFloat())) * 20.0,
+            y + @as(f32, @floatCast(mov_component.acceleration.y().toFloat())) * 20.0,
+        );
+
+        const subpixel_color = rl.Color.black.alpha(0.5);
+        const velocity_color = rl.Color.purple.alpha(0.5);
+        const acceleration_color = rl.Color.yellow.alpha(0.5);
+
+        rl.drawLineV(start, subpixel_end, subpixel_color);
+        rl.drawLineV(start, velocity_end, velocity_color);
+        rl.drawLineV(start, acceleration_end, acceleration_color);
+    }
+
+    var debug_collidable_query = world.query(&.{
+        ecs.component.Pos,
+        ecs.component.Col,
+        ecs.component.Dbg,
+    }, &.{});
+
+    while (debug_collidable_query.next()) |entity| {
+        const pos_component = debug_collidable_query.get(ecs.component.Pos) catch unreachable;
+        const col_component = debug_collidable_query.get(ecs.component.Col) catch unreachable;
 
         const x = @as(f32, @floatFromInt(pos_component.pos[0] * window.width)) / constants.world_width;
         const y = @as(f32, @floatFromInt(pos_component.pos[1] * window.height)) / constants.world_height;

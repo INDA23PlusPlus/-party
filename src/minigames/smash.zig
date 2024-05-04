@@ -13,12 +13,14 @@ const Animation = @import("../animation/animations.zig").Animation;
 const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
 
-// TODO: Merge and use new input system
 // TODO: Use input for movement and `Dir` for attack direction and animation
-// TODO: Attack animation and effect
 // TODO: Knockback increase over time
-// TODO: Blocking action, animation and effect
+// TODO: Block action
+// TODO: Block animation
+// TODO: Block particle
 // TODO: Fix bug where players are not being push away when attacking very close.
+// TODO: Death particle
+// TODO: End condition
 
 const left_texture_offset = [_]i32{ -5, -10 };
 const right_texture_offset = [_]i32{ -21, -10 };
@@ -54,6 +56,12 @@ const attack_dimensions = [_]i32{ 16, 16 };
 const attack_ticks = 7;
 const attack_player_offset = [_]i32{ -5, -5 };
 const attack_directional_offset = 16;
+
+const block_multiplier = ecs.component.F32.init(5, 4);
+const block_cooldown = 30;
+const block_buffer = 5;
+const block_ticks = 60;
+const block_dimensions = [_]i32{ 16, 16 };
 
 // var benchmarker: @import("../Benchmarker.zig") = undefined;
 pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
@@ -119,8 +127,9 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
                 .tint = constants.player_colors[i],
             },
             ecs.component.Anm{ .animation = Animation.SmashIdle, .interval = 8, .looping = true },
-            ecs.component.Tmr{}, // Coyote timer and hit recovery timer
-            ecs.component.Ctr{}, // Attack timer and block timer
+            ecs.component.Tmr{}, // Coyote timer
+            ecs.component.Ctr{}, // Attack timer, block timer, and hit recovery timer
+            ecs.component.Dbg{},
         });
     }
 }
@@ -136,8 +145,17 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
 
     var collisions = collision.CollisionQueue.init(rt.arena) catch @panic("collision");
 
-    try actionSystem(sim, timeline); // 30 laps/ms
-    try attackSystem(&sim.world, inputs); // 100 laps/ms
+    // benchmarker.start();
+    try actionSystem(sim, timeline); // 50 laps/ms (2 players)
+    // benchmarker.stop();
+    // if (benchmarker.laps % 360 == 0) {
+    //     benchmarker.write() catch undefined;
+    //     benchmarker.reset();
+    // }
+
+    blockSystem(&sim.world);
+    attackSystem(&sim.world);
+    hitSystem(&sim.world);
 
     gravitySystem(&sim.world); // 150 laps/ms
     movement.update(&sim.world, &collisions, rt.arena) catch @panic("movement"); // 70 laps/ms
@@ -151,23 +169,6 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
     animator.update(&sim.world); // 160 laps/ms
     particleSystem(&sim.world); // 250 laps/ms
     backgroundColorSystem(sim); // 650 laps/ms
-}
-
-fn backgroundColorSystem(sim: *simulation.Simulation) void {
-    if (sim.meta.ticks_elapsed % redness_increase_frames != 0) return;
-
-    var query = sim.world.query(&.{
-        ecs.component.Tex,
-    }, &.{
-        ecs.component.Plr,
-    });
-
-    while (query.next()) |_| {
-        const tex = query.get(ecs.component.Tex) catch unreachable;
-
-        tex.tint.b = @max(100, tex.tint.b - 1);
-        tex.tint.g = @max(100, tex.tint.g - 1);
-    }
 }
 
 fn actionSystem(sim: *simulation.Simulation, timeline: input.Timeline) !void {
@@ -217,14 +218,44 @@ fn actionSystem(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             sim.world.demote(entity, &.{ecs.component.Jmp});
         }
 
-        const wants_attack = state.button_b == .Pressed or (if (timeline.buttonStateTick(plr.id, .b, .Pressed)) |press_tick| sim.meta.ticks_elapsed - press_tick < attack_buffer else false);
-        const can_attack = (if (timeline.buttonStateTick(plr.id, .b, .Pressed)) |press_tick| sim.meta.ticks_elapsed - press_tick < attack_cooldown else false) and ctr.count < attack_cooldown and sim.world.checkSignature(entity, &.{}, &.{ecs.component.Atk});
+        const b_press_tick = timeline.buttonStateTick(plr.id, .b, .Pressed);
+
+        const wants_block = state.dpad == .None and (state.button_b == .Pressed or (if (b_press_tick) |press_tick| sim.meta.ticks_elapsed - press_tick < block_buffer else false));
+        const can_block = (if (b_press_tick) |press_tick| sim.meta.ticks_elapsed - press_tick < attack_cooldown else false) and ctr.count < block_cooldown and sim.world.checkSignature(entity, &.{}, &.{ ecs.component.Atk, ecs.component.Blk, ecs.component.Hit });
+
+        if (wants_block and can_block) {
+            sim.world.promote(entity, &.{ecs.component.Blk});
+
+            _ = try sim.world.spawnWith(.{
+                ecs.component.Pos{ .pos = pos.pos + [_]i32{ -5, -5 } },
+                ecs.component.Col{
+                    .dim = [_]i32{ 16, 16 },
+                    .layer = collision.Layer{ .base = false, .pushing = true },
+                    .mask = collision.Layer{ .base = false },
+                },
+                ecs.component.Tex{
+                    .subpos = [_]i32{ -8, -8 },
+                    .texture_hash = AssetManager.pathHash("assets/smash_attack_smoke.png"), // TODO: Block texture
+                    .w = 2,
+                    .h = 2,
+                    .tint = rl.Color.init(100, 100, 100, 100),
+                },
+                ecs.component.Anm{ .interval = 8, .animation = .SmashAttackSmoke }, // TODO: Block animation
+                ecs.component.Ctr{},
+                ecs.component.Blk{},
+            });
+
+            continue;
+        }
+
+        const wants_attack = state.dpad != .None and (state.button_b == .Pressed or (if (b_press_tick) |press_tick| sim.meta.ticks_elapsed - press_tick < attack_buffer else false));
+        const can_attack = (if (b_press_tick) |press_tick| sim.meta.ticks_elapsed - press_tick < attack_cooldown else false) and ctr.count < attack_cooldown and sim.world.checkSignature(entity, &.{}, &.{ ecs.component.Atk, ecs.component.Blk, ecs.component.Hit });
 
         if (wants_attack and can_attack) {
             sim.world.promote(entity, &.{ecs.component.Atk});
 
             _ = try sim.world.spawnWith(.{
-                ecs.component.Pos{ .pos = pos.pos + attack_player_offset + switch (timeline.latest()[plr.id].dpad) {
+                ecs.component.Pos{ .pos = pos.pos + attack_player_offset + switch (state.dpad) {
                     .North => @Vector(2, i32){ 0, -attack_directional_offset },
                     .South => @Vector(2, i32){ 0, attack_directional_offset },
                     .West => @Vector(2, i32){ -attack_directional_offset, 0 },
@@ -235,6 +266,23 @@ fn actionSystem(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                     .SouthEast => @Vector(2, i32){ attack_directional_offset, attack_directional_offset },
                     else => @Vector(2, i32){ 0, 0 },
                 } },
+                ecs.component.Ctr{},
+                ecs.component.Dir{ .facing = switch (state.dpad) {
+                    .North => .North,
+                    .South => .South,
+                    .West => .West,
+                    .East => .East,
+                    .NorthWest => .Northwest,
+                    .NorthEast => .Northeast,
+                    .SouthWest => .Southwest,
+                    .SouthEast => .Southeast,
+                    else => .None,
+                } },
+                ecs.component.Col{
+                    .dim = attack_dimensions,
+                    .layer = collision.Layer{ .base = false, .damaging = true },
+                    .mask = collision.Layer{ .base = false },
+                },
                 ecs.component.Tex{
                     .texture_hash = AssetManager.pathHash("assets/smash_attack_smoke.png"),
                     .subpos = [_]i32{ -8, -8 },
@@ -242,144 +290,185 @@ fn actionSystem(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                     .h = 2,
                     .tint = rl.Color.init(100, 100, 100, 100),
                 },
-                ecs.component.Tmr{},
                 ecs.component.Anm{ .interval = 8, .animation = .SmashAttackSmoke },
+                ecs.component.Lnk{ .child = entity },
                 ecs.component.Atk{},
             });
         }
     }
 }
 
-fn particleSystem(world: *ecs.world.World) void {
-    var jump_query = world.query(&.{
-        ecs.component.Tmr,
-        ecs.component.Pos,
-        ecs.component.Tex,
-        ecs.component.Anm,
-        ecs.component.Jmp,
-    }, &.{
-        ecs.component.Col,
+fn blockSystem(world: *ecs.world.World) void {
+    var blocker_query = world.query(&.{
         ecs.component.Plr,
+        ecs.component.Ctr,
+        ecs.component.Blk,
+    }, &.{
+        ecs.component.Atk,
+        ecs.component.Hit,
     });
 
-    while (jump_query.next()) |entity| {
-        const tmr = jump_query.get(ecs.component.Tmr) catch unreachable;
+    while (blocker_query.next()) |entity| {
+        const ctr = blocker_query.get(ecs.component.Ctr) catch unreachable;
 
-        if (tmr.ticks == 32) {
-            world.kill(entity);
+        if (ctr.count >= block_cooldown) {
+            world.demote(entity, &.{ecs.component.Blk});
+            ctr.count = 0;
         } else {
-            tmr.ticks += 1;
+            ctr.count += 1;
         }
     }
 
-    var attack_query = world.query(&.{
-        ecs.component.Tmr,
-        ecs.component.Pos,
-        ecs.component.Tex,
-        ecs.component.Anm,
-        ecs.component.Atk,
+    var block_query = world.query(&.{
+        ecs.component.Ctr,
+        ecs.component.Blk,
     }, &.{
-        ecs.component.Col,
         ecs.component.Plr,
     });
 
-    while (attack_query.next()) |entity| {
-        const tmr = attack_query.get(ecs.component.Tmr) catch unreachable;
+    while (block_query.next()) |entity| {
+        const ctr = block_query.get(ecs.component.Ctr) catch unreachable;
 
-        if (tmr.ticks == 40) {
+        if (ctr.count >= 40) { // TODO: Match particle animation length
             world.kill(entity);
         } else {
-            tmr.ticks += 1;
+            ctr.count += 1;
+        }
+    }
+
+    var block_hitbox_query = world.query(&.{
+        ecs.component.Pos,
+        ecs.component.Col,
+        ecs.component.Ctr,
+        ecs.component.Blk,
+    }, &.{
+        ecs.component.Plr,
+    });
+
+    while (block_hitbox_query.next()) |entity| {
+        const blk_ctr = block_hitbox_query.get(ecs.component.Ctr) catch unreachable;
+
+        if (blk_ctr.count >= block_ticks) {
+            world.demote(entity, &.{ecs.component.Col});
+            continue;
+        }
+
+        const blk_pos = block_hitbox_query.get(ecs.component.Pos) catch unreachable;
+        const blk_col = block_hitbox_query.get(ecs.component.Col) catch unreachable;
+
+        var attack_query = world.query(&.{
+            ecs.component.Pos,
+            ecs.component.Col,
+            ecs.component.Dir,
+            ecs.component.Atk,
+            ecs.component.Lnk,
+        }, &.{
+            ecs.component.Plr,
+        });
+
+        while (attack_query.next()) |atk| {
+            const atk_pos = attack_query.get(ecs.component.Pos) catch unreachable;
+            const atk_col = attack_query.get(ecs.component.Col) catch unreachable;
+
+            if (!collision.intersects(blk_pos, blk_col, atk_pos, atk_col)) continue;
+
+            const atk_dir = attack_query.get(ecs.component.Dir) catch unreachable;
+            const atk_lnk = attack_query.get(ecs.component.Lnk) catch unreachable;
+            const plr = atk_lnk.child orelse continue;
+
+            if (!world.checkSignature(plr, &.{ ecs.component.Plr, ecs.component.Mov, ecs.component.Ctr }, &.{ecs.component.Hit})) continue;
+
+            const mov = world.inspect(plr, ecs.component.Mov) catch unreachable;
+            const ctr = world.inspect(plr, ecs.component.Ctr) catch unreachable;
+
+            mov.velocity = switch (atk_dir.facing) {
+                .None => ecs.component.Vec2.init(0, 0),
+                .North => ecs.component.Vec2.init(0, attack_strength_medium.mul(block_multiplier)),
+                .South => ecs.component.Vec2.init(0, attack_strength_large.mul(block_multiplier).mul(-1)),
+                .West => ecs.component.Vec2.init(attack_strength_large.mul(block_multiplier), attack_strength_small.mul(block_multiplier).mul(-1)),
+                .East => ecs.component.Vec2.init(attack_strength_large.mul(block_multiplier).mul(-1), attack_strength_small.mul(block_multiplier).mul(-1)),
+                .Northwest => ecs.component.Vec2.init(attack_strength_medium.mul(block_multiplier), attack_strength_medium.mul(block_multiplier)),
+                .Northeast => ecs.component.Vec2.init(attack_strength_medium.mul(block_multiplier).mul(-1), attack_strength_medium.mul(block_multiplier)),
+                .Southwest => ecs.component.Vec2.init(attack_strength_medium.mul(block_multiplier), attack_strength_medium.mul(block_multiplier).mul(-1)),
+                .Southeast => ecs.component.Vec2.init(attack_strength_medium.mul(block_multiplier).mul(-1), attack_strength_medium.mul(block_multiplier).mul(-1)),
+            };
+
+            world.promote(plr, &.{ecs.component.Hit});
+            ctr.count = 0;
+
+            world.demote(atk, &.{ecs.component.Col});
         }
     }
 }
 
-fn attackSystem(world: *ecs.world.World, inputs: *const input.AllPlayerButtons) !void {
+fn attackSystem(world: *ecs.world.World) void {
     var attacker_query = world.query(&.{
         ecs.component.Plr,
-        ecs.component.Atk,
         ecs.component.Ctr,
-        ecs.component.Pos,
-    }, &.{});
+        ecs.component.Atk,
+    }, &.{
+        ecs.component.Blk,
+        ecs.component.Hit,
+    });
 
     while (attacker_query.next()) |entity| {
-        const plr = attacker_query.get(ecs.component.Plr) catch unreachable;
         const ctr = attacker_query.get(ecs.component.Ctr) catch unreachable;
-        const pos = attacker_query.get(ecs.component.Pos) catch unreachable;
-
-        if (ctr.count == 0) _ = try world.spawnWith(.{
-            ecs.component.Atk{},
-            ecs.component.Ctr{},
-            ecs.component.Dir{ .facing = switch (inputs[plr.id].dpad) {
-                .North => .North,
-                .South => .South,
-                .West => .West,
-                .East => .East,
-                .NorthWest => .Northwest,
-                .NorthEast => .Northeast,
-                .SouthWest => .Southwest,
-                .SouthEast => .Southeast,
-                else => .None,
-            } },
-            ecs.component.Col{
-                .dim = attack_dimensions,
-                .layer = collision.Layer{ .base = false, .damaging = true },
-                .mask = collision.Layer{ .base = false },
-            },
-            ecs.component.Pos{ .pos = pos.pos + attack_player_offset + switch (inputs[plr.id].dpad) {
-                .North => @Vector(2, i32){ 0, -attack_directional_offset },
-                .South => @Vector(2, i32){ 0, attack_directional_offset },
-                .West => @Vector(2, i32){ -attack_directional_offset, 0 },
-                .East => @Vector(2, i32){ attack_directional_offset, 0 },
-                .NorthWest => @Vector(2, i32){ -attack_directional_offset, -attack_directional_offset },
-                .NorthEast => @Vector(2, i32){ attack_directional_offset, -attack_directional_offset },
-                .SouthWest => @Vector(2, i32){ -attack_directional_offset, attack_directional_offset },
-                .SouthEast => @Vector(2, i32){ attack_directional_offset, attack_directional_offset },
-                else => @Vector(2, i32){ 0, 0 },
-            } },
-            ecs.component.Lnk{ .child = entity },
-        });
-
-        ctr.count += 1;
 
         if (ctr.count >= attack_cooldown) {
             world.demote(entity, &.{ecs.component.Atk});
             ctr.count = 0;
+        } else {
+            ctr.count += 1;
         }
     }
 
     var attack_query = world.query(&.{
-        ecs.component.Atk,
         ecs.component.Ctr,
-        ecs.component.Dir,
-        ecs.component.Pos,
-        ecs.component.Col,
-        ecs.component.Lnk,
+        ecs.component.Atk,
     }, &.{
         ecs.component.Plr,
     });
 
     while (attack_query.next()) |entity| {
-        const atk_ctr = attack_query.get(ecs.component.Ctr) catch unreachable;
+        const ctr = attack_query.get(ecs.component.Ctr) catch unreachable;
 
-        if (atk_ctr.count == attack_ticks) {
+        if (ctr.count >= 40) {
             world.kill(entity);
+        } else {
+            ctr.count += 1;
+        }
+    }
+
+    var attack_hitbox_query = world.query(&.{
+        ecs.component.Pos,
+        ecs.component.Col,
+        ecs.component.Dir,
+        ecs.component.Ctr,
+        ecs.component.Lnk,
+        ecs.component.Atk,
+    }, &.{
+        ecs.component.Plr,
+    });
+
+    while (attack_hitbox_query.next()) |entity| {
+        const atk_ctr = attack_hitbox_query.get(ecs.component.Ctr) catch unreachable;
+
+        if (atk_ctr.count >= attack_ticks) {
+            world.demote(entity, &.{ecs.component.Col});
             continue;
         }
 
-        atk_ctr.count += 1;
-
-        const atk_lnk = attack_query.get(ecs.component.Lnk) catch unreachable;
-        const atk_pos = attack_query.get(ecs.component.Pos) catch unreachable;
-        const atk_col = attack_query.get(ecs.component.Col) catch unreachable;
-        const atk_dir = attack_query.get(ecs.component.Dir) catch unreachable;
+        const atk_lnk = attack_hitbox_query.get(ecs.component.Lnk) catch unreachable;
+        const atk_pos = attack_hitbox_query.get(ecs.component.Pos) catch unreachable;
+        const atk_col = attack_hitbox_query.get(ecs.component.Col) catch unreachable;
+        const atk_dir = attack_hitbox_query.get(ecs.component.Dir) catch unreachable;
 
         var player_query = world.query(&.{
             ecs.component.Plr,
             ecs.component.Pos,
             ecs.component.Col,
             ecs.component.Mov,
-            ecs.component.Tmr,
+            ecs.component.Ctr,
         }, &.{
             ecs.component.Hit,
         });
@@ -390,47 +479,53 @@ fn attackSystem(world: *ecs.world.World, inputs: *const input.AllPlayerButtons) 
             const plr_pos = player_query.get(ecs.component.Pos) catch unreachable;
             const plr_col = player_query.get(ecs.component.Col) catch unreachable;
 
-            if (collision.intersects(atk_pos, atk_col, plr_pos, plr_col)) {
-                const plr_mov = player_query.get(ecs.component.Mov) catch unreachable;
-                const plr_tmr = player_query.get(ecs.component.Tmr) catch unreachable;
+            if (!collision.intersects(atk_pos, atk_col, plr_pos, plr_col)) continue;
 
-                plr_mov.velocity = switch (atk_dir.facing) {
-                    .None => ecs.component.Vec2.init(0, 0),
-                    .North => ecs.component.Vec2.init(0, attack_strength_medium.mul(-1)),
-                    .South => ecs.component.Vec2.init(0, attack_strength_large),
-                    .West => ecs.component.Vec2.init(attack_strength_large.mul(-1), attack_strength_small.mul(-1)),
-                    .East => ecs.component.Vec2.init(attack_strength_large, attack_strength_small.mul(-1)),
-                    .Northwest => ecs.component.Vec2.init(attack_strength_medium.mul(-1), attack_strength_medium.mul(-1)),
-                    .Northeast => ecs.component.Vec2.init(attack_strength_medium, attack_strength_medium.mul(-1)),
-                    .Southwest => ecs.component.Vec2.init(attack_strength_medium.mul(-1), attack_strength_medium),
-                    .Southeast => ecs.component.Vec2.init(attack_strength_medium, attack_strength_medium),
-                };
-                plr_tmr.ticks = 0;
+            const plr_mov = player_query.get(ecs.component.Mov) catch unreachable;
+            const plr_ctr = player_query.get(ecs.component.Ctr) catch unreachable;
 
-                world.promote(plr, &.{ecs.component.Hit});
-            }
+            plr_mov.velocity = switch (atk_dir.facing) {
+                .None => ecs.component.Vec2.init(0, 0),
+                .North => ecs.component.Vec2.init(0, attack_strength_medium.mul(-1)),
+                .South => ecs.component.Vec2.init(0, attack_strength_large),
+                .West => ecs.component.Vec2.init(attack_strength_large.mul(-1), attack_strength_small.mul(-1)),
+                .East => ecs.component.Vec2.init(attack_strength_large, attack_strength_small.mul(-1)),
+                .Northwest => ecs.component.Vec2.init(attack_strength_medium.mul(-1), attack_strength_medium.mul(-1)),
+                .Northeast => ecs.component.Vec2.init(attack_strength_medium, attack_strength_medium.mul(-1)),
+                .Southwest => ecs.component.Vec2.init(attack_strength_medium.mul(-1), attack_strength_medium),
+                .Southeast => ecs.component.Vec2.init(attack_strength_medium, attack_strength_medium),
+            };
+
+            world.promote(plr, &.{ecs.component.Hit});
+            plr_ctr.count = 0;
         }
     }
+}
 
+fn hitSystem(world: *ecs.world.World) void {
     var hit_query = world.query(&.{
         ecs.component.Plr,
+        ecs.component.Ctr,
         ecs.component.Hit,
-        ecs.component.Tmr,
     }, &.{});
 
     while (hit_query.next()) |entity| {
-        const tmr = hit_query.get(ecs.component.Tmr) catch unreachable;
+        const ctr = hit_query.get(ecs.component.Ctr) catch unreachable;
 
-        if (tmr.ticks >= hitstun) {
+        if (ctr.count >= hitstun) {
             world.demote(entity, &.{ecs.component.Hit});
+            ctr.count = 0;
         } else {
-            tmr.ticks += 1;
+            ctr.count += 1;
         }
     }
 }
 
 fn deathSystem(sim: *simulation.Simulation) void {
-    var query = sim.world.query(&.{ ecs.component.Plr, ecs.component.Pos }, &.{});
+    var query = sim.world.query(&.{
+        ecs.component.Plr,
+        ecs.component.Pos,
+    }, &.{});
 
     while (query.next()) |entity| {
         const pos = query.get(ecs.component.Pos) catch unreachable;
@@ -440,80 +535,9 @@ fn deathSystem(sim: *simulation.Simulation) void {
 
         if (x < 0 or constants.world_width < x or y < 0 or constants.world_height < y) {
             sim.world.kill(entity);
-            std.debug.print("entity {} died", .{entity.identifier});
+            // TODO: Spawn particle
+            // TODO: Update scoreboard
         }
-    }
-}
-
-fn animationSystem(world: *ecs.world.World, inputs: *const input.AllPlayerButtons) void {
-    var query = world.query(&.{
-        ecs.component.Plr,
-        ecs.component.Mov,
-        ecs.component.Tex,
-        ecs.component.Anm,
-    }, &.{});
-
-    while (query.next()) |entity| {
-        const plr = query.get(ecs.component.Plr) catch unreachable;
-        const mov = query.get(ecs.component.Mov) catch unreachable;
-        const tex = query.get(ecs.component.Tex) catch unreachable;
-        const anm = query.get(ecs.component.Anm) catch unreachable;
-
-        const state = inputs[plr.id];
-
-        switch (state.dpad) {
-            .East, .NorthEast, .SouthEast => if (mov.velocity.vector[0] > 0) {
-                tex.flip_horizontal = false;
-                tex.subpos = right_texture_offset;
-            },
-            .West, .NorthWest, .SouthWest => if (mov.velocity.vector[0] < 0) {
-                tex.flip_horizontal = true;
-                tex.subpos = left_texture_offset;
-            },
-            else => {},
-        }
-
-        const previous = anm.animation;
-
-        const moving = mov.velocity.vector[0] != 0 and switch (state.dpad) {
-            .None, .North, .South => false,
-            else => true,
-        };
-        const jumping = world.checkSignature(entity, &.{ecs.component.Jmp}, &.{});
-        const airborne = world.checkSignature(entity, &.{ecs.component.Air}, &.{});
-        const falling = !jumping and airborne and mov.velocity.vector[1] > 0;
-        const crouching = mov.velocity.vector[0] == 0 and mov.velocity.vector[1] == 0 and state.dpad == .South and !airborne;
-        const attacking = world.checkSignature(entity, &.{ecs.component.Atk}, &.{});
-        const hit = world.checkSignature(entity, &.{ecs.component.Hit}, &.{});
-
-        if (moving) {
-            anm.animation = .SmashRun;
-        } else if (crouching) {
-            anm.animation = .SmashCrouch;
-        } else {
-            anm.animation = .SmashIdle;
-        }
-
-        if (jumping) {
-            anm.looping = false;
-            anm.animation = .SmashJump;
-            if (anm.subframe == 0) anm.interval = 1 else anm.interval = 8;
-        } else if (falling) {
-            anm.looping = false;
-            anm.animation = .SmashFall;
-        } else {
-            anm.looping = true;
-        }
-
-        if (attacking) {
-            anm.animation = .SmashAttack;
-        }
-
-        if (hit) {
-            anm.animation = .SmashHit;
-        }
-
-        if (anm.animation != previous) anm.subframe = 0;
     }
 }
 
@@ -706,28 +730,30 @@ fn resolveCollisions(world: *ecs.world.World, collisions: *collision.CollisionQu
     for (collisions.data.keys()) |c| {
         const plrposmov1 = world.checkSignature(c.a, &.{
             ecs.component.Plr,
-            ecs.component.Mov,
             ecs.component.Pos,
+            ecs.component.Mov,
         }, &.{
             ecs.component.Hit,
         });
-        const plrposmovhit1 = world.checkSignature(c.a, &.{
+        const plrposmovcolhit1 = world.checkSignature(c.a, &.{
             ecs.component.Plr,
-            ecs.component.Mov,
             ecs.component.Pos,
+            ecs.component.Mov,
+            ecs.component.Col,
             ecs.component.Hit,
         }, &.{});
         const plrposmov2 = world.checkSignature(c.b, &.{
             ecs.component.Plr,
-            ecs.component.Mov,
             ecs.component.Pos,
+            ecs.component.Mov,
         }, &.{
             ecs.component.Hit,
         });
-        const plrposmovhit2 = world.checkSignature(c.b, &.{
+        const plrposmovcolhit2 = world.checkSignature(c.b, &.{
             ecs.component.Plr,
-            ecs.component.Mov,
             ecs.component.Pos,
+            ecs.component.Mov,
+            ecs.component.Col,
             ecs.component.Hit,
         }, &.{});
 
@@ -753,14 +779,126 @@ fn resolveCollisions(world: *ecs.world.World, collisions: *collision.CollisionQu
             mov2.velocity.vector[0] -= bounce.bits;
         }
 
-        if (plrposmovhit1) {
+        if (plrposmovcolhit1) {
             const mov1 = world.inspect(c.a, ecs.component.Mov) catch unreachable;
             mov1.velocity = mov1.velocity.mul(ecs.component.F32.init(-1, 2));
         }
 
-        if (plrposmovhit2) {
+        if (plrposmovcolhit2) {
             const mov2 = world.inspect(c.b, ecs.component.Mov) catch unreachable;
             mov2.velocity = mov2.velocity.mul(ecs.component.F32.init(-1, 2));
+        }
+    }
+}
+
+// VISUALS
+
+fn animationSystem(world: *ecs.world.World, inputs: *const input.AllPlayerButtons) void {
+    var query = world.query(&.{
+        ecs.component.Plr,
+        ecs.component.Mov,
+        ecs.component.Tex,
+        ecs.component.Anm,
+    }, &.{});
+
+    while (query.next()) |entity| {
+        const plr = query.get(ecs.component.Plr) catch unreachable;
+        const mov = query.get(ecs.component.Mov) catch unreachable;
+        const tex = query.get(ecs.component.Tex) catch unreachable;
+        const anm = query.get(ecs.component.Anm) catch unreachable;
+
+        const state = inputs[plr.id];
+
+        switch (state.dpad) {
+            .East, .NorthEast, .SouthEast => if (mov.velocity.vector[0] > 0) {
+                tex.flip_horizontal = false;
+                tex.subpos = right_texture_offset;
+            },
+            .West, .NorthWest, .SouthWest => if (mov.velocity.vector[0] < 0) {
+                tex.flip_horizontal = true;
+                tex.subpos = left_texture_offset;
+            },
+            else => {},
+        }
+
+        const previous = anm.animation;
+
+        const moving = mov.velocity.vector[0] != 0 and switch (state.dpad) {
+            .None, .North, .South => false,
+            else => true,
+        };
+        const jumping = world.checkSignature(entity, &.{ecs.component.Jmp}, &.{});
+        const airborne = world.checkSignature(entity, &.{ecs.component.Air}, &.{});
+        const falling = !jumping and airborne and mov.velocity.vector[1] > 0;
+        const crouching = mov.velocity.vector[0] == 0 and mov.velocity.vector[1] == 0 and state.dpad == .South and !airborne;
+        const attacking = world.checkSignature(entity, &.{ecs.component.Atk}, &.{});
+        const hit = world.checkSignature(entity, &.{ecs.component.Hit}, &.{});
+
+        if (moving) {
+            anm.animation = .SmashRun;
+        } else if (crouching) {
+            anm.animation = .SmashCrouch;
+        } else {
+            anm.animation = .SmashIdle;
+        }
+
+        if (jumping) {
+            anm.looping = false;
+            anm.animation = .SmashJump;
+            if (anm.subframe == 0) anm.interval = 1 else anm.interval = 8;
+        } else if (falling) {
+            anm.looping = false;
+            anm.animation = .SmashFall;
+        } else {
+            anm.looping = true;
+        }
+
+        if (hit) {
+            anm.animation = .SmashHit;
+        } else if (attacking) {
+            anm.animation = .SmashAttack;
+        }
+
+        if (anm.animation != previous) anm.subframe = 0;
+    }
+}
+
+fn backgroundColorSystem(sim: *simulation.Simulation) void {
+    if (sim.meta.ticks_elapsed % redness_increase_frames != 0) return;
+
+    var query = sim.world.query(&.{
+        ecs.component.Tex,
+    }, &.{
+        ecs.component.Plr,
+    });
+
+    while (query.next()) |_| {
+        const tex = query.get(ecs.component.Tex) catch unreachable;
+
+        tex.tint.b = @max(100, tex.tint.b - 1);
+        tex.tint.g = @max(100, tex.tint.g - 1);
+    }
+}
+
+fn particleSystem(world: *ecs.world.World) void {
+    var jump_query = world.query(&.{
+        ecs.component.Tmr,
+        ecs.component.Pos,
+        ecs.component.Tex,
+        ecs.component.Anm,
+        ecs.component.Jmp,
+    }, &.{
+        ecs.component.Col,
+        ecs.component.Plr,
+    });
+
+    while (jump_query.next()) |entity| {
+        const tmr = jump_query.get(ecs.component.Tmr) catch unreachable;
+
+        if (tmr.ticks == 32) {
+            world.kill(entity);
+        } else {
+            tmr.ticks += 1;
         }
     }
 }
