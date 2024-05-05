@@ -29,7 +29,7 @@ const ConnectedClient = struct {
 };
 
 const ConnectionType = enum(u8) {
-    unusued,
+    unused,
     local,
     remote,
 };
@@ -41,8 +41,8 @@ const NetServerData = struct {
     input_history: InputConsolidation,
 
     conns_list: [constants.max_connected_count]ConnectedClient = undefined,
-    conns_type: [constants.max_connected_count]ConnectionType = [_]ConnectionType{.Unused} ** constants.max_connected_count,
-    conns_packets: [constants.max_connected_count][20]InputConsolidation.Packet = undefined,
+    conns_type: [constants.max_connected_count]ConnectionType = [_]ConnectionType{.unused} ** constants.max_connected_count,
+    conns_incoming_packets: [constants.max_connected_count][20]NetworkingQueue.Packet = undefined,
     conns_write_buffers: [constants.max_connected_count][1024]u8 = undefined,
     conns_read_buffers: [constants.max_connected_count][1024]u8 = undefined,
 
@@ -60,15 +60,14 @@ const NetServerData = struct {
         return null;
     }
 
-    fn ingestPlayerInput(self: *const NetServerData, change: NetworkingQueue.Packet) void {
+    fn ingestPlayerInput(self: *NetServerData, change: NetworkingQueue.Packet) !void {
         // TODO: Could be optimized such that we do not need to loop for every ingestPlayerInput.
 
         _ = try self.input_history.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick);
-        inline for (self.conns_list, self.slot_occupied) |*connection, occupied| {
-            if (!occupied) {
-                continue;
+        inline for (&self.conns_list, self.conns_type) |*connection, conn_type| {
+            if (conn_type == .remote) {
+                connection.consistent_until = @min(connection.consistent_until, change.tick);
             }
-            connection.consistent_until = @min(connection.consistent_until, change.tick);
         }
     }
 };
@@ -94,7 +93,7 @@ fn clientMessage(client_index: ?*ConnectedClientIndex, l: *xev.Loop, _: *xev.Com
     var client = &server_data.conns_list[fromClientIndex(client_index)];
 
     const packet_size = packet_size_res catch |e| {
-        server_data.slot_occupied[fromClientIndex(client_index)] = false;
+        server_data.conns_type[fromClientIndex(client_index)] = .unused;
         client.stream.shutdown(l, &client.read_completion, void, null, afterOverfullDisconnect);
         std.debug.print("error: {any}\n", .{e});
         return .disarm;
@@ -152,12 +151,12 @@ fn clientConnected(_: ?*void, l: *xev.Loop, _: *xev.Completion, r: xev.TCP.Accep
 }
 
 fn serverThread(networking_queue: *NetworkingQueue) !void {
-    var server_data = NetServerData{ .loop = undefined };
-    server_data.conns_type[0] == .local;
+    var server_data = NetServerData{ .loop = undefined, .input_history = undefined };
+    server_data.conns_type[0] = .local;
     server_data.loop = try xev.Loop.init(.{ .entries = 128 });
     defer server_data.loop.deinit();
 
-    server_data.input_history.init(std.heap.page_allocator);
+    server_data.input_history = try InputConsolidation.init(std.heap.page_allocator);
     //defer server_data.input_history.deinit(std.heap.page_allocator);
 
     const address = try std.net.Address.parseIp("0.0.0.0", 8080);
@@ -177,29 +176,29 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
 
         // Ingest the updates from the local-client.
         for (networking_queue.incoming_data[0..networking_queue.incoming_data_len]) |change| {
-            server_data.ingestPlayerInput(change);
+            try server_data.ingestPlayerInput(change);
         }
         networking_queue.incoming_data_len = 0;
 
         // Ingest the updates from the connected clients.
-        inline for (server_data.conns_list, server_data.conns_type, server_data.conns_packets) |*connection, conn_type, *conns_packets| {
+        for (&server_data.conns_list, server_data.conns_type, &server_data.conns_incoming_packets) |*connection, conn_type, *conns_packets| {
             if (conn_type != .remote) {
                 continue;
             }
             for (conns_packets[0..connection.packets_available]) |change| {
-                server_data.ingestPlayerInput(change);
+                try server_data.ingestPlayerInput(change);
             }
             connection.packets_available = 0;
         }
 
         // Send the updates to the clients.
-        inline for (server_data.conns_list, server_data.conns_type, server_data.conns_writer_buffers) |connection, conn_type, *write_buffer| {
+        for (&server_data.conns_list, server_data.conns_type, &server_data.conns_write_buffers) |*connection, conn_type, *write_buffer| {
             // Send the missing inputs. But only N at the time.
             const send_until = @min(server_data.input_history.buttons.items.len, connection.consistent_until + 40);
 
             if (conn_type == .local) {
                 for (connection.consistent_until .. send_until) |tick_number| {
-                    const packet = server_data.input_history.buttons[tick_number];
+                    const packet = server_data.input_history.buttons.items[tick_number];
                     _ = packet;
                 }
             }
@@ -213,9 +212,22 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
             }
 
 
-            const fb = std.io.fixedBufferStream(write_buffer);
+            var fb = std.io.fixedBufferStream(write_buffer);
             const writer = fb.writer();
-            cbor.writeArrayHeader(writer, 2);
+            const input_tick_count = send_until - connection.consistent_until;
+            try cbor.writeArrayHeader(writer, input_tick_count);
+            for(connection.consistent_until .. send_until) |tick_index| {
+                const inputs = server_data.input_history.buttons.items[tick_index];
+                try cbor.writeArrayHeader(writer, inputs.len);
+                for(inputs) |input| {
+                    try cbor.writeArrayHeader(writer, 3);
+                    try cbor.writeUint(writer, @intFromEnum(input.dpad));
+                    try cbor.writeUint(writer, @intFromEnum(input.button_a));
+                    try cbor.writeUint(writer, @intFromEnum(input.button_b));
+                }
+            }
+
+            connection.stream.write(&server_data.loop, &connection.write_completion, .{ .slice = write_buffer }, void, null, writeNoop);
 
             // TODO: Actually send the data to remote peers.
         }

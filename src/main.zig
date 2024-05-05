@@ -67,7 +67,7 @@ const LaunchOptions = struct {
 };
 
 pub fn main() !void {
-    // const launch_options = try LaunchOptions.parse();
+    const launch_options = try LaunchOptions.parse();
 
     var window = win.Window.init(960, 540); // 960, 540
     defer window.deinit();
@@ -97,11 +97,11 @@ pub fn main() !void {
     var net_thread_queue = NetworkingQueue{};
 
     // Networking
-    // if (launch_options.start_as_role == .client) {
-    //     try networking.startClient(&net_thread_queue);
-    // } else {
-    //     try networking.startServer(&net_thread_queue);
-    // }
+    if (launch_options.start_as_role == .client) {
+        try networking.startClient(&net_thread_queue);
+    } else {
+        try networking.startServer(&net_thread_queue);
+    }
 
     const invariables = Invariables{
         .minigames_list = &minigames_list,

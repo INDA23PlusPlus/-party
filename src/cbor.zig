@@ -245,55 +245,99 @@ pub const Context = struct {
             else => return Error.IncorrectType,
         }
     }
+
+    pub fn toString(ctx: *Context, writer: anytype) !usize {
+        const token = try ctx.readAny();
+        var written: usize = 0;
+        switch (token) {
+            .array => |count| {
+                written += 2;
+                try writer.writeAll("[");
+                var next_context = Context {
+                    .scanner = ctx.scanner,
+                    .depth = ctx.depth + 1,
+                    .items = count,
+                    .reuse = ctx.reuse,
+                };
+                for(0..count) |i| {
+                    // TODO: Escape strings.
+                    written += try next_context.toString(writer) + 1;
+                    if (i + 1 != count) {
+                        try writer.writeByte(' ');
+                    } else {
+                        written -= 1;
+                    }
+                }
+                try writer.writeAll("]");
+            },
+            .number => |value| {
+                const form = "{d}";
+                written += std.fmt.count(form, .{value});
+                try writer.print(form, .{value});
+            },
+            .negative_number => |value| {
+                const form = "-{d}";
+                written += std.fmt.count(form, .{value});
+                try writer.print(form, .{value});
+            },
+            .unchecked_str, .string => |s| {
+                const form = "\"{s}\"";
+                written += std.fmt.count(form, .{s});
+                try writer.print(form, .{s});
+            },
+            .bin => |bin| {
+                const form = "<{d} bytes>";
+                written += std.fmt.count(form, .{bin});
+                try writer.print(form, .{bin});
+            },
+            //else => {
+            //    try writer.writeAll("<unprintable>");
+            //}
+        }
+        return written;
+    }
 };
 
-pub fn writeBin(writer: anytype, str: []const u8) !void {
-    if (str.len <= 23) {
-        try writer.writeByte(0x40 + @as(u8, @truncate(str.len)));
-        try writer.writeAll(str);
-    } else if (str.len <= 255) {
-        var a = [2]u8{0x58, @truncate(str.len)};
+inline fn writeSized(comptime code_start: u8, writer: anytype, size: usize) !void {
+    if (size <= 23) {
+        try writer.writeByte(code_start + @as(u8, @truncate(size)));
+    } else if (size <= 255) {
+        var a = [2]u8{code_start + 0x18, @truncate(size)};
         try writer.writeAll(&a);
-        try writer.writeAll(str);
-    } else if (str.len <= 65535) {
-        var a = [3]u8{0x59, 0, 0};
-        std.mem.writeInt(std.math.ByteAlignedInt(u16), a[1..], @truncate(str.len), std.builtin.Endian.big);
+    } else if (size <= 65535) {
+        var a = [3]u8{code_start + 0x19, 0, 0};
+        std.mem.writeInt(std.math.ByteAlignedInt(u16), a[1..], @truncate(size), std.builtin.Endian.big);
         try writer.writeAll(&a);
-        try writer.writeAll(str);
-    } else if (str.len <= 0xFFFFFFFF) {
-        var a = [5]u8{0x5a, 0, 0, 0, 0};
-        std.mem.writeInt(std.math.ByteAlignedInt(u32), a[1..], @truncate(str.len), std.builtin.Endian.big);
+    } else if (size <= 0xFFFFFFFF) {
+        var a = [5]u8{code_start + 0x1a, 0, 0, 0, 0};
+        std.mem.writeInt(std.math.ByteAlignedInt(u32), a[1..], @truncate(size), std.builtin.Endian.big);
         try writer.writeAll(&a);
-        try writer.writeAll(str);
     } else {
-        var a = [9]u8{0x5b, 0, 0, 0, 0, 0, 0, 0, 0};
-        std.mem.writeInt(std.math.ByteAlignedInt(u64), a[1..], @truncate(str.len), std.builtin.Endian.big);
+        var a = [9]u8{code_start + 0x1b, 0, 0, 0, 0, 0, 0, 0, 0};
+        std.mem.writeInt(std.math.ByteAlignedInt(u64), a[1..], @truncate(size), std.builtin.Endian.big);
         try writer.writeAll(&a);
-        try writer.writeAll(str);
     }
+}
+
+pub fn writeUint(writer: anytype, value: usize) !void {
+    try writeSized(0x00, writer, value);
+}
+
+pub fn writeBin(writer: anytype, str: []const u8) !void {
+    try writeSized(0x40, writer, str.len);
+    try writer.writeAll(str);
+}
+
+pub fn writeString(writer: anytype, str: []const u8) !void {
+    try writeSized(0x60, writer, str.len);
+    try writer.writeAll(str);
 }
 
 pub fn writeArrayHeader(writer: anytype, item_count: usize) !void {
-    if (item_count <= 23) {
-        try writer.writeByte(0x80 + @as(u8, @truncate(item_count)));
-    } else if (item_count <= 255) {
-        var a = [2]u8{0x98, @truncate(item_count)};
-        try writer.writeAll(&a);
-    } else if (item_count <= 65535) {
-        var a = [3]u8{0x99, 0, 0};
-        std.mem.writeInt(std.math.ByteAlignedInt(u16), a[1..], @truncate(item_count), std.builtin.Endian.big);
-        try writer.writeAll(&a);
-    } else if (item_count <= 0xFFFFFFFF) {
-        var a = [5]u8{0x9a, 0, 0, 0, 0};
-        std.mem.writeInt(std.math.ByteAlignedInt(u32), a[1..], @truncate(item_count), std.builtin.Endian.big);
-        try writer.writeAll(&a);
-    } else {
-        var a = [9]u8{0x9b, 0, 0, 0, 0, 0, 0, 0, 0};
-        std.mem.writeInt(std.math.ByteAlignedInt(u64), a[1..], @truncate(item_count), std.builtin.Endian.big);
-        try writer.writeAll(&a);
-    }
+    try writeSized(0x80, writer, item_count);
 }
 
+// TODO: Some of these tests might be redundant as writeSized is at the heart of many of them.
 
 test "write CBOR fixbin" {
     var output = [_]u8{0} ** 256;
@@ -366,6 +410,47 @@ test "write CBOR array 64" {
     const writer = fb.writer();
     try writeArrayHeader(writer, 5_000_000_000);
     try std.testing.expectEqualStrings("\x9b\x00\x00\x00\x01\x2A\x05\xF2\x00", &output);
+}
+
+test "write CBOR fixuint" {
+    var output = [_]u8{0} ** 2;
+    var fb = std.io.fixedBufferStream(&output);
+    const writer = fb.writer();
+    try writeUint(writer, 1);
+    try writeUint(writer, 0);
+    try std.testing.expectEqualStrings("\x01\x00", &output);
+}
+
+test "write CBOR uint 8" {
+    var output = [_]u8{0} ** 2;
+    var fb = std.io.fixedBufferStream(&output);
+    const writer = fb.writer();
+    try writeUint(writer, 210);
+    try std.testing.expectEqualStrings("\x18\xd2", &output);
+}
+
+test "write CBOR uint 16" {
+    var output = [_]u8{0} ** 3;
+    var fb = std.io.fixedBufferStream(&output);
+    const writer = fb.writer();
+    try writeUint(writer, 1000);
+    try std.testing.expectEqualStrings("\x19\x03\xe8", &output);
+}
+
+test "write CBOR uint 32" {
+    var output = [_]u8{0} ** 5;
+    var fb = std.io.fixedBufferStream(&output);
+    const writer = fb.writer();
+    try writeUint(writer, 100000);
+    try std.testing.expectEqualStrings("\x1a\x00\x01\x86\xa0", &output);
+}
+
+test "write CBOR uint 64" {
+    var output = [_]u8{0} ** 9;
+    var fb = std.io.fixedBufferStream(&output);
+    const writer = fb.writer();
+    try writeUint(writer, 5_000_000_000);
+    try std.testing.expectEqualStrings("\x1b\x00\x00\x00\x01\x2A\x05\xF2\x00", &output);
 }
 
 test "read fixuint" {
@@ -598,3 +683,62 @@ test "read array 64bit just 1" {
     try std.testing.expectError(Error.MissingBytes, ctx.readI64());
 }
 
+test "array empty toString" {
+    const v = "\x9b\x00\x00\x00\x00\x00\x00\x00\x00";
+    var scanner = Scanner{};
+    var ctx = scanner.begin(v);
+
+    var output = [_]u8{0} ** 128;
+    var fb = std.io.fixedBufferStream(&output);
+    const writer = fb.writer();
+
+    const len = try ctx.toString(writer);
+
+    try std.testing.expectEqualStrings("[]", output[0..len]);
+}
+
+test "array numbers toString" {
+    const v = "\x9b\x00\x00\x00\x00\x00\x00\x00\x02\x07\x02";
+    var scanner = Scanner{};
+    var ctx = scanner.begin(v);
+
+    var output = [_]u8{0} ** 128;
+    var fb = std.io.fixedBufferStream(&output);
+    const writer = fb.writer();
+
+    const len = try ctx.toString(writer);
+
+    try std.testing.expectEqualStrings("[7 2]", output[0..len]);
+}
+
+test "array numbers 3 toString" {
+    const v = "\x9b\x00\x00\x00\x00\x00\x00\x00\x03\x07\x02\x18\x03";
+    var scanner = Scanner{};
+    var ctx = scanner.begin(v);
+
+    var output = [_]u8{0} ** 128;
+    var fb = std.io.fixedBufferStream(&output);
+    const writer = fb.writer();
+
+    const len = try ctx.toString(writer);
+
+    try std.testing.expectEqualStrings("[7 2 3]", output[0..len]);
+}
+
+test "array strings toString" {
+    var input = [_]u8{0} ** 256;
+    var fb = std.io.fixedBufferStream(&input);
+    const writer = fb.writer();
+    try writeArrayHeader(writer, 1);
+    try writeString(writer, "hej");
+
+    var scanner = Scanner{};
+    var ctx = scanner.begin(&input);
+
+    var output = [_]u8{0} ** 256;
+    var fb_out = std.io.fixedBufferStream(&output);
+    const writer_out = fb_out.writer();
+    const len = try ctx.toString(writer_out);
+
+    try std.testing.expectEqualStrings("[\"hej\"]", output[0..len]);
+}
