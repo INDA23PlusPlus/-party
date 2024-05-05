@@ -11,7 +11,7 @@ pub const Metadata = struct {
     seed: usize = 555,
     ticks_elapsed: usize = 1,
     minigame_id: usize = 0,
-    minigame_ticks_per_update: u32 = 1, // Used by minigames to
+    minigame_ticks_per_update: u32 = 1,
 };
 
 pub const Simulation = struct {

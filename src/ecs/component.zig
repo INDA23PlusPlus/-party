@@ -36,6 +36,7 @@ pub const components: []const type = &.{
     Atk,
     Hit,
     Blk,
+    Kng,
 };
 
 /// Entities with this component are positionable.
@@ -141,3 +142,7 @@ pub const Hit = struct {};
 
 /// Entities with this component are in a blocking state.
 pub const Blk = struct {};
+
+/// The crown entity uses this tag as an identifier.
+/// Could potentially be used to make the leading player behave differently.
+pub const Kng = struct {};

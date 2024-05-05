@@ -90,7 +90,7 @@ fn updateScore(sim: *simulation.Simulation) !void {
             },
 
             0 => {
-                std.debug.print("Hpppsan det var fel\n", .{});
+                std.debug.print("Hoppsan det var fel\n", .{});
                 sim.meta.minigame_placements[id] = undefined;
             },
 
