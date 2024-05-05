@@ -110,4 +110,14 @@ pub const Timeline = struct {
 
         return null;
     }
+
+    pub fn connectedPlayerCount(time: Timeline) usize {
+        var i: usize = 0;
+
+        for (time.latest()) |plr| {
+            if (plr.is_connected()) i += 1;
+        }
+
+        return i;
+    }
 };

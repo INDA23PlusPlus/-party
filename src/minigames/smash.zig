@@ -15,15 +15,16 @@ const Invariables = @import("../Invariables.zig");
 
 // TODO: Use input for movement and `Dir` for attack direction and animation
 // TODO: Knockback increase over time
-// TODO: Block action
-// TODO: Block animation
 // TODO: Block particle
 // TODO: Fix bug where players are not being push away when attacking very close.
 // TODO: Death particle
 // TODO: End condition
+// TODO: Push players into players bounce
+// TODO: Push bounce correctly
 
 const left_texture_offset = [_]i32{ -5, -10 };
 const right_texture_offset = [_]i32{ -21, -10 };
+
 const redness_increase_frames = 30;
 
 const ground_speed = ecs.component.F32.init(4, 3);
@@ -50,7 +51,9 @@ const bounce_strength = ecs.component.F32.init(3, 2);
 const attack_strength_small = ecs.component.F32.init(2, 1);
 const attack_strength_medium = ecs.component.F32.init(4, 1);
 const attack_strength_large = ecs.component.F32.init(5, 1);
-const attack_cooldown = 20;
+const attack_strength_multiplier_speed = ecs.component.F32.init(1, 600);
+const attack_strength_multiplier_max = ecs.component.F32.init(2, 1);
+const attack_cooldown = 24;
 const attack_buffer = 5;
 const attack_dimensions = [_]i32{ 16, 16 };
 const attack_ticks = 7;
@@ -58,14 +61,22 @@ const attack_player_offset = [_]i32{ -5, -5 };
 const attack_directional_offset = 16;
 
 const block_multiplier = ecs.component.F32.init(5, 4);
-const block_cooldown = 30;
+const block_cooldown = 32;
 const block_buffer = 5;
-const block_ticks = 60;
+const block_ticks = 3;
 const block_dimensions = [_]i32{ 16, 16 };
 
-// var benchmarker: @import("../Benchmarker.zig") = undefined;
-pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
-    // benchmarker = @import("../Benchmarker.zig").init("smash") catch @panic("");
+pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
+    const player_count: u32 = @intCast(timeline.connectedPlayerCount());
+    _ = player_count;
+
+    // Global Data
+    const global = try sim.world.spawnWith(.{
+        ecs.component.Tmr{},
+        ecs.component.Ctr{ .count = 8 }, // Players left
+    });
+
+    sim.world.cache(global);
 
     // Background
     _ = try sim.world.spawnWith(.{
@@ -110,9 +121,11 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     });
 
     // Players
-    for (0..2) |i| {
+    for (0..8) |i| {
+        const id: u32 = @intCast(i);
+
         _ = try sim.world.spawnWith(.{
-            ecs.component.Plr{ .id = @intCast(i) },
+            ecs.component.Plr{ .id = id },
             ecs.component.Pos{ .pos = [_]i32{ 128 + 16 * @as(i32, @intCast(i)), 234 } },
             ecs.component.Col{
                 .dim = [_]i32{ 6, 6 },
@@ -129,9 +142,14 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
             ecs.component.Anm{ .animation = Animation.SmashIdle, .interval = 8, .looping = true },
             ecs.component.Tmr{}, // Coyote timer
             ecs.component.Ctr{}, // Attack timer, block timer, and hit recovery timer
-            ecs.component.Dbg{},
         });
+
+        sim.meta.minigame_placements[id] = 1; // Everyone's a winner by default
     }
+
+    // Crown
+    sim.meta.global_score[0] = 20;
+    try @import("../crown.zig").init(sim, .{ -5, -22 });
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invariables) !void {
@@ -141,21 +159,14 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
         try init(sim, timeline);
     }
 
-    const inputs = &timeline.latest();
-
-    var collisions = collision.CollisionQueue.init(rt.arena) catch @panic("collision");
-
-    // benchmarker.start();
     try actionSystem(sim, timeline); // 50 laps/ms (2 players)
-    // benchmarker.stop();
-    // if (benchmarker.laps % 360 == 0) {
-    //     benchmarker.write() catch undefined;
-    //     benchmarker.reset();
-    // }
 
     blockSystem(&sim.world);
     attackSystem(&sim.world);
     hitSystem(&sim.world);
+
+    const inputs = &timeline.latest();
+    var collisions = collision.CollisionQueue.init(rt.arena) catch @panic("collision");
 
     gravitySystem(&sim.world); // 150 laps/ms
     movement.update(&sim.world, &collisions, rt.arena) catch @panic("movement"); // 70 laps/ms
@@ -163,12 +174,16 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
     airborneSystem(&sim.world); // 70 laps/ms
     forceSystem(&sim.world, inputs); // 120 laps/ms
 
-    deathSystem(sim); // 200 laps/ms
+    try deathSystem(sim); // 200 laps/ms
 
     animationSystem(&sim.world, inputs); // 150 laps/ms
     animator.update(&sim.world); // 160 laps/ms
     particleSystem(&sim.world); // 250 laps/ms
     backgroundColorSystem(sim); // 650 laps/ms
+
+    try @import("../crown.zig").update(sim);
+
+    if ((try sim.world.inspect(sim.world.cached_entity.?, ecs.component.Ctr)).count <= 1) sim.meta.minigame_id = 3;
 }
 
 fn actionSystem(sim: *simulation.Simulation, timeline: input.Timeline) !void {
@@ -374,8 +389,8 @@ fn blockSystem(world: *ecs.world.World) void {
 
             const atk_dir = attack_query.get(ecs.component.Dir) catch unreachable;
             const atk_lnk = attack_query.get(ecs.component.Lnk) catch unreachable;
-            const plr = atk_lnk.child orelse continue;
 
+            const plr = atk_lnk.child orelse continue;
             if (!world.checkSignature(plr, &.{ ecs.component.Plr, ecs.component.Mov, ecs.component.Ctr }, &.{ecs.component.Hit})) continue;
 
             const mov = world.inspect(plr, ecs.component.Mov) catch unreachable;
@@ -521,11 +536,21 @@ fn hitSystem(world: *ecs.world.World) void {
     }
 }
 
-fn deathSystem(sim: *simulation.Simulation) void {
+fn deathSystem(sim: *simulation.Simulation) !void {
+    const player_counter = try sim.world.inspect(sim.world.cached_entity.?, ecs.component.Ctr);
+
     var query = sim.world.query(&.{
         ecs.component.Plr,
         ecs.component.Pos,
+        ecs.component.Mov,
+        ecs.component.Col,
+        ecs.component.Tex,
+        ecs.component.Anm,
+        ecs.component.Ctr,
+        ecs.component.Tmr,
     }, &.{});
+
+    var dead_players: u32 = 0;
 
     while (query.next()) |entity| {
         const pos = query.get(ecs.component.Pos) catch unreachable;
@@ -534,10 +559,49 @@ fn deathSystem(sim: *simulation.Simulation) void {
         const y = pos.pos[1];
 
         if (x < 0 or constants.world_width < x or y < 0 or constants.world_height < y) {
-            sim.world.kill(entity);
-            // TODO: Spawn particle
-            // TODO: Update scoreboard
+            dead_players += 1;
+            player_counter.count -= 1;
+
+            // TODO: Rotate particle
+            _ = try sim.world.spawnWith(.{
+                ecs.component.Pos{ .pos = pos.pos + [_]i32{ -12, -32 } },
+                ecs.component.Tex{
+                    .texture_hash = AssetManager.pathHash("assets/smash_death.png"),
+                    .w = 2,
+                    .h = 2,
+                },
+                ecs.component.Anm{ .animation = .SmashDeath, .interval = 4 },
+                ecs.component.Tmr{},
+            });
+
+            sim.world.demote(entity, &.{
+                ecs.component.Pos,
+                ecs.component.Mov,
+                ecs.component.Col,
+                ecs.component.Tex,
+                ecs.component.Anm,
+                ecs.component.Ctr,
+                ecs.component.Tmr,
+            });
         }
+    }
+
+    var dead_player_query = sim.world.query(&.{
+        ecs.component.Plr,
+    }, &.{
+        ecs.component.Mov,
+        ecs.component.Col,
+        ecs.component.Tex,
+        ecs.component.Anm,
+        ecs.component.Ctr,
+        ecs.component.Tmr,
+    });
+
+    while (dead_player_query.next()) |entity| {
+        const plr = dead_player_query.get(ecs.component.Plr) catch unreachable;
+
+        sim.meta.minigame_placements[plr.id] = player_counter.count + dead_players;
+        sim.world.kill(entity);
     }
 }
 
@@ -832,6 +896,7 @@ fn animationSystem(world: *ecs.world.World, inputs: *const input.AllPlayerButton
         const falling = !jumping and airborne and mov.velocity.vector[1] > 0;
         const crouching = mov.velocity.vector[0] == 0 and mov.velocity.vector[1] == 0 and state.dpad == .South and !airborne;
         const attacking = world.checkSignature(entity, &.{ecs.component.Atk}, &.{});
+        const blocking = world.checkSignature(entity, &.{ecs.component.Blk}, &.{});
         const hit = world.checkSignature(entity, &.{ecs.component.Hit}, &.{});
 
         if (moving) {
@@ -857,6 +922,8 @@ fn animationSystem(world: *ecs.world.World, inputs: *const input.AllPlayerButton
             anm.animation = .SmashHit;
         } else if (attacking) {
             anm.animation = .SmashAttack;
+        } else if (blocking) {
+            anm.animation = .SmashBlock;
         }
 
         if (anm.animation != previous) anm.subframe = 0;
@@ -896,6 +963,27 @@ fn particleSystem(world: *ecs.world.World) void {
         const tmr = jump_query.get(ecs.component.Tmr) catch unreachable;
 
         if (tmr.ticks == 32) {
+            world.kill(entity);
+        } else {
+            tmr.ticks += 1;
+        }
+    }
+
+    var death_query = world.query(&.{
+        ecs.component.Pos,
+        ecs.component.Tex,
+        ecs.component.Anm,
+        ecs.component.Tmr,
+    }, &.{
+        ecs.component.Col,
+        ecs.component.Plr,
+        ecs.component.Jmp,
+    });
+
+    while (death_query.next()) |entity| {
+        const tmr = death_query.get(ecs.component.Tmr) catch unreachable;
+
+        if (tmr.ticks == 20) {
             world.kill(entity);
         } else {
             tmr.ticks += 1;

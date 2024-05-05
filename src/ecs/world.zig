@@ -94,6 +94,7 @@ pub const World = struct {
         if (@typeInfo(C) != .Struct) @compileError("components must be structs");
     },
 
+    cached_entity: ?Entity = null,
     entities: Entities = Entities.initEmpty(),
     generations: [N]Generation = [_]Generation{0} ** N,
     signatures: [N]Signature = [_]Signature{Signature.initEmpty()} ** N,
@@ -101,9 +102,16 @@ pub const World = struct {
 
     /// Removes all entities from the world.
     pub fn reset(self: *Self) void {
+        self.cached_entity = null;
         self.entities = Entities.initEmpty();
         self.generations = [_]Generation{0} ** N;
         self.signatures = [_]Signature{Signature.initEmpty()} ** N;
+        self.buffer = undefined;
+    }
+
+    /// Cache an entity. There can be only one!
+    pub fn cache(self: *Self, entity: Entity) void {
+        self.cached_entity = entity;
     }
 
     /// Creates a new entity with default intialized components.

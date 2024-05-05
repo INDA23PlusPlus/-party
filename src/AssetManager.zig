@@ -42,6 +42,7 @@ const paths = [_][:0]const u8{
     "assets/smash_platform.png",
     "assets/smash_jump_smoke.png",
     "assets/smash_attack_smoke.png",
+    "assets/smash_death.png",
     "assets/tron_skull.png",
     "assets/smash_cat.png",
     "assets/error.png",
@@ -50,6 +51,7 @@ const paths = [_][:0]const u8{
     "assets/sky_background_0.png",
     "assets/sky_background_1.png",
     "assets/sky_background_2.png",
+    "assets/crown.png",
 };
 
 hashmap: map_type,
