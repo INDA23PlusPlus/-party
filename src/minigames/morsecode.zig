@@ -17,7 +17,7 @@ const morsecode_maxlen = 6;
 var keystrokes: [constants.max_player_count][morsecode_maxlen]u8 = undefined;
 var typed_len = std.mem.zeroes([constants.max_player_count]u8);
 var current_letter = std.mem.zeroes([constants.max_player_count]u8);
-var game_string: []const u8 = undefined;
+var game_string: [:0]const u8 = undefined;
 var game_string_len: usize = 20;
 var current_placement: usize = 0;
 var player_finish_order: [constants.max_player_count]u32 = [constants.max_player_count]u32{ undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined };
@@ -30,12 +30,27 @@ fn assigned_pos(id: usize) @Vector(2, i32) {
     return pos;
 }
 
+// TODO: better strings
+const game_strings = [_][:0]const u8{
+    "BABBA",
+    "TEST",
+    "WORD",
+};
+
 fn set_string_info() void {
-    // TODO: generate a random string for gameplay
-    game_string = "BABBA";
+    // TODO: pick random from list
+    game_string = game_strings[0];
     game_string_len = game_string.len;
     // return "plusplusparty";
 }
+
+const player_strings: [constants.max_player_count][:0]const u8 = blk: {
+    var res: [constants.max_player_count][:0]const u8 = undefined;
+    for (0..constants.max_player_count) |id| {
+        res[id] = "Player " ++ std.fmt.comptimePrint("{}", .{id});
+    }
+    break :blk res;
+};
 
 pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     sim.meta.minigame_ticks_per_update = 50;
@@ -57,12 +72,12 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     for (0..constants.max_player_count) |id| {
         // std.debug.print("{any}", .{buf});
         //std.debug.print("{any}", .{id});
-        const temp: []const u8 = std.fmt.bufPrint(&buf, "Player {}", .{id}) catch @panic("cock");
-        const temp2 = buf[0..temp.len :0];
+        // const temp: []const u8 = std.fmt.bufPrint(&buf, "Player {}", .{id}) catch @panic("cock");
+        // const temp2 = buf[0..temp.len :0];
         _ = try sim.world.spawnWith(.{
             // ecs.component.Plr{ .id = @intCast(id) }, // only use this to name the players
             ecs.component.Txt{
-                .string = temp2,
+                .string = player_strings[id],
                 // .string = "Player x",
                 .font_size = 10,
                 .color = 0xff0066ff,
@@ -86,6 +101,15 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
             ecs.component.Ctr{ .id = @intCast(id), .count = @intCast(id + 1) },
         });
     }
+
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Pos{ .pos = [2]i32{ 120, 100 } },
+        ecs.component.Txt{
+            .string = game_string,
+            // .font_size = 10,
+            .color = 0x666666FF,
+        },
+    });
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
