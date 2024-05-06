@@ -13,12 +13,9 @@ const Animation = @import("../animation/animations.zig").Animation;
 const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
 
-// TODO: Use input for movement and `Dir` for attack direction and animation
-// TODO: Knockback increase over time
 // TODO: Block particle
-// TODO: Fix bug where players are not being push away when attacking very close.
 // TODO: Death particle
-// TODO: End condition
+// TODO: Fix bug where players are not being push away when attacking very close
 // TODO: Push players into players bounce
 // TODO: Push bounce correctly
 
@@ -26,6 +23,7 @@ const left_texture_offset = [_]i32{ -5, -10 };
 const right_texture_offset = [_]i32{ -21, -10 };
 
 const redness_increase_frames = 30;
+const pushback_bonus = ecs.component.F32.init(1, 1).mul(ecs.component.F32.init(1, 60));
 
 const ground_speed = ecs.component.F32.init(4, 3);
 const ground_acceleration = ecs.component.F32.init(1, 6);
@@ -51,8 +49,6 @@ const bounce_strength = ecs.component.F32.init(3, 2);
 const attack_strength_small = ecs.component.F32.init(2, 1);
 const attack_strength_medium = ecs.component.F32.init(4, 1);
 const attack_strength_large = ecs.component.F32.init(5, 1);
-const attack_strength_multiplier_speed = ecs.component.F32.init(1, 600);
-const attack_strength_multiplier_max = ecs.component.F32.init(2, 1);
 const attack_cooldown = 24;
 const attack_buffer = 5;
 const attack_dimensions = [_]i32{ 16, 16 };
@@ -63,7 +59,7 @@ const attack_directional_offset = 16;
 const block_multiplier = ecs.component.F32.init(5, 4);
 const block_cooldown = 32;
 const block_buffer = 5;
-const block_ticks = 3;
+const block_ticks = 7;
 const block_dimensions = [_]i32{ 16, 16 };
 
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
@@ -72,7 +68,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
     // Global Data
     const global = try sim.world.spawnWith(.{
-        ecs.component.Tmr{},
+        ecs.component.Tmr{}, // Pushback strength timer
         ecs.component.Ctr{ .count = 8 }, // Players left
     });
 
@@ -158,6 +154,9 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
         sim.world.reset();
         try init(sim, timeline);
     }
+
+    const pushback_timer = try sim.world.inspect(sim.world.cached_entity.?, ecs.component.Tmr);
+    pushback_timer.ticks = @min(60, pushback_timer.ticks + @intFromBool(sim.meta.ticks_elapsed % 60 == 0));
 
     try actionSystem(sim, timeline); // 50 laps/ms (2 players)
 
@@ -396,16 +395,22 @@ fn blockSystem(world: *ecs.world.World) void {
             const mov = world.inspect(plr, ecs.component.Mov) catch unreachable;
             const ctr = world.inspect(plr, ecs.component.Ctr) catch unreachable;
 
+            const pushback_seconds: i16 = @intCast((world.inspect(world.cached_entity.?, ecs.component.Tmr) catch unreachable).ticks);
+            const multiplier = pushback_bonus.mul(pushback_seconds).add(1);
+            const small_push = attack_strength_small.mul(block_multiplier).mul(multiplier);
+            const medium_push = attack_strength_medium.mul(block_multiplier).mul(multiplier);
+            const large_push = attack_strength_large.mul(block_multiplier).mul(multiplier);
+
             mov.velocity = switch (atk_dir.facing) {
                 .None => ecs.component.Vec2.init(0, 0),
-                .North => ecs.component.Vec2.init(0, attack_strength_medium.mul(block_multiplier)),
-                .South => ecs.component.Vec2.init(0, attack_strength_large.mul(block_multiplier).mul(-1)),
-                .West => ecs.component.Vec2.init(attack_strength_large.mul(block_multiplier), attack_strength_small.mul(block_multiplier).mul(-1)),
-                .East => ecs.component.Vec2.init(attack_strength_large.mul(block_multiplier).mul(-1), attack_strength_small.mul(block_multiplier).mul(-1)),
-                .Northwest => ecs.component.Vec2.init(attack_strength_medium.mul(block_multiplier), attack_strength_medium.mul(block_multiplier)),
-                .Northeast => ecs.component.Vec2.init(attack_strength_medium.mul(block_multiplier).mul(-1), attack_strength_medium.mul(block_multiplier)),
-                .Southwest => ecs.component.Vec2.init(attack_strength_medium.mul(block_multiplier), attack_strength_medium.mul(block_multiplier).mul(-1)),
-                .Southeast => ecs.component.Vec2.init(attack_strength_medium.mul(block_multiplier).mul(-1), attack_strength_medium.mul(block_multiplier).mul(-1)),
+                .North => ecs.component.Vec2.init(0, medium_push),
+                .South => ecs.component.Vec2.init(0, large_push.mul(-1)),
+                .West => ecs.component.Vec2.init(large_push, small_push.mul(-1)),
+                .East => ecs.component.Vec2.init(large_push.mul(-1), small_push.mul(-1)),
+                .Northwest => ecs.component.Vec2.init(medium_push, medium_push),
+                .Northeast => ecs.component.Vec2.init(medium_push.mul(-1), medium_push),
+                .Southwest => ecs.component.Vec2.init(medium_push, medium_push.mul(-1)),
+                .Southeast => ecs.component.Vec2.init(medium_push.mul(-1), medium_push.mul(-1)),
             };
 
             world.promote(plr, &.{ecs.component.Hit});
@@ -499,16 +504,22 @@ fn attackSystem(world: *ecs.world.World) void {
             const plr_mov = player_query.get(ecs.component.Mov) catch unreachable;
             const plr_ctr = player_query.get(ecs.component.Ctr) catch unreachable;
 
+            const pushback_seconds: i16 = @intCast((world.inspect(world.cached_entity.?, ecs.component.Tmr) catch unreachable).ticks);
+            const multiplier = pushback_bonus.mul(pushback_seconds).add(1);
+            const small_push = attack_strength_small.mul(multiplier);
+            const medium_push = attack_strength_medium.mul(multiplier);
+            const large_push = attack_strength_large.mul(multiplier);
+
             plr_mov.velocity = switch (atk_dir.facing) {
                 .None => ecs.component.Vec2.init(0, 0),
-                .North => ecs.component.Vec2.init(0, attack_strength_medium.mul(-1)),
-                .South => ecs.component.Vec2.init(0, attack_strength_large),
-                .West => ecs.component.Vec2.init(attack_strength_large.mul(-1), attack_strength_small.mul(-1)),
-                .East => ecs.component.Vec2.init(attack_strength_large, attack_strength_small.mul(-1)),
-                .Northwest => ecs.component.Vec2.init(attack_strength_medium.mul(-1), attack_strength_medium.mul(-1)),
-                .Northeast => ecs.component.Vec2.init(attack_strength_medium, attack_strength_medium.mul(-1)),
-                .Southwest => ecs.component.Vec2.init(attack_strength_medium.mul(-1), attack_strength_medium),
-                .Southeast => ecs.component.Vec2.init(attack_strength_medium, attack_strength_medium),
+                .North => ecs.component.Vec2.init(0, medium_push.mul(-1)),
+                .South => ecs.component.Vec2.init(0, large_push),
+                .West => ecs.component.Vec2.init(large_push.mul(-1), small_push.mul(-1)),
+                .East => ecs.component.Vec2.init(large_push, small_push.mul(-1)),
+                .Northwest => ecs.component.Vec2.init(medium_push.mul(-1), medium_push.mul(-1)),
+                .Northeast => ecs.component.Vec2.init(medium_push, medium_push.mul(-1)),
+                .Southwest => ecs.component.Vec2.init(medium_push.mul(-1), medium_push),
+                .Southeast => ecs.component.Vec2.init(medium_push, medium_push),
             };
 
             world.promote(plr, &.{ecs.component.Hit});
@@ -937,6 +948,7 @@ fn backgroundColorSystem(sim: *simulation.Simulation) void {
         ecs.component.Tex,
     }, &.{
         ecs.component.Plr,
+        ecs.component.Kng,
     });
 
     while (query.next()) |_| {
