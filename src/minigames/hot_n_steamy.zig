@@ -14,6 +14,7 @@ const movement = @import("../physics/movement.zig");
 const collision = @import("../physics/collision.zig");
 const Vec2 = ecs.component.Vec2;
 const F32 = ecs.component.F32;
+const crown = @import("../crown.zig");
 
 var prng = std.rand.DefaultPrng.init(555);
 const rand = prng.random();
@@ -69,6 +70,7 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
         try spawnPlayer(&sim.world, @intCast(id));
         // }
     }
+    try crown.init(sim, .{ 0, 0 });
 }
 pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invariables) !void {
     try jetpackSystem(&sim.world, inputs.latest());
@@ -88,11 +90,11 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
     try scrollSystem(&sim.world);
 
     animator.update(&sim.world);
-    //TODO Change number so it uses current active players instead
+    try crown.update(sim);
+
     if (current_placement == constants.max_player_count) {
-        // everyone should be finished
-        for (0..constants.max_player_count) |rank| {
-            sim.meta.minigame_placements[player_finish_order[rank]] = 8 - @as(u32, @intCast(rank));
+        for (0..constants.max_player_count) |id| {
+            sim.meta.minigame_placements[player_finish_order[id]] = constants.max_player_count - 1 - @as(u32, @intCast(id));
         }
         sim.meta.minigame_id = 3;
     }
