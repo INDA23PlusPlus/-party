@@ -23,8 +23,8 @@ const crown = @import("../crown.zig");
 // - Speed up the score animation as it goes on
 // - Allow pressing button to skip score animation
 
-const score_distribution: [constants.max_player_count]u32 = .{ 1000, 800, 600, 500, 150, 100, 75, 250 }; // completely arbitrary score values, open to change
-const score_decrease_speed = 10; // how much the score decreases every tick
+const score_distribution: [constants.max_player_count]u32 = .{ 20, 10, 5, 2, 0, 0, 0, 0 }; // completely arbitrary score values, open to change
+const score_decrease_speed = 1; // how much the score decreases every tick
 const wait_time_ticks = 3 * constants.ticks_per_second; // time before switching minigame
 const switching_timer_id = 100;
 const score_text_color = 0xFFCC99FF;
@@ -56,12 +56,6 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
         });
     }
     try crown.init(sim, .{ 0, -5 });
-    _ = try sim.world.spawnWith(.{
-        ecs.component.Ctr{ .id = 100, .count = 20 * 60 },
-    });
-    _ = try sim.world.spawnWith(.{
-        ecs.component.Ctr{ .id = 101, .count = 10 * 60 },
-    });
     // spawn timer, responsible for changing minigame
     _ = try sim.world.spawnWith(.{ecs.component.Ctr{ .id = switching_timer_id, .count = 3 * constants.ticks_per_second }});
 }
@@ -76,36 +70,6 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
         try tickNextGameTimer(sim);
     }
 
-    var query = sim.world.query(&.{ecs.component.Ctr}, &.{ ecs.component.Plr, ecs.component.Tex });
-    while (query.next()) |entity| {
-        const ctr = query.get(ecs.component.Ctr) catch unreachable;
-        switch (ctr.id) {
-            100 => {
-                if (ctr.count == 0) {
-                    for (sim.meta.global_score, 0..constants.max_player_count) |score, id| {
-                        std.debug.print("Score {d}: {d}\n", .{ id, score });
-                    }
-                    sim.meta.minigame_id = 4;
-                    return;
-                } else {
-                    ctr.count -= 1;
-                }
-            },
-            101 => {
-                if (ctr.count == 0) {
-                    for (sim.meta.global_score, 0..constants.max_player_count) |score, id| {
-                        std.debug.print("Score {d}: {d}\n", .{ id, score });
-                    }
-                    try updateScore(&sim.meta);
-                    sim.world.kill(entity);
-                    return;
-                } else {
-                    ctr.count -= 1;
-                }
-            },
-            else => {},
-        }
-    }
     try crown.update(sim);
     animator.update(&sim.world);
 }
