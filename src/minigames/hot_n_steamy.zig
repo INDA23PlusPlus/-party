@@ -16,11 +16,12 @@ const Vec2 = ecs.component.Vec2;
 const F32 = ecs.component.F32;
 const crown = @import("../crown.zig");
 
+//TODO Remove this and change som RNG comes from ecs of metadata
 var prng = std.rand.DefaultPrng.init(555);
 const rand = prng.random();
+
 const obstacle_height_base = 7;
 const obstacle_height_delta = 6;
-
 const player_gravity = Vec2.init(0, F32.init(1, 10));
 const player_boost = Vec2.init(0, F32.init(-1, 4));
 const vertical_obstacle_velocity = Vec2.init(-5, 0);
