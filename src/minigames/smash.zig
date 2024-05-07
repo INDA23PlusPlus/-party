@@ -47,14 +47,15 @@ const hitstun = 10;
 const bounce_strength = ecs.component.F32.init(3, 2);
 
 const attack_strength_small = ecs.component.F32.init(2, 1);
-const attack_strength_medium = ecs.component.F32.init(4, 1);
-const attack_strength_large = ecs.component.F32.init(5, 1);
+const attack_strength_medium = ecs.component.F32.init(7, 2);
+const attack_strength_large = ecs.component.F32.init(9, 2);
 const attack_cooldown = 24;
 const attack_buffer = 5;
 const attack_dimensions = [_]i32{ 16, 16 };
 const attack_ticks = 7;
 const attack_player_offset = [_]i32{ -5, -5 };
 const attack_directional_offset = 16;
+const attack_bounce = ecs.component.Vec2.init(-1, 1).mul(ecs.component.F32.init(1, 2));
 
 const block_multiplier = ecs.component.F32.init(5, 4);
 const block_cooldown = 32;
@@ -803,65 +804,61 @@ fn airborneSystem(world: *ecs.world.World) void {
 
 fn resolveCollisions(world: *ecs.world.World, collisions: *collision.CollisionQueue) void {
     for (collisions.data.keys()) |c| {
-        const plrposmov1 = world.checkSignature(c.a, &.{
-            ecs.component.Plr,
-            ecs.component.Pos,
-            ecs.component.Mov,
-        }, &.{
-            ecs.component.Hit,
-        });
-        const plrposmovcolhit1 = world.checkSignature(c.a, &.{
-            ecs.component.Plr,
-            ecs.component.Pos,
-            ecs.component.Mov,
-            ecs.component.Col,
-            ecs.component.Hit,
-        }, &.{});
-        const plrposmov2 = world.checkSignature(c.b, &.{
-            ecs.component.Plr,
-            ecs.component.Pos,
-            ecs.component.Mov,
-        }, &.{
-            ecs.component.Hit,
-        });
-        const plrposmovcolhit2 = world.checkSignature(c.b, &.{
-            ecs.component.Plr,
-            ecs.component.Pos,
-            ecs.component.Mov,
-            ecs.component.Col,
-            ecs.component.Hit,
-        }, &.{});
+        const ent1 = c.a;
+        const ent2 = c.b;
 
-        if (plrposmov1 and plrposmov2) {
-            const pos1 = world.inspect(c.a, ecs.component.Pos) catch unreachable;
-            const pos2 = world.inspect(c.b, ecs.component.Pos) catch unreachable;
-            const mov1 = world.inspect(c.a, ecs.component.Mov) catch unreachable;
-            const mov2 = world.inspect(c.b, ecs.component.Mov) catch unreachable;
+        const hit1 = world.checkSignature(ent1, &.{ecs.component.Hit}, &.{});
+        const hit2 = world.checkSignature(ent2, &.{ecs.component.Hit}, &.{});
+        const plr1 = world.checkSignature(ent1, &.{ ecs.component.Plr, ecs.component.Pos, ecs.component.Col, ecs.component.Mov }, &.{});
+        const plr2 = world.checkSignature(ent2, &.{ ecs.component.Plr, ecs.component.Pos, ecs.component.Col, ecs.component.Mov }, &.{});
 
-            const left: i16 = @intFromBool(pos1.pos[0] < pos2.pos[0]);
-            const right: i16 = @intFromBool(pos1.pos[0] > pos2.pos[0]);
-            const middle: i16 = @intFromBool(pos1.pos[0] == pos2.pos[0]);
-            const top: i16 = @intFromBool(pos1.pos[1] < pos2.pos[1]);
-            const bottom: i16 = @intFromBool(pos1.pos[1] > pos2.pos[1]);
+        if (plr1 and plr2) {
+            const pos1 = world.inspect(ent1, ecs.component.Pos) catch unreachable;
+            const pos2 = world.inspect(ent2, ecs.component.Pos) catch unreachable;
+            const mov1 = world.inspect(ent1, ecs.component.Mov) catch unreachable;
+            const mov2 = world.inspect(ent2, ecs.component.Mov) catch unreachable;
 
-            const leftright = (right - left);
-            const topbottom = (bottom - top);
+            if (hit1 or hit2) {
+                const tmp = mov1.velocity;
+                mov1.velocity = mov2.velocity;
+                mov2.velocity = tmp;
+            } else {
+                const left: i16 = @intFromBool(pos1.pos[0] < pos2.pos[0]);
+                const right: i16 = @intFromBool(pos1.pos[0] > pos2.pos[0]);
+                const middle: i16 = @intFromBool(pos1.pos[0] == pos2.pos[0]);
+                const top: i16 = @intFromBool(pos1.pos[1] < pos2.pos[1]);
+                const bottom: i16 = @intFromBool(pos1.pos[1] > pos2.pos[1]);
 
-            const direction = leftright + middle * topbottom;
-            const bounce = bounce_strength.mul(direction);
+                const direction = (right - left) + middle * (bottom - top);
+                const bounce = bounce_strength.mul(direction);
 
-            mov1.velocity.vector[0] += bounce.bits;
-            mov2.velocity.vector[0] -= bounce.bits;
-        }
+                mov1.velocity.vector[0] += bounce.bits;
+                mov2.velocity.vector[0] -= bounce.bits;
+            }
+        } else if (plr1 and hit1) {
+            const pos1 = world.inspect(ent1, ecs.component.Pos) catch unreachable;
+            const pos2 = world.inspect(ent2, ecs.component.Pos) catch unreachable;
+            const col1 = world.inspect(ent1, ecs.component.Col) catch unreachable;
+            const col2 = world.inspect(ent2, ecs.component.Col) catch unreachable;
+            const mov1 = world.inspect(ent1, ecs.component.Mov) catch unreachable;
 
-        if (plrposmovcolhit1) {
-            const mov1 = world.inspect(c.a, ecs.component.Mov) catch unreachable;
-            mov1.velocity = mov1.velocity.mul(ecs.component.F32.init(-1, 2));
-        }
+            if (collision.intersectsAt(pos1, col1, pos2, col2, .{ -1, 0 }) or collision.intersectsAt(pos1, col1, pos2, col2, .{ 1, 0 })) {
+                mov1.velocity = mov1.velocity.mul(attack_bounce);
+            } else {
+                mov1.velocity = mov1.velocity.mul(attack_bounce.mul(-1));
+            }
+        } else if (plr2 and hit2) {
+            const pos1 = world.inspect(ent1, ecs.component.Pos) catch unreachable;
+            const pos2 = world.inspect(ent2, ecs.component.Pos) catch unreachable;
+            const col1 = world.inspect(ent1, ecs.component.Col) catch unreachable;
+            const col2 = world.inspect(ent2, ecs.component.Col) catch unreachable;
+            const mov2 = world.inspect(ent2, ecs.component.Mov) catch unreachable;
 
-        if (plrposmovcolhit2) {
-            const mov2 = world.inspect(c.b, ecs.component.Mov) catch unreachable;
-            mov2.velocity = mov2.velocity.mul(ecs.component.F32.init(-1, 2));
+            if (collision.intersectsAt(pos1, col1, pos2, col2, .{ -1, 0 }) or collision.intersectsAt(pos1, col1, pos2, col2, .{ 1, 0 })) {
+                mov2.velocity = mov2.velocity.mul(attack_bounce);
+            } else {
+                mov2.velocity = mov2.velocity.mul(attack_bounce.mul(-1));
+            }
         }
     }
 }
