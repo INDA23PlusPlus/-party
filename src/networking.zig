@@ -36,6 +36,20 @@ const ConnectionType = enum(u8) {
 
 const max_net_packet_size = 32768;
 
+fn debugPacket(packet: []u8) void {
+    var debug_log_buffer: [1024]u8 = undefined;
+    var debug_fb = std.io.fixedBufferStream(&debug_log_buffer);
+    const debug_writer = debug_fb.writer();
+    var scanner = cbor.Scanner{};
+    var ctx = scanner.begin(packet);
+    const debug_len = ctx.toString(debug_writer) catch |e| {
+        const formatter = std.fmt.fmtSliceHexUpper(packet);
+        std.debug.print("could not parse package ({any}): {any}\n", .{ e, formatter });
+        return;
+    };
+    std.debug.print("parsed package: {s}\n", .{debug_log_buffer[0..debug_len]});
+}
+
 const NetServerData = struct {
     common: NetData = NetData{},
     input_history: InputConsolidation,
@@ -89,6 +103,7 @@ fn writeNoop(_: ?*void, _: *xev.Loop, _: *xev.Completion, _: xev.TCP, _: xev.Wri
 }
 
 fn clientMessage(client_index: ?*ConnectedClientIndex, l: *xev.Loop, _: *xev.Completion, s: xev.TCP, read_buffer: xev.ReadBuffer, packet_size_res: xev.ReadError!usize) xev.CallbackAction {
+    _ = s;
     var server_data = loopToServerData(l);
     var client = &server_data.conns_list[fromClientIndex(client_index)];
 
@@ -101,15 +116,17 @@ fn clientMessage(client_index: ?*ConnectedClientIndex, l: *xev.Loop, _: *xev.Com
 
     const packet = read_buffer.slice[0..packet_size];
 
+    debugPacket(packet);
+
     // TODO: Parse packet and ingest into input_history.
 
-    std.debug.print("message from ({d}): {s}\n", .{ fromClientIndex(client_index), packet });
+    //std.debug.print("message from ({d}): {s}\n", .{ fromClientIndex(client_index), packet });
 
-    const write_buffer: xev.WriteBuffer = .{ .array = .{
-        .array = [2]u8{ 'h', 'i' } ** 16,
-        .len = 2,
-    } };
-    s.write(l, &client.write_completion, write_buffer, void, null, writeNoop);
+    //const write_buffer: xev.WriteBuffer = .{ .array = .{
+    //    .array = [2]u8{ 'h', 'i' } ** 16,
+    //    .len = 2,
+    //} };
+    //s.write(l, &client.write_completion, write_buffer, void, null, writeNoop);
 
     return .rearm;
 }
@@ -197,7 +214,7 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
             const send_until = @min(server_data.input_history.buttons.items.len, connection.consistent_until + 40);
 
             if (conn_type == .local) {
-                for (connection.consistent_until .. send_until) |tick_number| {
+                for (connection.consistent_until..send_until) |tick_number| {
                     const packet = server_data.input_history.buttons.items[tick_number];
                     _ = packet;
                 }
@@ -211,23 +228,21 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
                 continue;
             }
 
-
             var fb = std.io.fixedBufferStream(write_buffer);
             const writer = fb.writer();
             const input_tick_count = send_until - connection.consistent_until;
             try cbor.writeArrayHeader(writer, input_tick_count);
-            for(connection.consistent_until .. send_until) |tick_index| {
+            for (connection.consistent_until..send_until) |tick_index| {
                 const inputs = server_data.input_history.buttons.items[tick_index];
                 try cbor.writeArrayHeader(writer, inputs.len);
-                for(inputs) |input| {
+                for (inputs) |input| {
                     try cbor.writeArrayHeader(writer, 3);
                     try cbor.writeUint(writer, @intFromEnum(input.dpad));
                     try cbor.writeUint(writer, @intFromEnum(input.button_a));
                     try cbor.writeUint(writer, @intFromEnum(input.button_b));
                 }
             }
-
-            connection.stream.write(&server_data.loop, &connection.write_completion, .{ .slice = write_buffer }, void, null, writeNoop);
+            connection.stream.write(&server_data.loop, &connection.write_completion, .{ .slice = write_buffer[0..fb.pos] }, void, null, writeNoop);
 
             // TODO: Actually send the data to remote peers.
         }
@@ -264,7 +279,9 @@ fn clientThread(networking_queue: *NetworkingQueue) !void {
         std.debug.print("begin read\n", .{});
         const packet_len = try stream.read(&packet_buf);
         const packet = packet_buf[0..packet_len];
-        std.debug.print("received: {s}\n", .{packet});
+
+        debugPacket(packet);
+
         _ = try stream.write("hi");
 
         // TODO: Parse packets.

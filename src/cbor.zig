@@ -89,9 +89,6 @@ pub const Context = struct {
             return Error.UnreadItemsInSequence;
         }
         ctx.items -= 1;
-        if (ctx.items == 0) {
-            ctx.scanner.depth -= 1;
-        }
         switch (ctx.scanner.data[pos]) {
             inline 0x00...0x17 => |s| {
                 ctx.scanner.pos = pos + 1;
@@ -236,13 +233,31 @@ pub const Context = struct {
 
     pub fn readArray(ctx: *Context) !Context {
         switch (try ctx.readAny()) {
-            .array => |n| return Context {
+            .array => |n| return Context{
                 .scanner = ctx.scanner,
                 .depth = ctx.depth + 1,
                 .items = n,
                 .reuse = ctx.reuse,
             },
             else => return Error.IncorrectType,
+        }
+    }
+
+    pub fn readEnd(ctx: *Context) !void {
+        if (ctx.reuse != ctx.scanner.reuse) {
+            return Error.OutdatedContext;
+        }
+
+        const has_more = ctx.items != 0 and ctx.depth != 0;
+        if (ctx.scanner.depth != ctx.depth or has_more) {
+            return Error.UnreadItemsInSequence;
+        }
+
+        // Make sure this context isn't used again.
+        ctx.reuse = 0;
+
+        if (ctx.depth != 0) {
+            ctx.scanner.depth -= 1;
         }
     }
 
@@ -253,21 +268,22 @@ pub const Context = struct {
             .array => |count| {
                 written += 2;
                 try writer.writeAll("[");
-                var next_context = Context {
+                var next_context = Context{
                     .scanner = ctx.scanner,
                     .depth = ctx.depth + 1,
                     .items = count,
                     .reuse = ctx.reuse,
                 };
-                for(0..count) |i| {
-                    // TODO: Escape strings.
+                for (0..count) |i| {
                     written += try next_context.toString(writer) + 1;
+                    next_context.depth = ctx.depth + 1;
                     if (i + 1 != count) {
                         try writer.writeByte(' ');
                     } else {
                         written -= 1;
                     }
                 }
+                try next_context.readEnd();
                 try writer.writeAll("]");
             },
             .number => |value| {
@@ -281,6 +297,7 @@ pub const Context = struct {
                 try writer.print(form, .{value});
             },
             .unchecked_str, .string => |s| {
+                // TODO: Escape strings.
                 const form = "\"{s}\"";
                 written += std.fmt.count(form, .{s});
                 try writer.print(form, .{s});
@@ -302,18 +319,18 @@ inline fn writeSized(comptime code_start: u8, writer: anytype, size: usize) !voi
     if (size <= 23) {
         try writer.writeByte(code_start + @as(u8, @truncate(size)));
     } else if (size <= 255) {
-        var a = [2]u8{code_start + 0x18, @truncate(size)};
+        var a = [2]u8{ code_start + 0x18, @truncate(size) };
         try writer.writeAll(&a);
     } else if (size <= 65535) {
-        var a = [3]u8{code_start + 0x19, 0, 0};
+        var a = [3]u8{ code_start + 0x19, 0, 0 };
         std.mem.writeInt(std.math.ByteAlignedInt(u16), a[1..], @truncate(size), std.builtin.Endian.big);
         try writer.writeAll(&a);
     } else if (size <= 0xFFFFFFFF) {
-        var a = [5]u8{code_start + 0x1a, 0, 0, 0, 0};
+        var a = [5]u8{ code_start + 0x1a, 0, 0, 0, 0 };
         std.mem.writeInt(std.math.ByteAlignedInt(u32), a[1..], @truncate(size), std.builtin.Endian.big);
         try writer.writeAll(&a);
     } else {
-        var a = [9]u8{code_start + 0x1b, 0, 0, 0, 0, 0, 0, 0, 0};
+        var a = [9]u8{ code_start + 0x1b, 0, 0, 0, 0, 0, 0, 0, 0 };
         std.mem.writeInt(std.math.ByteAlignedInt(u64), a[1..], @truncate(size), std.builtin.Endian.big);
         try writer.writeAll(&a);
     }
@@ -554,7 +571,6 @@ test "read str 100" {
     try std.testing.expectEqualStrings("a" ** 100, try ctx.readStr());
 }
 
-
 test "read bad bin 1" {
     const v = "\x41";
     var scanner = Scanner{};
@@ -581,7 +597,6 @@ test "read bin 16bit" {
     var scanner = Scanner{};
     var ctx = scanner.begin(v);
     try std.testing.expectEqualStrings("a" ** 1000, try ctx.readBin());
-
 }
 
 test "read bin 32bit" {
@@ -639,6 +654,8 @@ test "read array 100" {
         try std.testing.expectEqual(@as(i64, 7), try arr.readI64());
     }
     try std.testing.expectError(Error.NoMoreData, arr.readI64());
+    try arr.readEnd();
+    try std.testing.expectError(Error.OutdatedContext, arr.readI64());
     try std.testing.expectEqual(@as(i64, 2), try ctx.readI64());
     try std.testing.expectError(Error.MissingBytes, ctx.readI64());
 }
@@ -653,6 +670,8 @@ test "read array 1000" {
         try std.testing.expectEqual(@as(i64, 7), try arr.readI64());
     }
     try std.testing.expectError(Error.NoMoreData, arr.readI64());
+    try arr.readEnd();
+    try std.testing.expectError(Error.OutdatedContext, arr.readI64());
     try std.testing.expectEqual(@as(i64, 2), try ctx.readI64());
     try std.testing.expectError(Error.MissingBytes, ctx.readI64());
 }
@@ -667,6 +686,8 @@ test "read array 100000" {
         try std.testing.expectEqual(@as(i64, 7), try arr.readI64());
     }
     try std.testing.expectError(Error.NoMoreData, arr.readI64());
+    try arr.readEnd();
+    try std.testing.expectError(Error.OutdatedContext, arr.readI64());
     try std.testing.expectEqual(@as(i64, 2), try ctx.readI64());
     try std.testing.expectError(Error.MissingBytes, ctx.readI64());
 }
@@ -679,6 +700,8 @@ test "read array 64bit just 1" {
     try std.testing.expectError(Error.UnreadItemsInSequence, ctx.readI64());
     try std.testing.expectEqual(@as(i64, 7), try arr.readI64());
     try std.testing.expectError(Error.NoMoreData, arr.readI64());
+    try arr.readEnd();
+    try std.testing.expectError(Error.OutdatedContext, arr.readI64());
     try std.testing.expectEqual(@as(i64, 2), try ctx.readI64());
     try std.testing.expectError(Error.MissingBytes, ctx.readI64());
 }
@@ -741,4 +764,58 @@ test "array strings toString" {
     const len = try ctx.toString(writer_out);
 
     try std.testing.expectEqualStrings("[\"hej\"]", output[0..len]);
+}
+
+test "array array strings predicted" {
+    var input = [_]u8{0} ** 256;
+    var fb = std.io.fixedBufferStream(&input);
+    const writer = fb.writer();
+    try writeArrayHeader(writer, 2);
+    try writeArrayHeader(writer, 1);
+    try writeString(writer, "hello");
+    try writeArrayHeader(writer, 1);
+    try writeString(writer, "world");
+
+    var scanner = Scanner{};
+    var ctx = scanner.begin(&input);
+
+    var arr1 = try ctx.readArray();
+
+    var arr2 = try arr1.readArray();
+    _ = try arr2.readStr();
+    try arr2.readEnd();
+
+    var arr3 = try arr1.readArray();
+    _ = try arr3.readStr();
+    try arr3.readEnd();
+
+    try arr1.readEnd();
+}
+
+test "array array strings toString" {
+    var input = [_]u8{0} ** 256;
+    var fb = std.io.fixedBufferStream(&input);
+    const writer = fb.writer();
+    try writeArrayHeader(writer, 2);
+    try writeArrayHeader(writer, 1);
+    try writeString(writer, "hello");
+    try writeArrayHeader(writer, 1);
+    try writeString(writer, "world");
+
+    var scanner = Scanner{};
+    var ctx = scanner.begin(&input);
+
+    var output = [_]u8{0} ** 256;
+    var fb_out = std.io.fixedBufferStream(&output);
+    const writer_out = fb_out.writer();
+    const len = try ctx.toString(writer_out);
+
+    try std.testing.expectEqualStrings("[[\"hello\"] [\"world\"]]", output[0..len]);
+}
+
+test "read begin and end" {
+    const input = "";
+    var scanner = Scanner{};
+    var ctx = scanner.begin(input);
+    try ctx.readEnd();
 }
