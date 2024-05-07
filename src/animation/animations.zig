@@ -14,6 +14,7 @@ pub const Animation = enum {
     SmashRun,
     SmashJump,
     SmashFall,
+    SmashRise,
     SmashLand,
     SmashCrouch,
     SmashHit,
@@ -35,6 +36,7 @@ pub fn data(animation: Animation) []const Frame {
         .SmashIdle => &frames_smash_idle,
         .SmashRun => &frames_smash_run,
         .SmashJump => &frames_smash_jump,
+        .SmashRise => &frames_smash_rise,
         .SmashFall => &frames_smash_fall,
         .SmashLand => &frames_smash_land,
         .SmashCrouch => &frames_smash_crouch,
@@ -97,9 +99,12 @@ const frames_smash_run: [8]Frame = .{
     Frame.init(14, 4),
 };
 
-const frames_smash_jump: [3]Frame = .{
-    Frame.init(0, 8),
+const frames_smash_jump: [2]Frame = .{
     Frame.init(2, 8),
+    Frame.init(4, 8),
+};
+
+const frames_smash_rise: [1]Frame = .{
     Frame.init(4, 8),
 };
 
