@@ -18,9 +18,6 @@ const crown = @import("../crown.zig");
 
 var prng = std.rand.DefaultPrng.init(555);
 const rand = prng.random();
-var player_finish_order: [8]u32 = [8]u32{ undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined };
-var current_placement: u32 = 0;
-var ticks_at_start: usize = undefined;
 const obstacle_height_base = 7;
 const obstacle_height_delta = 6;
 
@@ -59,17 +56,15 @@ fn spawnBackground(world: *ecs.world.World) !void {
 }
 
 pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
-    ticks_at_start = sim.meta.ticks_elapsed;
-    current_placement = 0;
-    player_finish_order = [8]u32{ undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined };
+    sim.meta.ticks_at_minigame_start = sim.meta.ticks_elapsed;
     _ = try spawnBackground(&sim.world);
     //TODO Change so it spawns one player for all current active players
     for (0..constants.max_player_count) |id| {
-        //Condtion for only spawning player that are connected DOESN'T WORK AT THE MOMENT
         // if (inputs[id].is_connected) {
         try spawnPlayer(&sim.world, @intCast(id));
         // }
     }
+    _ = try sim.world.spawnWith(.{ecs.component.Ctr{ .count = 0 }});
     try crown.init(sim, .{ 0, 0 });
 }
 pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invariables) !void {
@@ -83,20 +78,20 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
 
     try pushSystem(&sim.world, &collisions);
 
-    try spawnSystem(&sim.world, sim.meta.ticks_elapsed - ticks_at_start);
+    try spawnSystem(&sim.world, sim.meta.ticks_elapsed - sim.meta.ticks_at_minigame_start);
 
-    try deathSystem(&sim.world, &collisions);
+    try deathSystem(sim, &collisions);
 
     try scrollSystem(&sim.world);
 
     animator.update(&sim.world);
     try crown.update(sim);
-
-    if (current_placement == constants.max_player_count) {
-        for (0..constants.max_player_count) |id| {
-            sim.meta.minigame_placements[player_finish_order[id]] = constants.max_player_count - 1 - @as(u32, @intCast(id));
+    var query = sim.world.query(&.{ecs.component.Ctr}, &.{});
+    while (query.next()) |_| {
+        const ctr = try query.get(ecs.component.Ctr);
+        if (ctr.count == constants.max_player_count) {
+            sim.meta.minigame_id = 3;
         }
-        sim.meta.minigame_id = 3;
     }
 }
 
@@ -158,20 +153,24 @@ fn jetpackSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void 
     }
 }
 
-fn deathSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
-    var query = world.query(&.{ ecs.component.Pos, ecs.component.Col }, &.{});
+fn deathSystem(sim: *simulation.Simulation, _: *collision.CollisionQueue) !void {
+    var query = sim.world.query(&.{ ecs.component.Pos, ecs.component.Col }, &.{});
     while (query.next()) |entity| {
         const col = try query.get(ecs.component.Col);
         const pos = try query.get(ecs.component.Pos);
 
         const right = pos.pos[0] + col.dim[0];
         if (right < 0) {
-            if (world.checkSignature(entity, &.{ecs.component.Plr}, &.{})) {
-                const plr = try world.inspect(entity, ecs.component.Plr);
-                player_finish_order[current_placement] = plr.id;
-                current_placement += 1;
+            if (sim.world.checkSignature(entity, &.{ecs.component.Plr}, &.{})) {
+                const plr = try sim.world.inspect(entity, ecs.component.Plr);
+                var query_ctr = sim.world.query(&.{ecs.component.Ctr}, &.{});
+                while (query_ctr.next()) |_| {
+                    var ctr = try query_ctr.get(ecs.component.Ctr);
+                    sim.meta.minigame_placements[plr.id] = constants.max_player_count - 1 - @as(u32, @intCast(ctr.count));
+                    ctr.count += 1;
+                }
             }
-            world.kill(entity);
+            sim.world.kill(entity);
             std.debug.print("entity {} died\n", .{entity.identifier});
         }
     }
