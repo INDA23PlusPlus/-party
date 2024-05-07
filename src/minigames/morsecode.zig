@@ -20,7 +20,7 @@ var current_letter = std.mem.zeroes([constants.max_player_count]u8);
 var game_string: [:0]const u8 = undefined;
 var game_string_len: usize = 20;
 var current_placement: usize = 0;
-var player_finish_order: [constants.max_player_count]u32 = [constants.max_player_count]u32{ undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined };
+var player_finish_order = [_]u32{100} ** constants.max_player_count;
 var buf: [30]u8 = std.mem.zeroes([30]u8);
 
 fn assigned_pos(id: usize) @Vector(2, i32) {
@@ -70,15 +70,12 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     }
 
     for (0..constants.max_player_count) |id| {
-        // std.debug.print("{any}", .{buf});
-        //std.debug.print("{any}", .{id});
         // const temp: []const u8 = std.fmt.bufPrint(&buf, "Player {}", .{id}) catch @panic("cock");
         // const temp2 = buf[0..temp.len :0];
         _ = try sim.world.spawnWith(.{
             // ecs.component.Plr{ .id = @intCast(id) }, // only use this to name the players
             ecs.component.Txt{
                 .string = player_strings[id],
-                // .string = "Player x",
                 .font_size = 10,
                 .color = 0xff0066ff,
                 .subpos = .{ 10, 20 },
@@ -86,9 +83,11 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
             ecs.component.Pos{ .pos = assigned_pos(id) },
             ecs.component.Mov{ .velocity = ecs.component.Vec2.init(0, 0) },
             ecs.component.Tex{
+                //.texture_hash = AssetManager.pathHash("assets/kattis.png"),
                 .texture_hash = AssetManager.pathHash("assets/kattis.png"),
                 .tint = constants.player_colors[id],
             },
+            //ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
             ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
         });
         var button_position: @Vector(2, i32) = assigned_pos(id);
@@ -98,34 +97,49 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
             ecs.component.Plr{ .id = @intCast(id) },
             ecs.component.Pos{ .pos = .{ button_position[0], button_position[1] } },
             ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis_testcases.png") },
-            ecs.component.Ctr{ .id = @intCast(id), .count = @intCast(id + 1) },
+            //ecs.component.Ctr{ .id = @intCast(id), .count = @intCast(id + 1) },
         });
     }
 
     _ = try sim.world.spawnWith(.{
-        ecs.component.Pos{ .pos = [2]i32{ 120, 100 } },
+        ecs.component.Pos{ .pos = [2]i32{ 245, 55 } },
         ecs.component.Txt{
             .string = game_string,
             // .font_size = 10,
             .color = 0x666666FF,
         },
     });
+
+    // Count down.
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Ctr{ .count = 30 * 60 }, // change the 30 while debugging
+    });
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
     rl.drawText("Morsecode Minigame", 300, 8, 32, rl.Color.blue);
     // rl.drawText(game_string, 300, 50, 32, rl.Color.blue);
-    std.debug.print("{any}\n", .{keystrokes[0]});
-    std.debug.print("cur: {}\n", .{current_placement});
     try inputSystem(&sim.world, timeline);
     try wordSystem(&sim.world);
     animator.update(&sim.world);
-    if (current_placement == constants.max_player_count) {
-        // everyone should be finished
-        for (0..constants.max_player_count) |rank| {
-            sim.meta.minigame_placements[player_finish_order[rank]] = 8 - @as(u32, @intCast(rank));
+
+    var query = sim.world.query(&.{ecs.component.Ctr}, &.{});
+    while (query.next()) |_| {
+        const ctr = query.get(ecs.component.Ctr) catch unreachable;
+        if (ctr.count <= 0) {
+            std.debug.print("ending pfo: {any}\n", .{player_finish_order});
+            for (0..constants.max_player_count) |j| {
+                if (player_finish_order[j] == 100) {
+                    player_finish_order[j] = @as(u32, @intCast(current_placement));
+                }
+            }
+            sim.meta.minigame_placements = player_finish_order;
+            std.debug.print("ending miniplaces: {any}\n", .{sim.meta.minigame_placements});
+            sim.meta.minigame_id = 3;
+            return;
+        } else {
+            ctr.count -= 1;
         }
-        sim.meta.minigame_id = 3;
     }
 }
 
@@ -167,16 +181,16 @@ fn wordSystem(world: *ecs.world.World) !void {
 
         if (keystrokes[id][typed_len[id] - 1] == 3) {
             const character: u8 = code_to_char(id);
-            std.debug.print("{}", .{std.ascii.toUpper(character)});
             if (character == game_string[current_letter[id]]) {
                 typed_len[id] = 0;
                 current_letter[id] += 1;
                 keystrokes[id] = .{ 0, 0, 0, 0, 0, 0 };
-                // TODO: check that the typed letter is the correct one, not just any letter
                 if (current_letter[id] == game_string_len) {
                     // There is a small problem with this, lower ids get prioritized in this check
                     player_finish_order[current_placement] = @intCast(id);
                     current_placement += 1;
+                    std.debug.print("Current placement: {any}\n", .{current_placement});
+                    std.debug.print("Player finish order: {any}\n", .{player_finish_order});
                     // player has finished
                 }
             } else {
