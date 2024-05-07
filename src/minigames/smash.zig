@@ -14,10 +14,7 @@ const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
 
 // TODO: Block particle
-// TODO: Death particle
 // TODO: Fix bug where players are not being push away when attacking very close
-// TODO: Push players into players bounce
-// TODO: Push bounce correctly
 
 const left_texture_offset = [_]i32{ -5, -10 };
 const right_texture_offset = [_]i32{ -21, -10 };
@@ -574,13 +571,16 @@ fn deathSystem(sim: *simulation.Simulation) !void {
             dead_players += 1;
             player_counter.count -= 1;
 
-            // TODO: Rotate particle
+            const position = @min(@max(pos.pos, @Vector(2, i32){ 0, 0 }), @Vector(2, i32){ constants.world_width, constants.world_height });
+            const rotational_offset = if (constants.world_width < x) [_]i32{ -28, 20 } else if (y < 0) [_]i32{ 16, 32 } else if (x < 0) [_]i32{ 28, -20 } else [_]i32{ -12, -32 };
+
             _ = try sim.world.spawnWith(.{
-                ecs.component.Pos{ .pos = pos.pos + [_]i32{ -12, -32 } },
+                ecs.component.Pos{ .pos = position + rotational_offset },
                 ecs.component.Tex{
                     .texture_hash = AssetManager.pathHash("assets/smash_death.png"),
                     .w = 2,
                     .h = 2,
+                    .rotate = if (constants.world_width < x) .R270 else if (y < 0) .R180 else if (x < 0) .R90 else .R0,
                 },
                 ecs.component.Anm{ .animation = .SmashDeath, .interval = 4 },
                 ecs.component.Tmr{},
@@ -901,7 +901,8 @@ fn animationSystem(world: *ecs.world.World, inputs: *const input.AllPlayerButton
         };
         const jumping = world.checkSignature(entity, &.{ecs.component.Jmp}, &.{});
         const airborne = world.checkSignature(entity, &.{ecs.component.Air}, &.{});
-        const falling = !jumping and airborne and mov.velocity.vector[1] > 0;
+        const rising = airborne and mov.velocity.vector[1] <= 0;
+        const falling = airborne and mov.velocity.vector[1] > 0;
         const crouching = mov.velocity.vector[0] == 0 and mov.velocity.vector[1] == 0 and state.dpad == .South and !airborne;
         const attacking = world.checkSignature(entity, &.{ecs.component.Atk}, &.{});
         const blocking = world.checkSignature(entity, &.{ecs.component.Blk}, &.{});
@@ -918,7 +919,9 @@ fn animationSystem(world: *ecs.world.World, inputs: *const input.AllPlayerButton
         if (jumping) {
             anm.looping = false;
             anm.animation = .SmashJump;
-            if (anm.subframe == 0) anm.interval = 1 else anm.interval = 8;
+        } else if (rising) {
+            anm.looping = false;
+            anm.animation = .SmashRise;
         } else if (falling) {
             anm.looping = false;
             anm.animation = .SmashFall;

@@ -42,9 +42,11 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
 
         const dst = rl.Rectangle{ .x = dst_x, .y = dst_y, .width = dst_w, .height = dst_h };
 
+        const rotation = @as(f32, @floatFromInt(@intFromEnum(tex_component.rotate))) * 90.0;
+
         // Draw
 
-        rl.drawTexturePro(tex, src, dst, rl.Vector2.init(0, 0), 0.0, tex_component.tint);
+        rl.drawTexturePro(tex, src, dst, rl.Vector2.init(0, 0), rotation, tex_component.tint);
     }
 
     var text_query = world.query(&.{ ecs.component.Pos, ecs.component.Txt }, &.{});
