@@ -21,14 +21,16 @@ pub const world_height = 288;
 pub const world_width_tiles = world_width / asset_resolution;
 pub const world_height_tiles = world_height / asset_resolution;
 
+pub const ticks_per_second = 60;
+
 /// The color hint of each player.
 pub const player_colors: [max_player_count]rl.Color = .{
+    rl.Color.white,
     rl.Color.red,
     rl.Color.green,
     rl.Color.blue,
-    rl.Color.yellow,
+    rl.Color.gray,
     rl.Color.magenta,
     rl.Color.sky_blue,
-    rl.Color.brown,
-    rl.Color.white,
+    rl.Color.violet,
 };
