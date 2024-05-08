@@ -21,7 +21,6 @@ var game_string: [:0]const u8 = undefined;
 var game_string_len: usize = 20;
 var current_placement: usize = 0;
 var player_finish_order = [_]u32{100} ** constants.max_player_count;
-var buf: [30]u8 = std.mem.zeroes([30]u8);
 
 fn assigned_pos(id: usize) @Vector(2, i32) {
     const top_left_x = 120;
@@ -35,6 +34,9 @@ const game_strings = [_][:0]const u8{
     "BABBA",
     "TEST",
     "WORD",
+    "PLUSPLUS",
+    "KTH",
+    "DATA",
 };
 
 fn set_string_info() void {
@@ -56,13 +58,6 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     sim.meta.minigame_ticks_per_update = 50;
     set_string_info();
 
-    // _ = sim;
-    // jag tänker att det ska vara ett klassrum, och alla spelare är elever
-    // de kommer först in i klassrummet genom en och samma rum och sedan står på angett plats
-    // typ i rader. Framför varje spelare kan vi lägga dess morsecode keypresses
-    // på tavlan har vi den dynamiska morse code tabellen.
-
-    // kan inte zig, fick hårdkoda detta, help me pls
     for (timeline.latest(), 0..) |inp, id| {
         if (inp.is_connected()) {
             for (0..morsecode_maxlen) |j| {
@@ -73,8 +68,6 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
     for (timeline.latest(), 0..) |inp, id| {
         if (inp.is_connected()) {
-            // const temp: []const u8 = std.fmt.bufPrint(&buf, "Player {}", .{id}) catch @panic("cock");
-            // const temp2 = buf[0..temp.len :0];
             _ = try sim.world.spawnWith(.{
                 // ecs.component.Plr{ .id = @intCast(id) }, // only use this to name the players
                 ecs.component.Txt{
@@ -86,11 +79,9 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                 ecs.component.Pos{ .pos = assigned_pos(id) },
                 ecs.component.Mov{ .velocity = ecs.component.Vec2.init(0, 0) },
                 ecs.component.Tex{
-                    //.texture_hash = AssetManager.pathHash("assets/kattis.png"),
                     .texture_hash = AssetManager.pathHash("assets/kattis.png"),
                     .tint = constants.player_colors[id],
                 },
-                //ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
                 ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
             });
             var button_position: @Vector(2, i32) = assigned_pos(id);
@@ -122,7 +113,6 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
     rl.drawText("Morsecode Minigame", 300, 8, 32, rl.Color.blue);
-    // rl.drawText(game_string, 300, 50, 32, rl.Color.blue);
     try inputSystem(&sim.world, timeline);
     try wordSystem(&sim.world);
     animator.update(&sim.world);
@@ -196,6 +186,7 @@ fn wordSystem(world: *ecs.world.World) !void {
                     std.debug.print("Current placement: {any}\n", .{current_placement});
                     std.debug.print("Player finish order: {any}\n", .{player_finish_order});
                     // player has finished
+                    // TODO: ignore this players inputs from now on
                 }
             } else {
                 typed_len[id] = 0;
