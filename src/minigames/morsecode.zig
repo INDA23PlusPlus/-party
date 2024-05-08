@@ -52,7 +52,7 @@ const player_strings: [constants.max_player_count][:0]const u8 = blk: {
     break :blk res;
 };
 
-pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
+pub fn init(sim: *simulation.Simulation, inputs: input.Timeline) !void {
     sim.meta.minigame_ticks_per_update = 50;
     set_string_info();
 
@@ -63,42 +63,46 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     // på tavlan har vi den dynamiska morse code tabellen.
 
     // kan inte zig, fick hårdkoda detta, help me pls
-    for (0..constants.max_player_count) |id| {
-        for (0..morsecode_maxlen) |j| {
-            keystrokes[id][j] = 0;
+    for (inputs, 0..) |inp, id| {
+        if (inp.is_connected()) {
+            for (0..morsecode_maxlen) |j| {
+                keystrokes[id][j] = 0;
+            }
         }
     }
 
-    for (0..constants.max_player_count) |id| {
-        // const temp: []const u8 = std.fmt.bufPrint(&buf, "Player {}", .{id}) catch @panic("cock");
-        // const temp2 = buf[0..temp.len :0];
-        _ = try sim.world.spawnWith(.{
-            // ecs.component.Plr{ .id = @intCast(id) }, // only use this to name the players
-            ecs.component.Txt{
-                .string = player_strings[id],
-                .font_size = 10,
-                .color = 0xff0066ff,
-                .subpos = .{ 10, 20 },
-            },
-            ecs.component.Pos{ .pos = assigned_pos(id) },
-            ecs.component.Mov{ .velocity = ecs.component.Vec2.init(0, 0) },
-            ecs.component.Tex{
-                //.texture_hash = AssetManager.pathHash("assets/kattis.png"),
-                .texture_hash = AssetManager.pathHash("assets/kattis.png"),
-                .tint = constants.player_colors[id],
-            },
-            //ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
-            ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
-        });
-        var button_position: @Vector(2, i32) = assigned_pos(id);
-        button_position[1] += @intCast(-17);
+    for (inputs, 0..) |inp, id| {
+        if (inp.is_connected()) {
+            // const temp: []const u8 = std.fmt.bufPrint(&buf, "Player {}", .{id}) catch @panic("cock");
+            // const temp2 = buf[0..temp.len :0];
+            _ = try sim.world.spawnWith(.{
+                // ecs.component.Plr{ .id = @intCast(id) }, // only use this to name the players
+                ecs.component.Txt{
+                    .string = player_strings[id],
+                    .font_size = 10,
+                    .color = 0xff0066ff,
+                    .subpos = .{ 10, 20 },
+                },
+                ecs.component.Pos{ .pos = assigned_pos(id) },
+                ecs.component.Mov{ .velocity = ecs.component.Vec2.init(0, 0) },
+                ecs.component.Tex{
+                    //.texture_hash = AssetManager.pathHash("assets/kattis.png"),
+                    .texture_hash = AssetManager.pathHash("assets/kattis.png"),
+                    .tint = constants.player_colors[id],
+                },
+                //ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
+                ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
+            });
+            var button_position: @Vector(2, i32) = assigned_pos(id);
+            button_position[1] += @intCast(-17);
 
-        _ = try sim.world.spawnWith(.{
-            ecs.component.Plr{ .id = @intCast(id) },
-            ecs.component.Pos{ .pos = .{ button_position[0], button_position[1] } },
-            ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis_testcases.png") },
-            //ecs.component.Ctr{ .id = @intCast(id), .count = @intCast(id + 1) },
-        });
+            _ = try sim.world.spawnWith(.{
+                ecs.component.Plr{ .id = @intCast(id) },
+                ecs.component.Pos{ .pos = .{ button_position[0], button_position[1] } },
+                ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis_testcases.png") },
+                //ecs.component.Ctr{ .id = @intCast(id), .count = @intCast(id + 1) },
+            });
+        }
     }
 
     _ = try sim.world.spawnWith(.{

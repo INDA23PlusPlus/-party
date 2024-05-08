@@ -115,30 +115,32 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     });
 
     // Players
-    for (0..8) |i| {
-        const id: u32 = @intCast(i);
+    for (timeline, 0..) |inp, i| {
+        if (inp.is_connected()) {
+            const id: u32 = @intCast(i);
 
-        _ = try sim.world.spawnWith(.{
-            ecs.component.Plr{ .id = id },
-            ecs.component.Pos{ .pos = [_]i32{ 128 + 16 * @as(i32, @intCast(i)), 234 } },
-            ecs.component.Col{
-                .dim = [_]i32{ 6, 6 },
-                .layer = collision.Layer{ .base = false, .player = true },
-                .mask = collision.Layer{ .base = false, .platform = true, .player = true },
-            },
-            ecs.component.Mov{},
-            ecs.component.Tex{
-                .texture_hash = AssetManager.pathHash("assets/smash_cat.png"),
-                .w = 2,
-                .subpos = right_texture_offset,
-                .tint = constants.player_colors[i],
-            },
-            ecs.component.Anm{ .animation = Animation.SmashIdle, .interval = 8, .looping = true },
-            ecs.component.Tmr{}, // Coyote timer
-            ecs.component.Ctr{}, // Attack timer, block timer, and hit recovery timer
-        });
+            _ = try sim.world.spawnWith(.{
+                ecs.component.Plr{ .id = id },
+                ecs.component.Pos{ .pos = [_]i32{ 128 + 16 * @as(i32, @intCast(i)), 234 } },
+                ecs.component.Col{
+                    .dim = [_]i32{ 6, 6 },
+                    .layer = collision.Layer{ .base = false, .player = true },
+                    .mask = collision.Layer{ .base = false, .platform = true, .player = true },
+                },
+                ecs.component.Mov{},
+                ecs.component.Tex{
+                    .texture_hash = AssetManager.pathHash("assets/smash_cat.png"),
+                    .w = 2,
+                    .subpos = right_texture_offset,
+                    .tint = constants.player_colors[i],
+                },
+                ecs.component.Anm{ .animation = Animation.SmashIdle, .interval = 8, .looping = true },
+                ecs.component.Tmr{}, // Coyote timer
+                ecs.component.Ctr{}, // Attack timer, block timer, and hit recovery timer
+            });
 
-        sim.meta.minigame_placements[id] = 1; // Everyone's a winner by default
+            sim.meta.minigame_placements[id] = 0; // Everyone's a winner by default
+        }
     }
 
     // Crown

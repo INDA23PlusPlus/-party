@@ -56,14 +56,13 @@ fn spawnBackground(world: *ecs.world.World) !void {
     }
 }
 
-pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
+pub fn init(sim: *simulation.Simulation, inputs: input.Timeline) !void {
     sim.meta.ticks_at_minigame_start = sim.meta.ticks_elapsed;
     _ = try spawnBackground(&sim.world);
-    //TODO Change so it spawns one player for all current active players
-    for (0..constants.max_player_count) |id| {
-        // if (inputs[id].is_connected) {
-        try spawnPlayer(&sim.world, @intCast(id));
-        // }
+    for (inputs, 0..) |inp, id| {
+        if (inp.is_connected()) {
+            try spawnPlayer(&sim.world, @intCast(id));
+        }
     }
     _ = try sim.world.spawnWith(.{ecs.component.Ctr{ .count = 0 }});
     try crown.init(sim, .{ 0, -10 });

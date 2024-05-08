@@ -33,27 +33,29 @@ fn scoreFromPlacement(placement: u32) u32 {
     return score_distribution[placement];
 }
 
-pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
-    for (0..constants.max_player_count) |id| {
-        const placement = sim.meta.minigame_placements[id];
-        const score = scoreFromPlacement(placement);
-        const score_counter = try sim.world.spawnWith(.{
-            ecs.component.Pos{ .pos = .{ constants.asset_resolution * 4, 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(id)) } },
-            ecs.component.Ctr{ .count = score, .id = @intCast(id) },
-            ecs.component.Txt{ .color = score_text_color, .string = "???", .font_size = 18, .subpos = .{ 64, 6 } },
-        });
-        _ = try sim.world.spawnWith(.{
-            ecs.component.Plr{ .id = @intCast(id) },
-            ecs.component.Pos{ .pos = .{ constants.asset_resolution * 4, 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(id)) } },
-            ecs.component.Tex{
-                .texture_hash = AssetManager.pathHash("assets/smash_cat.png"),
-                .w = 2,
-                .h = 1,
-                .tint = constants.player_colors[id],
-            },
-            ecs.component.Anm{ .animation = Animation.SmashIdle, .interval = 16, .looping = true },
-            ecs.component.Lnk{ .child = score_counter },
-        });
+pub fn init(sim: *simulation.Simulation, inputs: input.Timeline) !void {
+    for (inputs, 0..) |inp, id| {
+        if (inp.is_connected()) {
+            const placement = sim.meta.minigame_placements[id];
+            const score = scoreFromPlacement(placement);
+            const score_counter = try sim.world.spawnWith(.{
+                ecs.component.Pos{ .pos = .{ constants.asset_resolution * 4, 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(id)) } },
+                ecs.component.Ctr{ .count = score, .id = @intCast(id) },
+                ecs.component.Txt{ .color = score_text_color, .string = "???", .font_size = 18, .subpos = .{ 64, 6 } },
+            });
+            _ = try sim.world.spawnWith(.{
+                ecs.component.Plr{ .id = @intCast(id) },
+                ecs.component.Pos{ .pos = .{ constants.asset_resolution * 4, 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(id)) } },
+                ecs.component.Tex{
+                    .texture_hash = AssetManager.pathHash("assets/smash_cat.png"),
+                    .w = 2,
+                    .h = 1,
+                    .tint = constants.player_colors[id],
+                },
+                ecs.component.Anm{ .animation = Animation.SmashIdle, .interval = 16, .looping = true },
+                ecs.component.Lnk{ .child = score_counter },
+            });
+        }
     }
     try crown.init(sim, .{ 0, -5 });
     // timer responsible for changing minigame
