@@ -100,11 +100,13 @@ fn writeNoop(_: ?*void, _: *xev.Loop, _: *xev.Completion, _: xev.TCP, _: xev.Wri
     return .disarm;
 }
 
-fn handlePacketFromClient(client_index: usize, server_data: *NetServerData, packet: []u8) !void {
+fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packet: []u8) !void {
     var client = &server_data.conns_list[client_index];
     var scanner = cbor.Scanner{};
     var ctx = scanner.begin(packet);
-    var packets = try ctx.readArray();
+    var header = try ctx.readArray();
+    client.consistent_until = try header.readU64();
+    var packets = try header.readArray();
     for (0..packets.items) |_| {
         var packet_ctx = try packets.readArray();
         const frame_tick_index = try packet_ctx.readU64();
@@ -130,9 +132,10 @@ fn handlePacketFromClient(client_index: usize, server_data: *NetServerData, pack
         client.packets_available += 1;
     }
     try packets.readEnd();
+    try header.readEnd();
 }
 
-fn clientMessage(client_index_raw: ?*ConnectedClientIndex, l: *xev.Loop, _: *xev.Completion, s: xev.TCP, read_buffer: xev.ReadBuffer, packet_size_res: xev.ReadError!usize) xev.CallbackAction {
+fn handlePacketFromClient(client_index_raw: ?*ConnectedClientIndex, l: *xev.Loop, _: *xev.Completion, s: xev.TCP, read_buffer: xev.ReadBuffer, packet_size_res: xev.ReadError!usize) xev.CallbackAction {
     _ = s;
     var server_data = loopToServerData(l);
     const client_index = fromClientIndex(client_index_raw);
@@ -148,8 +151,8 @@ fn clientMessage(client_index_raw: ?*ConnectedClientIndex, l: *xev.Loop, _: *xev
     const packet = read_buffer.slice[0..packet_size];
 
     debugPacket(packet);
-    handlePacketFromClient(client_index, server_data, packet) catch |e| {
-        std.debug.print("error while handling package from client: {any}", .{e});
+    parsePacketFromClient(client_index, server_data, packet) catch |e| {
+        std.debug.print("error while handling package from client: {any}\n", .{e});
     };
 
     // TODO: Parse packet and ingest into input_history.
@@ -190,7 +193,7 @@ fn clientConnected(_: ?*void, l: *xev.Loop, _: *xev.Completion, r: xev.TCP.Accep
         server_data.conns_list[slot].stream = stream;
         const completion = &server_data.conns_list[slot].read_completion;
         const buffer = &server_data.conns_list[slot].read_buffer;
-        stream.read(l, completion, .{ .slice = buffer }, ConnectedClientIndex, toClientIndex(slot), clientMessage);
+        stream.read(l, completion, .{ .slice = buffer }, ConnectedClientIndex, toClientIndex(slot), handlePacketFromClient);
 
         startNewConnectionHandler(server_data);
         return .disarm;
@@ -275,9 +278,9 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
 
             var fb = std.io.fixedBufferStream(write_buffer);
             const writer = fb.writer();
-            const input_tick_count = send_until - connection.consistent_until;
+            const input_tick_count = send_until -| connection.consistent_until;
             try cbor.writeArrayHeader(writer, input_tick_count);
-            for (connection.consistent_until..send_until) |tick_index| {
+            for (connection.consistent_until..connection.consistent_until + input_tick_count) |tick_index| {
                 const inputs = server_data.input_history.buttons.items[tick_index];
 
                 try cbor.writeArrayHeader(writer, 2);
@@ -311,7 +314,6 @@ const NetClientData = struct {
 };
 
 fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !void {
-    // TODO: Use input consolidator instead.
     var scanner = cbor.Scanner{};
     var ctx = scanner.begin(packet);
     var packets = try ctx.readArray();
@@ -348,7 +350,6 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !voi
         try frame_inputs.readEnd();
         try frame_ctx.readEnd();
     }
-    //std.debug.print("we have {d} {d} {d}\n", .{scanner.depth, packets.depth, packets.items});
     try packets.readEnd();
 }
 
@@ -381,6 +382,8 @@ fn clientThread(networking_queue: *NetworkingQueue) !void {
         var fb = std.io.fixedBufferStream(&write_buffer);
         const writer = fb.writer();
 
+        try cbor.writeArrayHeader(writer, 2);
+        try cbor.writeUint(writer, 200);
         try cbor.writeArrayHeader(writer, networking_queue.incoming_data_len);
         for (networking_queue.incoming_data[0..networking_queue.incoming_data_len]) |packet| {
             try cbor.writeArrayHeader(writer, 5);
@@ -391,7 +394,7 @@ fn clientThread(networking_queue: *NetworkingQueue) !void {
             try cbor.writeUint(writer, @intFromEnum(packet.data.button_b));
         }
         networking_queue.incoming_data_len = 0;
-        _ = try stream.write(&write_buffer);
+        _ = try stream.write(write_buffer[0..fb.pos]);
 
         networking_queue.rw_lock.unlock();
         std.time.sleep(std.time.ns_per_ms * 20);
