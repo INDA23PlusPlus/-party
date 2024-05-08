@@ -63,14 +63,15 @@ pub fn init(sim: *simulation.Simulation, inputs: input.Timeline) !void {
 }
 
 pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invariables) !void {
-    _ = inputs;
     _ = invar;
 
-    try depleteScores(sim);
+    try instantDepleteScore(sim, inputs);
     const scores_depleted = try checkScoresDepleted(sim);
     if (scores_depleted) {
         try updatePos(sim);
         try tickNextGameTimer(sim);
+    } else {
+        try depleteScores(sim);
     }
 
     try crown.update(sim);
@@ -92,6 +93,30 @@ fn depleteScores(sim: *simulation.Simulation) !void {
         txt.string = rl.textFormat("%d +%d", .{ sim.meta.global_score[id], ctr.count });
     }
 }
+
+fn instantDepleteScore(sim: *simulation.Simulation, inputs: input.Timeline) !void {
+    const latest = inputs.latest();
+    var query = sim.world.query(&.{ ecs.component.Plr, ecs.component.Lnk }, &.{});
+    while (query.next()) |_| {
+        const plr = query.get(ecs.component.Plr) catch unreachable;
+        const lnk = query.get(ecs.component.Lnk) catch unreachable;
+        const score_counter = lnk.child.?; // should not be null
+
+        const ctr = sim.world.inspect(score_counter, ecs.component.Ctr) catch unreachable;
+        const txt = sim.world.inspect(score_counter, ecs.component.Txt) catch unreachable;
+
+        const id = plr.id;
+
+        const state = latest[id];
+
+        if (state.button_b == .Pressed) {
+            sim.meta.global_score[id] += ctr.count;
+            ctr.count = 0;
+            txt.string = "DONE"; // Debug
+        }
+    }
+}
+
 fn checkScoresDepleted(sim: *simulation.Simulation) !bool {
     var query = sim.world.query(&.{ ecs.component.Ctr, ecs.component.Txt }, &.{});
     while (query.next()) |_| {
