@@ -4,11 +4,13 @@ const std = @import("std");
 const input = @import("input.zig");
 const Invariables = @import("Invariables.zig");
 
+const seed = 555;
+
 /// Data that is kept between minigames (such as seed, scores, etc)
 pub const Metadata = struct {
     global_score: [constants.max_player_count]u32 = [_]u32{0} ** constants.max_player_count,
     minigame_placements: [constants.max_player_count]u32 = [_]u32{0} ** constants.max_player_count,
-    seed: usize = 555,
+    prng: std.rand.DefaultPrng = std.rand.DefaultPrng.init(seed),
     ticks_elapsed: u64 = 1,
     minigame_id: usize = 0,
     minigame_ticks_per_update: u32 = 1, // Deprecated
@@ -36,7 +38,7 @@ pub const SharedSimulation = struct {
 pub const SimulationError = ecs.world.WorldError;
 
 /// Should this be here?
-pub fn init(sim: *Simulation, rt: Invariables) !void {
+pub fn start(sim: *Simulation, rt: Invariables) !void {
     sim.meta.minigame_ticks_per_update = 1;
     try rt.minigames_list[sim.meta.minigame_id].init(sim, .{
         .buttons = &.{},
@@ -60,6 +62,7 @@ pub fn simulate(sim: *Simulation, input_state: input.Timeline, rt: Invariables) 
         sim.meta.minigame_ticks_per_update = 1;
         sim.meta.minigame_timer = 0;
         sim.meta.minigame_counter = 0;
+        sim.meta.prng.seed(seed + sim.meta.ticks_elapsed);
         try rt.minigames_list[sim.meta.minigame_id].init(sim, input_state);
     }
 }
