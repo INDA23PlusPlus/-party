@@ -108,7 +108,7 @@ pub fn main() !void {
         .arena = frame_allocator,
     };
 
-    try simulation.init(&sim, invariables);
+    try simulation.start(&sim, invariables);
 
     // var benchmarker = try @import("Benchmarker.zig").init("Simulation");
 
