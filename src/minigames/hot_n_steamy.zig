@@ -283,10 +283,13 @@ fn spawnPlayer(world: *ecs.world.World, id: u32) !void {
             .mask = collision.Layer{ .base = false, .player = false, .pushing = true },
         },
         ecs.component.Tex{
-            .subpos = .{ 0, -3 },
-            .texture_hash = AssetManager.pathHash("assets/kattis.png"),
+            .w = 2,
+            .h = 1,
+            .subpos = .{ -18, -6 },
+            .texture_hash = AssetManager.pathHash("assets/smash_cat.png"),
             .tint = constants.player_colors[id],
         },
-        ecs.component.Anm{ .animation = Animation.KattisFly, .interval = 8, .looping = true },
+        ecs.component.Anm{ .animation = Animation.SmashRun, .interval = 8, .looping = true },
+        // ecs.component.Dbg{},
     });
 }
