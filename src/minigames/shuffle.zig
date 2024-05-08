@@ -38,7 +38,7 @@ pub fn update(sim: *simulation.Simulation, _: input.Timeline, _: Invariables) si
         ticks_left.count -= 1;
 
         if (ticks_left.count == 0) {
-            sim.meta.minigame_id = @mod(sim.meta.prng.next(), game_list.list.len - 3) + 3;
+            sim.meta.minigame_id = @mod(sim.meta.minigame_prng.next(), game_list.list.len - 3) + 3;
         }
     }
 }
