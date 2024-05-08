@@ -204,6 +204,86 @@ fn clientConnected(_: ?*void, l: *xev.Loop, _: *xev.Completion, r: xev.TCP.Accep
     }
 }
 
+fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *NetworkingQueue) !void {
+    // Give thethreads a chance to work.
+    try server_data.loop.run(.once);
+
+    networking_queue.rw_lock.lock();
+
+    // Ingest the updates from the local-client.
+    for (networking_queue.incoming_data[0..networking_queue.incoming_data_len]) |change| {
+        std.debug.print("emptying...\n", .{});
+        try server_data.ingestPlayerInput(change);
+    }
+    networking_queue.incoming_data_len = 0;
+
+    // Ingest the updates from the connected clients.
+    for (&server_data.conns_list, server_data.conns_type, &server_data.conns_incoming_packets) |*connection, conn_type, *conns_packets| {
+        if (conn_type != .remote) {
+            continue;
+        }
+        for (conns_packets[0..connection.packets_available]) |change| {
+            try server_data.ingestPlayerInput(change);
+        }
+        connection.packets_available = 0;
+    }
+
+    // Send the updates to the clients.
+    for (&server_data.conns_list, server_data.conns_type, &server_data.conns_write_buffers) |*connection, conn_type, *write_buffer| {
+        // Send the missing inputs. But only N at the time.
+        const send_until = @min(server_data.input_history.buttons.items.len, connection.consistent_until + 40);
+        const input_tick_count = send_until -| connection.consistent_until;
+
+        if (conn_type == .local) {
+            for (connection.consistent_until..connection.consistent_until + input_tick_count) |tick_number| {
+                const inputs = server_data.input_history.buttons.items[tick_number];
+                for (inputs, 0..) |packet, player_index| {
+                    // TODO: Reduce the nesting.
+                    if (networking_queue.outgoing_data_len >= networking_queue.outgoing_data.len) {
+                        continue;
+                    }
+                    networking_queue.outgoing_data[networking_queue.outgoing_data_len] = .{
+                        .tick = tick_number,
+                        .player = @truncate(player_index),
+                        .data = packet,
+                    };
+                    networking_queue.outgoing_data_len += 1;
+                }
+            }
+        }
+
+        if (conn_type != .remote) {
+            continue;
+        }
+
+        if (connection.write_completion.state() == .active) {
+            // We are still writing data.
+            continue;
+        }
+
+        var fb = std.io.fixedBufferStream(write_buffer);
+        const writer = fb.writer();
+        try cbor.writeArrayHeader(writer, input_tick_count);
+        for (connection.consistent_until..connection.consistent_until + input_tick_count) |tick_index| {
+            const inputs = server_data.input_history.buttons.items[tick_index];
+
+            try cbor.writeArrayHeader(writer, 2);
+            try cbor.writeUint(writer, tick_index);
+            try cbor.writeArrayHeader(writer, inputs.len);
+            for (inputs) |input| {
+                try cbor.writeArrayHeader(writer, 3);
+                try cbor.writeUint(writer, @intFromEnum(input.dpad));
+                try cbor.writeUint(writer, @intFromEnum(input.button_a));
+                try cbor.writeUint(writer, @intFromEnum(input.button_b));
+            }
+        }
+        connection.stream.write(&server_data.loop, &connection.write_completion, .{ .slice = write_buffer[0..fb.pos] }, void, null, writeNoop);
+    }
+
+    networking_queue.rw_lock.unlock();
+
+}
+
 fn serverThread(networking_queue: *NetworkingQueue) !void {
     var server_data = NetServerData{ .loop = undefined, .input_history = undefined };
     server_data.conns_type[0] = .local;
@@ -219,87 +299,10 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
     try server_data.listener.listen(16);
     startNewConnectionHandler(&server_data);
 
-    //try server_data.loop.run(.until_done);
     while (true) {
         // TODO: Take clock timestamp
-
-        // Give thethreads a chance to work.
-        try server_data.loop.run(.once);
-
-        networking_queue.rw_lock.lock();
-
-        // Ingest the updates from the local-client.
-        for (networking_queue.incoming_data[0..networking_queue.incoming_data_len]) |change| {
-            try server_data.ingestPlayerInput(change);
-        }
-        networking_queue.incoming_data_len = 0;
-
-        // Ingest the updates from the connected clients.
-        for (&server_data.conns_list, server_data.conns_type, &server_data.conns_incoming_packets) |*connection, conn_type, *conns_packets| {
-            if (conn_type != .remote) {
-                continue;
-            }
-            for (conns_packets[0..connection.packets_available]) |change| {
-                try server_data.ingestPlayerInput(change);
-            }
-            connection.packets_available = 0;
-        }
-
-        // Send the updates to the clients.
-        for (&server_data.conns_list, server_data.conns_type, &server_data.conns_write_buffers) |*connection, conn_type, *write_buffer| {
-            // Send the missing inputs. But only N at the time.
-            const send_until = @min(server_data.input_history.buttons.items.len, connection.consistent_until + 40);
-
-            if (conn_type == .local) {
-                for (connection.consistent_until..send_until) |tick_number| {
-                    const inputs = server_data.input_history.buttons.items[tick_number];
-                    for (inputs, 0..) |packet, player_index| {
-                        // TODO: Reduce the nesting.
-                        if (networking_queue.outgoing_data_len >= networking_queue.outgoing_data.len) {
-                            continue;
-                        }
-                        networking_queue.outgoing_data[networking_queue.outgoing_data_len] = .{
-                            .tick = tick_number,
-                            .player = @truncate(player_index),
-                            .data = packet,
-                        };
-                        networking_queue.outgoing_data_len += 1;
-                    }
-                }
-            }
-
-            if (conn_type != .remote) {
-                continue;
-            }
-            if (connection.write_completion.state() == .active) {
-                // We are still writing data.
-                continue;
-            }
-
-            var fb = std.io.fixedBufferStream(write_buffer);
-            const writer = fb.writer();
-            const input_tick_count = send_until -| connection.consistent_until;
-            try cbor.writeArrayHeader(writer, input_tick_count);
-            for (connection.consistent_until..connection.consistent_until + input_tick_count) |tick_index| {
-                const inputs = server_data.input_history.buttons.items[tick_index];
-
-                try cbor.writeArrayHeader(writer, 2);
-                try cbor.writeUint(writer, tick_index);
-                try cbor.writeArrayHeader(writer, inputs.len);
-                for (inputs) |input| {
-                    try cbor.writeArrayHeader(writer, 3);
-                    try cbor.writeUint(writer, @intFromEnum(input.dpad));
-                    try cbor.writeUint(writer, @intFromEnum(input.button_a));
-                    try cbor.writeUint(writer, @intFromEnum(input.button_b));
-                }
-            }
-            connection.stream.write(&server_data.loop, &connection.write_completion, .{ .slice = write_buffer[0..fb.pos] }, void, null, writeNoop);
-        }
-
-        networking_queue.rw_lock.unlock();
-
+        try serverThreadQueueTransfer(&server_data, networking_queue);
         std.time.sleep(std.time.ns_per_ms * 20);
-        //
         // TODO: Take clock timestamp
         // TODO: Compare these then sleep a bit to lock the ticks per second.
     }

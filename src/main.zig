@@ -123,10 +123,12 @@ pub fn main() !void {
         // TODO: Write this code.
 
         for (input_frames_sent..input_consolidation.buttons.items.len) |tick_number| {
+            std.debug.print("try send\n", .{});
             const all_buttons = input_consolidation.buttons.items[tick_number];
             const local = input_consolidation.local.items[tick_number];
             for (all_buttons, 0..) |buttons, i| {
                 if (main_thread_queue.outgoing_data_len >= main_thread_queue.outgoing_data.len) {
+                    std.debug.print("warning: outgoing_data of main is overfilled\n", .{});
                     continue;
                 }
                 if (local.isSet(i)) {
@@ -136,6 +138,7 @@ pub fn main() !void {
                         .player = @truncate(i),
                     };
                     main_thread_queue.outgoing_data_len += 1;
+                    std.debug.print("sending packet to net thread\n", .{});
                 }
             }
         }
@@ -145,6 +148,7 @@ pub fn main() !void {
 
         // Ingest the updates.
         for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_len]) |change| {
+            std.debug.print("ingesting update\n", .{});
             _ = try input_consolidation.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick);
         }
         main_thread_queue.incoming_data_len = 0;
