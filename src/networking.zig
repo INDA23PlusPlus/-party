@@ -106,32 +106,30 @@ fn handlePacketFromClient(client_index: usize, server_data: *NetServerData, pack
     var ctx = scanner.begin(packet);
     var packets = try ctx.readArray();
     for (0..packets.items) |_| {
-        var frame_ctx = try packets.readArray();
-        const frame_tick_index = try frame_ctx.readU64();
-        var frame_inputs = try frame_ctx.readArray();
-        for (0..frame_inputs.items) |i| {
-            var input_ctx = try frame_inputs.readArray();
-            const dpad = try input_ctx.readU64();
-            const button_a = try input_ctx.readU64();
-            const button_b = try input_ctx.readU64();
+        var packet_ctx = try packets.readArray();
+        const frame_tick_index = try packet_ctx.readU64();
+        const dpad = try packet_ctx.readU64();
+        const button_a = try packet_ctx.readU64();
+        const button_b = try packet_ctx.readU64();
+        try packets.readEnd();
 
-            if (client.packets_available >= server_data.conns_incoming_packets.len) {
-                continue;
-            }
-
-            server_data.conns_incoming_packets[client_index][client.packets_available] = .{
-                .tick = @truncate(frame_tick_index),
-                .data = .{
-                    .dpad = @enumFromInt(dpad),
-                    .button_a = @enumFromInt(button_a),
-                    .button_b = @enumFromInt(button_b),
-                },
-                .player = @truncate(i),
-            };
-
-            client.packets_available += 1;
+        if (client.packets_available >= server_data.conns_incoming_packets.len) {
+            continue;
         }
+
+        server_data.conns_incoming_packets[client_index][client.packets_available] = .{
+            .tick = @truncate(frame_tick_index),
+            .data = .{
+                .dpad = @enumFromInt(dpad),
+                .button_a = @enumFromInt(button_a),
+                .button_b = @enumFromInt(button_b),
+            },
+            .player = @truncate(client_index),
+        };
+
+        client.packets_available += 1;
     }
+    try packets.readEnd();
 }
 
 fn clientMessage(client_index_raw: ?*ConnectedClientIndex, l: *xev.Loop, _: *xev.Completion, s: xev.TCP, read_buffer: xev.ReadBuffer, packet_size_res: xev.ReadError!usize) xev.CallbackAction {
@@ -312,6 +310,49 @@ const NetClientData = struct {
     common: NetData,
 };
 
+fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !void {
+    // TODO: Use input consolidator instead.
+    var scanner = cbor.Scanner{};
+    var ctx = scanner.begin(packet);
+    var packets = try ctx.readArray();
+    for (0..packets.items) |_| {
+        var frame_ctx = try packets.readArray();
+        std.debug.assert(frame_ctx.items == 2);
+        const frame_tick_index = try frame_ctx.readU64();
+        var frame_inputs = try frame_ctx.readArray();
+        std.debug.assert(frame_inputs.items == constants.max_player_count);
+        for (0..frame_inputs.items) |player_i| {
+            var input_ctx = try frame_inputs.readArray();
+            std.debug.assert(input_ctx.items == 3);
+            const dpad = try input_ctx.readU64();
+            const button_a = try input_ctx.readU64();
+            const button_b = try input_ctx.readU64();
+            try input_ctx.readEnd();
+
+            if (networking_queue.outgoing_data_len >= networking_queue.outgoing_data.len) {
+                continue;
+            }
+
+            networking_queue.outgoing_data[networking_queue.outgoing_data_len] = .{
+                .tick = @truncate(frame_tick_index),
+                .data = .{
+                    .dpad = @enumFromInt(dpad),
+                    .button_a = @enumFromInt(button_a),
+                    .button_b = @enumFromInt(button_b),
+                },
+                .player = @truncate(player_i),
+            };
+
+            networking_queue.outgoing_data_len += 1;
+        }
+        try frame_inputs.readEnd();
+        try frame_ctx.readEnd();
+    }
+    //std.debug.print("we have {d} {d} {d}\n", .{scanner.depth, packets.depth, packets.items});
+    try packets.readEnd();
+}
+
+
 fn clientThread(networking_queue: *NetworkingQueue) !void {
     // The client doesn't currently do evented IO. I don't think it will be necessary.
 
@@ -319,22 +360,38 @@ fn clientThread(networking_queue: *NetworkingQueue) !void {
     var alloc = std.heap.FixedBufferAllocator.init(&mem);
     const allocator = alloc.allocator();
     const stream = try std.net.tcpConnectToHost(allocator, "127.0.0.1", 8080);
-    _ = try stream.write("hi");
 
     //std.time.sleep(std.time.ns_per_s * 1);
     while (true) {
-        var packet_buf: [1024]u8 = undefined;
+        var incoming_packet_buf: [1024]u8 = undefined;
         //std.debug.print("begin read\n", .{});
-        const packet_len = try stream.read(&packet_buf);
-        const packet = packet_buf[0..packet_len];
+        const incoming_packet_len = try stream.read(&incoming_packet_buf);
+        const incoming_packet = incoming_packet_buf[0..incoming_packet_len];
 
-        debugPacket(packet);
+        debugPacket(incoming_packet);
 
-        _ = try stream.write("hi");
 
         // TODO: Parse packets.
 
         networking_queue.rw_lock.lock();
+
+        try handlePacketFromServer(networking_queue, incoming_packet);
+
+        var write_buffer: [1024]u8 = undefined;
+        var fb = std.io.fixedBufferStream(&write_buffer);
+        const writer = fb.writer();
+
+        try cbor.writeArrayHeader(writer, networking_queue.incoming_data_len);
+        for (networking_queue.incoming_data[0..networking_queue.incoming_data_len]) |packet| {
+            try cbor.writeArrayHeader(writer, 5);
+            try cbor.writeUint(writer, packet.tick);
+            try cbor.writeUint(writer, packet.player);
+            try cbor.writeUint(writer, @intFromEnum(packet.data.dpad));
+            try cbor.writeUint(writer, @intFromEnum(packet.data.button_a));
+            try cbor.writeUint(writer, @intFromEnum(packet.data.button_b));
+        }
+        networking_queue.incoming_data_len = 0;
+        _ = try stream.write(&write_buffer);
 
         networking_queue.rw_lock.unlock();
         std.time.sleep(std.time.ns_per_ms * 20);

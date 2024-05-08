@@ -90,7 +90,7 @@ pub fn main() !void {
     var input_frames_sent: u64 = 0;
 
     var controllers = Controller.DefaultControllers;
-    controllers[2].input_index = 0;
+    controllers[0].input_index = 0;
     controllers[1].input_index = 1;
 
     var main_thread_queue = NetworkingQueue{};

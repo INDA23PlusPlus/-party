@@ -63,7 +63,7 @@ pub fn init(sim: *simulation.Simulation, inputs: input.Timeline) !void {
     // på tavlan har vi den dynamiska morse code tabellen.
 
     // kan inte zig, fick hårdkoda detta, help me pls
-    for (inputs, 0..) |inp, id| {
+    for (inputs.latest(), 0..) |inp, id| {
         if (inp.is_connected()) {
             for (0..morsecode_maxlen) |j| {
                 keystrokes[id][j] = 0;
@@ -71,7 +71,7 @@ pub fn init(sim: *simulation.Simulation, inputs: input.Timeline) !void {
         }
     }
 
-    for (inputs, 0..) |inp, id| {
+    for (inputs.latest(), 0..) |inp, id| {
         if (inp.is_connected()) {
             // const temp: []const u8 = std.fmt.bufPrint(&buf, "Player {}", .{id}) catch @panic("cock");
             // const temp2 = buf[0..temp.len :0];

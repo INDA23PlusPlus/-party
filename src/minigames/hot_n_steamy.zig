@@ -59,7 +59,7 @@ fn spawnBackground(world: *ecs.world.World) !void {
 pub fn init(sim: *simulation.Simulation, inputs: input.Timeline) !void {
     sim.meta.ticks_at_minigame_start = sim.meta.ticks_elapsed;
     _ = try spawnBackground(&sim.world);
-    for (inputs, 0..) |inp, id| {
+    for (inputs.latest(), 0..) |inp, id| {
         if (inp.is_connected()) {
             try spawnPlayer(&sim.world, @intCast(id));
         }
