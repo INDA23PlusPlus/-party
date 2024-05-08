@@ -19,7 +19,7 @@ var typed_len = std.mem.zeroes([constants.max_player_count]u8);
 var current_letter = std.mem.zeroes([constants.max_player_count]u8);
 var game_string: [:0]const u8 = undefined;
 var game_string_len: usize = 20;
-var current_placement: usize = 0;
+//var current_placement: usize = 0;
 //var player_finish_order = [_]u32{100} ** constants.max_player_count;
 
 fn assigned_pos(id: usize) @Vector(2, i32) {
@@ -127,7 +127,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
             std.debug.print("ending pfo: {any}\n", .{sim.meta.minigame_placements});
             for (0..constants.max_player_count) |j| {
                 if (sim.meta.minigame_placements[j] == constants.max_player_count - 1) {
-                    sim.meta.minigame_placements[j] = @as(u32, @intCast(current_placement));
+                    sim.meta.minigame_placements[j] = @as(u32, @intCast(sim.meta.minigame_counter));
                 }
             }
             std.debug.print("ending miniplaces: {any}\n", .{sim.meta.minigame_placements});
@@ -183,9 +183,9 @@ fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
                 keystrokes[id] = .{ 0, 0, 0, 0, 0, 0 };
                 if (current_letter[id] == game_string_len) {
                     // There is a small problem with this, lower ids get prioritized in this check
-                    meta.minigame_placements[current_placement] = @intCast(id);
-                    current_placement += 1;
-                    std.debug.print("Current placement: {any}\n", .{current_placement});
+                    meta.minigame_placements[meta.minigame_counter] = @intCast(id);
+                    meta.minigame_counter += 1;
+                    std.debug.print("minigame_placement: {any}\n", .{meta.minigame_counter});
                     std.debug.print("Player finish order: {any}\n", .{meta.minigame_placements});
                     // player has finished
                     // TODO: ignore this players inputs from now on
