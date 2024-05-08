@@ -52,6 +52,7 @@ const paths = [_][:0]const u8{
     "assets/sky_background_1.png",
     "assets/sky_background_2.png",
     "assets/crown.png",
+    "assets/roulette.png",
 };
 
 hashmap: map_type,
