@@ -1,6 +1,4 @@
-// TODO: Still heavily a work in progress.
-// TODO: Handle disconnects (set input state of the player as disconnected)
-// TODO: Parse packets and send packets
+// Let it be known that the complexity of this code really isn't something I am proud of.
 // TODO: Keep track of old state and request resimulation
 
 const std = @import("std");
@@ -102,13 +100,48 @@ fn writeNoop(_: ?*void, _: *xev.Loop, _: *xev.Completion, _: xev.TCP, _: xev.Wri
     return .disarm;
 }
 
-fn clientMessage(client_index: ?*ConnectedClientIndex, l: *xev.Loop, _: *xev.Completion, s: xev.TCP, read_buffer: xev.ReadBuffer, packet_size_res: xev.ReadError!usize) xev.CallbackAction {
+fn handlePacketFromClient(client_index: usize, server_data: *NetServerData, packet: []u8) !void {
+    var client = &server_data.conns_list[client_index];
+    var scanner = cbor.Scanner{};
+    var ctx = scanner.begin(packet);
+    var packets = try ctx.readArray();
+    for (0..packets.items) |_| {
+        var frame_ctx = try packets.readArray();
+        const frame_tick_index = try frame_ctx.readU64();
+        var frame_inputs = try frame_ctx.readArray();
+        for (0..frame_inputs.items) |i| {
+            var input_ctx = try frame_inputs.readArray();
+            const dpad = try input_ctx.readU64();
+            const button_a = try input_ctx.readU64();
+            const button_b = try input_ctx.readU64();
+
+            if (client.packets_available >= server_data.conns_incoming_packets.len) {
+                continue;
+            }
+
+            server_data.conns_incoming_packets[client_index][client.packets_available] = .{
+                .tick = @truncate(frame_tick_index),
+                .data = .{
+                    .dpad = @enumFromInt(dpad),
+                    .button_a = @enumFromInt(button_a),
+                    .button_b = @enumFromInt(button_b),
+                },
+                .player = @truncate(i),
+            };
+
+            client.packets_available += 1;
+        }
+    }
+}
+
+fn clientMessage(client_index_raw: ?*ConnectedClientIndex, l: *xev.Loop, _: *xev.Completion, s: xev.TCP, read_buffer: xev.ReadBuffer, packet_size_res: xev.ReadError!usize) xev.CallbackAction {
     _ = s;
     var server_data = loopToServerData(l);
-    var client = &server_data.conns_list[fromClientIndex(client_index)];
+    const client_index = fromClientIndex(client_index_raw);
+    var client = &server_data.conns_list[client_index];
 
     const packet_size = packet_size_res catch |e| {
-        server_data.conns_type[fromClientIndex(client_index)] = .unused;
+        server_data.conns_type[client_index] = .unused;
         client.stream.shutdown(l, &client.read_completion, void, null, afterOverfullDisconnect);
         std.debug.print("error: {any}\n", .{e});
         return .disarm;
@@ -117,6 +150,9 @@ fn clientMessage(client_index: ?*ConnectedClientIndex, l: *xev.Loop, _: *xev.Com
     const packet = read_buffer.slice[0..packet_size];
 
     debugPacket(packet);
+    handlePacketFromClient(client_index, server_data, packet) catch |e| {
+        std.debug.print("error while handling package from client: {any}", .{e});
+    };
 
     // TODO: Parse packet and ingest into input_history.
 
@@ -215,8 +251,19 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
 
             if (conn_type == .local) {
                 for (connection.consistent_until..send_until) |tick_number| {
-                    const packet = server_data.input_history.buttons.items[tick_number];
-                    _ = packet;
+                    const inputs = server_data.input_history.buttons.items[tick_number];
+                    for (inputs, 0..) |packet, player_index| {
+                        // TODO: Reduce the nesting.
+                        if (networking_queue.outgoing_data_len >= networking_queue.outgoing_data.len) {
+                            continue;
+                        }
+                        networking_queue.outgoing_data[networking_queue.outgoing_data_len] = .{
+                            .tick = tick_number,
+                            .player = @truncate(player_index),
+                            .data = packet,
+                        };
+                        networking_queue.outgoing_data_len += 1;
+                    }
                 }
             }
 
@@ -234,6 +281,9 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
             try cbor.writeArrayHeader(writer, input_tick_count);
             for (connection.consistent_until..send_until) |tick_index| {
                 const inputs = server_data.input_history.buttons.items[tick_index];
+
+                try cbor.writeArrayHeader(writer, 2);
+                try cbor.writeUint(writer, tick_index);
                 try cbor.writeArrayHeader(writer, inputs.len);
                 for (inputs) |input| {
                     try cbor.writeArrayHeader(writer, 3);
@@ -243,8 +293,6 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
                 }
             }
             connection.stream.write(&server_data.loop, &connection.write_completion, .{ .slice = write_buffer[0..fb.pos] }, void, null, writeNoop);
-
-            // TODO: Actually send the data to remote peers.
         }
 
         networking_queue.rw_lock.unlock();
@@ -276,7 +324,7 @@ fn clientThread(networking_queue: *NetworkingQueue) !void {
     //std.time.sleep(std.time.ns_per_s * 1);
     while (true) {
         var packet_buf: [1024]u8 = undefined;
-        std.debug.print("begin read\n", .{});
+        //std.debug.print("begin read\n", .{});
         const packet_len = try stream.read(&packet_buf);
         const packet = packet_buf[0..packet_len];
 

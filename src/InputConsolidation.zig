@@ -32,10 +32,9 @@ fn extendTimeline(self: *Self, allocator: std.mem.Allocator, tick: u64) !void {
     const start = self.buttons.items.len;
 
     try self.buttons.ensureTotalCapacity(allocator, tick + 1);
+    self.buttons.expandToCapacity();
     try self.local.ensureTotalCapacity(allocator, tick + 1);
-
-    self.buttons.items.len = tick + 1;
-    self.local.items.len = tick + 1;
+    self.local.expandToCapacity();
 
     for (self.buttons.items[start..]) |*frame| {
         frame.* = guess_buttons;
@@ -50,6 +49,14 @@ pub fn localUpdate(self: *Self, allocator: std.mem.Allocator, controllers: []Con
     if (tick >= self.newest_remote_frame) {
         try self.extendTimeline(allocator, tick);
         self.buttons.items[tick] = Controller.poll(controllers, self.buttons.items[tick - 1]);
+        var local = input.IsLocalBitfield.initEmpty();
+        for (controllers) |controller| {
+            if (controller.input_index < constants.max_player_count) {
+                local.set(controller.input_index);
+            }
+        }
+        self.local.items[tick] = local;
+
         // TODO: fill out self.local too.
     }
     return .{
@@ -62,10 +69,10 @@ pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, player: u32, new_
         @panic("the inputs came out of order");
     }
     try self.extendTimeline(allocator, tick);
-    for (self.buttons.items[tick..]) |*frame| {
-        //if (player.is_local) {
-        //    continue;
-        //}
+    for (self.buttons.items[tick..], self.local.items[tick..]) |*frame, is_local| {
+        if (is_local.isSet(player)) {
+            continue;
+        }
         frame[player] = new_state;
     }
     self.newest_remote_frame = tick;

@@ -8,6 +8,7 @@ const AssetManager = @import("../AssetManager.zig");
 const animator = @import("../animation/animator.zig");
 const Animation = @import("../animation/animations.zig").Animation;
 const Invariables = @import("../Invariables.zig");
+const Crown = @import("../crown.zig");
 
 // Hey, nice code you got there!   (^‿^ )
 // Would be a shame if someone deleted everything...   (0‿0  )
@@ -60,12 +61,15 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Ctr{ .count = 30 * 60 },
     });
+
+    try Crown.init(sim, .{ -6, -16 });
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
     inputSystem(&sim.world, timeline);
     updateTextures(&sim.world, timeline);
     animator.update(&sim.world);
+    try Crown.update(sim);
 
     var query = sim.world.query(&.{ecs.component.Ctr}, &.{ ecs.component.Plr, ecs.component.Tex, ecs.component.Lnk });
     while (query.next()) |_| {
@@ -75,7 +79,6 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
             sim.meta.minigame_id = 3;
             return;
         }
-
         ctr.count -= 1;
     }
 }
@@ -201,7 +204,8 @@ fn updateRankings(sim: *simulation.Simulation, timeline: input.Timeline) void {
         const plr = query.get(ecs.component.Plr) catch unreachable;
         const ctr = query.get(ecs.component.Ctr) catch unreachable;
 
-        player_scores[plr.id] = plr.id | ctr.count << 3;
+        const count = if (ctr.count & 0x80000000 != 0) 0 else ctr.count & 0x7FFFFFFF;
+        player_scores[plr.id] = plr.id | (count << 3);
     }
 
     std.mem.sort(u32, &player_scores, {}, std.sort.desc(u32));

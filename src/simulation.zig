@@ -9,10 +9,10 @@ pub const Metadata = struct {
     global_score: [constants.max_player_count]u32 = [_]u32{0} ** constants.max_player_count,
     minigame_placements: [constants.max_player_count]u32 = [_]u32{0} ** constants.max_player_count,
     seed: usize = 555,
-    ticks_elapsed: u32 = 1,
+    ticks_elapsed: u64 = 1,
     minigame_id: usize = 0,
     minigame_ticks_per_update: u32 = 1,
-    ticks_at_minigame_start: u32 = 1,
+    ticks_at_minigame_start: u64 = 1,
 };
 
 pub const Simulation = struct {

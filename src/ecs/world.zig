@@ -239,8 +239,7 @@ pub const World = struct {
         return entity.generation == self.generations[entity.identifier];
     }
 
-    /// TODO: Test
-    /// DO not use this yet.
+    /// Checks if an entity both has and does not have some collection of components.
     pub fn checkSignature(self: *Self, entity: Entity, comptime Include: []const type, comptime Exclude: []const type) bool {
         if (!self.entities.isSet(entity.identifier)) {
             return false;
