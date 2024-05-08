@@ -11,8 +11,11 @@ pub const Metadata = struct {
     seed: usize = 555,
     ticks_elapsed: u64 = 1,
     minigame_id: usize = 0,
-    minigame_ticks_per_update: u32 = 1,
-    ticks_at_minigame_start: u64 = 1,
+    minigame_ticks_per_update: u32 = 1, // Deprecated
+    ticks_at_minigame_start: u64 = 1, // Deprecated
+
+    minigame_timer: u32 = 0,
+    minigame_counter: u32 = 0,
 };
 
 pub const Simulation = struct {
@@ -49,15 +52,14 @@ pub fn simulate(sim: *Simulation, input_state: input.Timeline, rt: Invariables) 
 
     sim.meta.ticks_elapsed += 1;
 
-    // Handles transitions between minigames.
     try rt.minigames_list[sim.meta.minigame_id].update(sim, input_state, rt);
 
-    // TODO: game selection
-    // We could select the game randomly by first switching to a "game select minigame" with ID 0 maybe?
-
+    // Handles transitions between minigames.
     if (frame_start_minigame != sim.meta.minigame_id) {
         sim.world.reset();
         sim.meta.minigame_ticks_per_update = 1;
+        sim.meta.minigame_timer = 0;
+        sim.meta.minigame_counter = 0;
         try rt.minigames_list[sim.meta.minigame_id].init(sim, input_state);
     }
 }

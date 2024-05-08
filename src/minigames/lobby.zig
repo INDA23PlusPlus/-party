@@ -19,7 +19,20 @@ const ready_strings: [2][:0]const u8 = .{
     "Ready",
 };
 
-pub fn init(_: *simulation.Simulation, _: input.Timeline) !void {}
+const left_texture_offset = [_]i32{ 0, -8 };
+const right_texture_offset = [_]i32{ -16, -8 };
+
+pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
+    // Background
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Pos{},
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/tron_map.png"),
+            .w = 32,
+            .h = 18,
+        },
+    });
+}
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invariables) !void {
     var players = sim.world.query(&.{ecs.component.Plr}, &.{});
@@ -52,13 +65,18 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
                 ecs.component.Plr{ .id = @truncate(index) },
                 ecs.component.Pos{ .pos = .{ 256, 144 } },
                 ecs.component.Tex{
-                    .texture_hash = AssetManager.pathHash("assets/kattis.png"),
+                    .texture_hash = AssetManager.pathHash("assets/smash_cat.png"),
+                    .w = 2,
+                    .h = 1,
                     .tint = constants.player_colors[index],
+                    .subpos = right_texture_offset,
                 },
                 ecs.component.Mov{},
-                ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
+                ecs.component.Anm{ .animation = Animation.SmashIdle, .interval = 16, .looping = true },
                 ecs.component.Ctr{ .id = @truncate(index), .count = 0 },
-                ecs.component.Txt{ .string = ready_strings[0], .color = 0x666666FF, .subpos = .{ 0, -10 }, .font_size = 12 },
+                ecs.component.Txt{ .string = ready_strings[0], .color = 0x999999FF, .subpos = .{ 0, -10 }, .font_size = 12 },
+                ecs.component.Col{ .dim = .{ 16, 8 }, .layer = .{ .base = false } },
+                // ecs.component.Dbg{},
             });
         } else if (change == .remove) {
             if (entity) |e| {
@@ -72,7 +90,8 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
     try inputSystem(&sim.world, inputs);
     try flipSystem(&sim.world, inputs);
     movement.update(&sim.world, &collisions, rt.arena) catch @panic("movement");
-    animator.update(&sim.world); // I don't think this should be here
+    try containSystem(&sim.world);
+    animator.update(&sim.world);
 
     // Count ready players
     var ready_count: u8 = 0;
@@ -111,10 +130,10 @@ fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
 
         const anm = try query.get(ecs.component.Anm);
         if (state.dpad != input.InputDirection.None) {
-            anm.animation = Animation.KattisRun;
+            anm.animation = Animation.SmashRun;
             anm.interval = 8;
         } else {
-            anm.animation = Animation.KattisIdle;
+            anm.animation = Animation.SmashIdle;
             anm.interval = 16;
         }
 
@@ -130,13 +149,44 @@ fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
 }
 
 fn flipSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
-    var query = world.query(&.{ ecs.component.Plr, ecs.component.Tex }, &.{});
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Tex, ecs.component.Mov }, &.{});
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
         const tex = try query.get(ecs.component.Tex);
+        const mov = try query.get(ecs.component.Mov);
         const state = inputs[plr.id];
-        if (state.horizontal() != 0) {
-            tex.flip_horizontal = state.horizontal() < 0;
+        switch (state.dpad) {
+            .East, .NorthEast, .SouthEast => if (mov.velocity.vector[0] > 0) {
+                tex.flip_horizontal = false;
+                tex.subpos = right_texture_offset;
+            },
+            .West, .NorthWest, .SouthWest => if (mov.velocity.vector[0] < 0) {
+                tex.flip_horizontal = true;
+                tex.subpos = left_texture_offset;
+            },
+            else => {},
+        }
+    }
+}
+
+fn containSystem(world: *ecs.world.World) !void {
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Pos, ecs.component.Col }, &.{});
+    while (query.next()) |_| {
+        const plr = try query.get(ecs.component.Plr);
+        _ = plr;
+        const pos = try query.get(ecs.component.Pos);
+        const col = try query.get(ecs.component.Col);
+        if (pos.pos[0] < 16) {
+            pos.pos[0] = 16;
+        }
+        if (pos.pos[0] + col.dim[0] > constants.world_width - 16) {
+            pos.pos[0] = constants.world_width - col.dim[0] - 16;
+        }
+        if (pos.pos[1] < 16) {
+            pos.pos[1] = 16;
+        }
+        if (pos.pos[1] + col.dim[1] > constants.world_height - 16) {
+            pos.pos[1] = constants.world_height - col.dim[1] - 16;
         }
     }
 }

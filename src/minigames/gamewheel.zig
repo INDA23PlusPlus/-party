@@ -9,6 +9,8 @@ const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
 const Minigame = @import("Minigame.zig");
 
+const constants = @import("../constants.zig");
+
 const main_ctr_id = 0;
 const handle_ctr_id = 1;
 const waiting = std.math.maxInt(u32);
@@ -20,6 +22,16 @@ pub fn init(_: *simulation.Simulation, _: input.Timeline) !void {}
 fn setup(sim: *simulation.Simulation, available_minigames: []const Minigame) !void {
     const pseudo = sim.meta.seed + sim.meta.ticks_elapsed;
     const random_handle_start = pseudo % available_minigames.len;
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/roulette.png"),
+            .w = constants.world_width_tiles,
+            .h = constants.world_height_tiles,
+        },
+        ecs.component.Pos{
+            .pos = .{ 0, 0 },
+        },
+    });
     _ = try sim.world.spawnWith(.{ecs.component.Ctr{
         .id = main_ctr_id,
         .count = waiting,
