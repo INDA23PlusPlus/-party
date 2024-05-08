@@ -20,7 +20,7 @@ var current_letter = std.mem.zeroes([constants.max_player_count]u8);
 var game_string: [:0]const u8 = undefined;
 var game_string_len: usize = 20;
 var current_placement: usize = 0;
-var player_finish_order = [_]u32{100} ** constants.max_player_count;
+//var player_finish_order = [_]u32{100} ** constants.max_player_count;
 
 fn assigned_pos(id: usize) @Vector(2, i32) {
     const top_left_x = 120;
@@ -55,7 +55,6 @@ const player_strings: [constants.max_player_count][:0]const u8 = blk: {
 };
 
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
-    sim.meta.minigame_ticks_per_update = 50;
     set_string_info();
 
     for (timeline.latest(), 0..) |inp, id| {
@@ -64,6 +63,9 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                 keystrokes[id][j] = 0;
             }
         }
+    }
+    for (0..constants.max_player_count) |id| {
+        sim.meta.minigame_placements[id] = constants.max_player_count - 1;
     }
 
     for (timeline.latest(), 0..) |inp, id| {
@@ -114,20 +116,19 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
     rl.drawText("Morsecode Minigame", 300, 8, 32, rl.Color.blue);
     try inputSystem(&sim.world, timeline);
-    try wordSystem(&sim.world);
+    try wordSystem(&sim.world, &sim.meta);
     animator.update(&sim.world);
 
     var query = sim.world.query(&.{ecs.component.Ctr}, &.{});
     while (query.next()) |_| {
         const ctr = query.get(ecs.component.Ctr) catch unreachable;
         if (ctr.count <= 0) {
-            std.debug.print("ending pfo: {any}\n", .{player_finish_order});
+            std.debug.print("ending pfo: {any}\n", .{sim.meta.minigame_placements});
             for (0..constants.max_player_count) |j| {
-                if (player_finish_order[j] == 100) {
-                    player_finish_order[j] = @as(u32, @intCast(current_placement));
+                if (sim.meta.minigame_placements[j] == constants.max_player_count - 1) {
+                    sim.meta.minigame_placements[j] = @as(u32, @intCast(current_placement));
                 }
             }
-            sim.meta.minigame_placements = player_finish_order;
             std.debug.print("ending miniplaces: {any}\n", .{sim.meta.minigame_placements});
             sim.meta.minigame_id = 3;
             return;
@@ -168,7 +169,7 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
     }
 }
 
-fn wordSystem(world: *ecs.world.World) !void {
+fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
     _ = world;
     for (0..constants.max_player_count) |id| {
         if (typed_len[id] == 0) continue;
@@ -181,10 +182,10 @@ fn wordSystem(world: *ecs.world.World) !void {
                 keystrokes[id] = .{ 0, 0, 0, 0, 0, 0 };
                 if (current_letter[id] == game_string_len) {
                     // There is a small problem with this, lower ids get prioritized in this check
-                    player_finish_order[current_placement] = @intCast(id);
+                    meta.minigame_placements[current_placement] = @intCast(id);
                     current_placement += 1;
                     std.debug.print("Current placement: {any}\n", .{current_placement});
-                    std.debug.print("Player finish order: {any}\n", .{player_finish_order});
+                    std.debug.print("Player finish order: {any}\n", .{meta.minigame_placements});
                     // player has finished
                     // TODO: ignore this players inputs from now on
                 }
