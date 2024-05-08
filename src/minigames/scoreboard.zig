@@ -23,9 +23,9 @@ const crown = @import("../crown.zig");
 // - Speed up the score animation as it goes on
 // - Allow pressing button to skip score animation
 
-const score_distribution: [constants.max_player_count]u32 = .{ 240, 10, 5, 2, 0, 0, 0, 0 }; // completely arbitrary score values, open to change
+const score_distribution: [constants.max_player_count]u32 = .{ 500, 500, 1, 0, 0, 0, 0, 0 }; // completely arbitrary score values, open to change
 const score_decrease_speed = 1; // how much the score decreases every tick
-const wait_time_ticks = 3 * constants.ticks_per_second; // time before switching minigame
+const wait_time_ticks = 5 * constants.ticks_per_second; // time before switching minigame
 const score_text_color = 0xFFCC99FF;
 
 fn scoreFromPlacement(placement: u32) u32 {
@@ -109,7 +109,6 @@ fn tickNextGameTimer(sim: *simulation.Simulation) !void {
     }
 }
 
-// idk what this is ?
 fn updatePos(sim: *simulation.Simulation) !void {
     const scores = sim.meta.global_score;
     var scores_with_id: [8][2]u32 = .{ .{ undefined, undefined }, .{ undefined, undefined }, .{ undefined, undefined }, .{ undefined, undefined }, .{ undefined, undefined }, .{ undefined, undefined }, .{ undefined, undefined }, .{ undefined, undefined } };
@@ -117,14 +116,18 @@ fn updatePos(sim: *simulation.Simulation) !void {
         scores_with_id[id] = .{ score, @as(u32, @intCast(id)) };
     }
     std.mem.sort([2]u32, &scores_with_id, {}, lessThanFn);
-    var query = sim.world.query(&.{ ecs.component.Plr, ecs.component.Pos }, &.{});
+    var query = sim.world.query(&.{ ecs.component.Plr, ecs.component.Pos, ecs.component.Lnk }, &.{});
     while (query.next()) |_| {
         //TODO Make the players switch postion
         const plr = query.get(ecs.component.Plr) catch unreachable;
         const pos = query.get(ecs.component.Pos) catch unreachable;
+        const lnk = query.get(ecs.component.Lnk) catch unreachable;
+
         for (scores_with_id, 0..8) |score_with_id, placement| {
             if (plr.id == score_with_id[1]) {
+                const ctr_pos = sim.world.inspect(lnk.child.?, ecs.component.Pos) catch unreachable;
                 pos.pos = .{ constants.asset_resolution * 4, 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(placement)) };
+                ctr_pos.pos = .{ constants.asset_resolution * 4, 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(placement)) };
             }
         }
     }

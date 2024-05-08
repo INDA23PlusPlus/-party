@@ -90,7 +90,7 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
     var query = sim.world.query(&.{ecs.component.Ctr}, &.{});
     while (query.next()) |_| {
         const ctr = try query.get(ecs.component.Ctr);
-        if (ctr.count == constants.max_player_count) {
+        if (ctr.count == constants.max_player_count - 1) {
             sim.meta.minigame_id = 3;
         }
     }
