@@ -115,7 +115,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     });
 
     // Players
-    for (timeline, 0..) |inp, i| {
+    for (timeline.latest(), 0..) |inp, i| {
         if (inp.is_connected()) {
             const id: u32 = @intCast(i);
 

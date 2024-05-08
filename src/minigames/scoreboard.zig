@@ -33,8 +33,8 @@ fn scoreFromPlacement(placement: u32) u32 {
     return score_distribution[placement];
 }
 
-pub fn init(sim: *simulation.Simulation, inputs: input.Timeline) !void {
-    for (inputs, 0..) |inp, id| {
+pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
+    for (timeline.latest(), 0..) |inp, id| {
         if (inp.is_connected()) {
             const placement = sim.meta.minigame_placements[id];
             const score = scoreFromPlacement(placement);

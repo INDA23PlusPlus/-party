@@ -56,11 +56,12 @@ fn spawnBackground(world: *ecs.world.World) !void {
     }
 }
 
-pub fn init(sim: *simulation.Simulation, inputs: input.Timeline) !void {
+pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     sim.meta.ticks_at_minigame_start = sim.meta.ticks_elapsed;
     _ = try spawnBackground(&sim.world);
-    for (inputs, 0..) |inp, id| {
+    for (timeline.latest(), 0..) |inp, id| {
         if (inp.is_connected()) {
+            std.debug.print("connexted\n", .{});
             try spawnPlayer(&sim.world, @intCast(id));
         }
     }
