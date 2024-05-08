@@ -599,7 +599,7 @@ fn deathSystem(sim: *simulation.Simulation) !void {
     while (dead_player_query.next()) |entity| {
         const plr = dead_player_query.get(ecs.component.Plr) catch unreachable;
 
-        sim.meta.minigame_placements[plr.id] = sim.meta.minigame_counter + dead_players;
+        sim.meta.minigame_placements[plr.id] = sim.meta.minigame_counter + dead_players - 1;
         sim.world.kill(entity);
     }
 }
