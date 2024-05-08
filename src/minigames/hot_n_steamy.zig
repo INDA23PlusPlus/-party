@@ -66,7 +66,7 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
         // }
     }
     _ = try sim.world.spawnWith(.{ecs.component.Ctr{ .count = 0 }});
-    try crown.init(sim, .{ 0, 0 });
+    try crown.init(sim, .{ 0, -10 });
 }
 pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invariables) !void {
     try jetpackSystem(&sim.world, inputs.latest());
