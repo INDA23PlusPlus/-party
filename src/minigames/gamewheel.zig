@@ -20,7 +20,7 @@ const title_id = std.math.maxInt(u32);
 pub fn init(_: *simulation.Simulation, _: input.Timeline) !void {}
 
 fn setup(sim: *simulation.Simulation, available_minigames: []const Minigame) !void {
-    const pseudo = sim.meta.prng.next();
+    const pseudo = sim.meta.minigame_prng.next();
     const random_handle_start = pseudo % available_minigames.len;
     _ = try sim.world.spawnWith(.{
         ecs.component.Tex{

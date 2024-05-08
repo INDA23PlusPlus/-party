@@ -20,7 +20,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     // Players
     for (inputs, 0..) |inp, id| {
         if (inp.is_connected()) {
-            const bitset: u32 = @truncate(sim.meta.prng.next());
+            const bitset: u32 = @truncate(sim.meta.minigame_prng.next());
             player_count += 1;
 
             var previous: ecs.entity.Entity = undefined;
