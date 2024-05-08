@@ -57,7 +57,6 @@ fn spawnBackground(world: *ecs.world.World) !void {
 }
 
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
-    sim.meta.ticks_at_minigame_start = sim.meta.ticks_elapsed;
     _ = try spawnBackground(&sim.world);
     for (timeline.latest(), 0..) |inp, id| {
         if (inp.is_connected()) {
@@ -69,6 +68,8 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     try crown.init(sim, .{ 0, -10 });
 }
 pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invariables) !void {
+    sim.meta.minigame_timer += 1;
+
     try jetpackSystem(&sim.world, inputs.latest());
 
     var collisions = collision.CollisionQueue.init(invar.arena) catch @panic("could not initialize collision queue");
@@ -79,7 +80,7 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
 
     try pushSystem(&sim.world, &collisions);
 
-    try spawnSystem(&sim.world, sim.meta.ticks_elapsed - sim.meta.ticks_at_minigame_start);
+    try spawnSystem(&sim.world, sim.meta.minigame_timer);
 
     try deathSystem(sim, &collisions);
 

@@ -15,13 +15,12 @@ const Crown = @import("../crown.zig");
 
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     const inputs = timeline.latest();
-    var rng = std.rand.DefaultPrng.init(sim.meta.seed + sim.meta.ticks_elapsed);
     var player_count: u8 = 0;
 
     // Players
     for (inputs, 0..) |inp, id| {
         if (inp.is_connected()) {
-            const bitset: u32 = @truncate(rng.next());
+            const bitset: u32 = @truncate(sim.meta.minigame_prng.next());
             player_count += 1;
 
             var previous: ecs.entity.Entity = undefined;

@@ -15,7 +15,7 @@ const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
 
 pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
-    sim.meta.minigame_ticks_per_update = 16;
+    sim.meta.minigame_timer = 16;
 
     // Background
     _ = try sim.world.spawnWith(.{
@@ -107,7 +107,7 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) void {
 }
 
 fn velocitySystem(sim: *simulation.Simulation) void {
-    if (sim.meta.ticks_elapsed % sim.meta.minigame_ticks_per_update != 0) return;
+    if (sim.meta.ticks_elapsed % sim.meta.minigame_timer != 0) return;
 
     var query = sim.world.query(&.{
         ecs.component.Dir,
@@ -129,7 +129,7 @@ fn velocitySystem(sim: *simulation.Simulation) void {
 }
 
 fn playerFacingSystem(sim: *simulation.Simulation) void {
-    if (sim.meta.ticks_elapsed % sim.meta.minigame_ticks_per_update != 0) return;
+    if (sim.meta.ticks_elapsed % sim.meta.minigame_timer != 0) return;
 
     var query = sim.world.query(&.{
         ecs.component.Plr,
@@ -147,7 +147,7 @@ fn playerFacingSystem(sim: *simulation.Simulation) void {
 }
 
 fn repositionSystem(sim: *simulation.Simulation) void {
-    if (sim.meta.ticks_elapsed % sim.meta.minigame_ticks_per_update != 0) return;
+    if (sim.meta.ticks_elapsed % sim.meta.minigame_timer != 0) return;
 
     var query = sim.world.query(&.{
         ecs.component.Pos,
@@ -163,7 +163,7 @@ fn repositionSystem(sim: *simulation.Simulation) void {
 }
 
 fn animationSystem(sim: *simulation.Simulation) void {
-    if (sim.meta.ticks_elapsed % sim.meta.minigame_ticks_per_update == 0) {
+    if (sim.meta.ticks_elapsed % sim.meta.minigame_timer == 0) {
         var query = sim.world.query(&.{
             ecs.component.Tex,
             ecs.component.Mov,
@@ -192,7 +192,7 @@ fn animationSystem(sim: *simulation.Simulation) void {
 }
 
 fn trailSystem(sim: *simulation.Simulation) !void {
-    if (sim.meta.ticks_elapsed % sim.meta.minigame_ticks_per_update != 0) return;
+    if (sim.meta.ticks_elapsed % sim.meta.minigame_timer != 0) return;
 
     var spawn_query = sim.world.query(&.{
         ecs.component.Plr,
@@ -232,7 +232,7 @@ fn trailSystem(sim: *simulation.Simulation) !void {
 }
 
 fn deathSystem(sim: *simulation.Simulation) void {
-    if (sim.meta.ticks_elapsed % sim.meta.minigame_ticks_per_update != 0) return;
+    if (sim.meta.ticks_elapsed % sim.meta.minigame_timer != 0) return;
 
     var player_query = sim.world.query(&.{
         ecs.component.Plr,

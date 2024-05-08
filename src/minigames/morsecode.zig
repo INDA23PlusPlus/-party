@@ -55,6 +55,7 @@ const player_strings: [constants.max_player_count][:0]const u8 = blk: {
 };
 
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
+    sim.meta.minigame_timer = 50;
     set_string_info();
 
     for (timeline.latest(), 0..) |inp, id| {
