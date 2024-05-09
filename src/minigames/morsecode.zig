@@ -60,8 +60,9 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     //gm_string = game_strings[0]; // temp
     //gm_string_len = gm_string.len; // temp
     const game_string = game_strings[0];
-    _ = try sim.world.spawnWith(.{
+    const string_info = try sim.world.spawnWith(.{
         ecs.component.Txt{ .string = game_string },
+        ecs.component.Ctr{ .count = 5 },
         //ecs.component.Lnk{ .child = string_info },
         //ecs.component.Ctr{ .id = @intCast(id), .count = @intCast(id + 1) },
     });
@@ -110,7 +111,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                 ecs.component.Plr{ .id = @intCast(id) },
                 ecs.component.Pos{ .pos = .{ button_position[0], button_position[1] } },
                 ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis_testcases.png") },
-                //ecs.component.Lnk{ .child = string_info },
+                ecs.component.Lnk{ .child = string_info },
                 //ecs.component.Ctr{ .id = @intCast(id), .count = @intCast(id + 1) },
             });
         }
@@ -188,25 +189,28 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
 }
 
 fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
-    var stringQuery = world.query(&.{ecs.component.Txt}, &.{ecs.component.Pos}); // TODO: try to do this with Lnk and inspect
-    var game_string: [:0]const u8 = undefined;
-    while (stringQuery.next()) |_| { // this is ugly but I don't know how else to do it
-        const temp_comp = try stringQuery.get(ecs.component.Txt);
-        game_string = temp_comp.string;
-    }
+    //var stringQuery = world.query(&.{ecs.component.Txt}, &.{ecs.component.Pos}); // TODO: try to do this with Lnk and inspect
+    //var game_string: [:0]const u8 = undefined;
+    //while (stringQuery.next()) |_| { // this is ugly but I don't know how else to do it
+    //const temp_comp = try stringQuery.get(ecs.component.Txt);
+    //game_string = temp_comp.string;
+    //}
 
-    std.debug.print("game_string: {any}\n", .{game_string});
-    var query = world.query(&.{ecs.component.Plr}, &.{});
+    //std.debug.print("game_string: {any}\n", .{game_string});
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Lnk }, &.{});
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
-        //std.debug.print("keystrokes{any}: {any}\n", .{ plr.id, keystrokes[plr.id] });
-        //std.debug.print("current_letter{any}: {any}\n", .{ plr.id, current_letter[plr.id] });
-        //const game_string =  try query.get(
+        const lnk = query.get(ecs.component.Lnk) catch unreachable;
+        const game_string_comp = world.inspect(lnk.child.?, ecs.component.Txt) catch unreachable;
+        const game_string = game_string_comp.string;
+
+        std.debug.print("game_string{any}\n", .{game_string});
         if (typed_len[plr.id] == 0) continue;
 
         if (keystrokes[plr.id][typed_len[plr.id] - 1] == 3) {
             const character: u8 = code_to_char(plr.id);
             if (character == game_string[current_letter[plr.id]]) {
+                //if (character == 0) {
                 typed_len[plr.id] = 0;
                 current_letter[plr.id] += 1;
                 keystrokes[plr.id] = .{ 0, 0, 0, 0, 0, 0 };
