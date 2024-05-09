@@ -8,6 +8,10 @@ pub const DefaultControllers: [constants.max_controller_count]Controller = [_]Co
 
 input_index: usize = std.math.maxInt(usize),
 
+pub inline fn is_assigned(self: Controller) bool {
+    return self.input_index < constants.max_player_count;
+}
+
 inline fn fourBoolsToDirection(up: bool, down: bool, left: bool, right: bool) input.InputDirection {
     if (up and !down) {
         if (left and !right) {
@@ -113,27 +117,35 @@ fn pollGamepad(gamepad: i32, previous: input.PlayerInputState) input.PlayerInput
     };
 }
 
-// Polls the state of all input devices at the current time.
+/// Polls the state of all input devices at the current time.
 pub fn poll(controllers: []Controller, previous: input.AllPlayerButtons) input.AllPlayerButtons {
-    // TODO: Also set the local variable somewhere...
-
     var result = previous;
-    const controller1 = controllers[0].input_index;
-    if (controller1 < result.len) {
-        result[controller1] = pollKeyboard1(previous[controller1]);
+    if (controllers[0].is_assigned()) {
+        const index = controllers[0].input_index;
+        result[index] = pollKeyboard1(previous[index]);
     }
 
-    const controller2 = controllers[1].input_index;
-    if (controller2 < result.len) {
-        result[controller2] = pollKeyboard2(previous[controller2]);
+    if (controllers[1].is_assigned()) {
+        const index = controllers[1].input_index;
+        result[index] = pollKeyboard2(previous[index]);
     }
 
     for (controllers[2..], 0..) |controller, gamepad_id| {
-        const controller_n = controller.input_index;
-        if (controller_n >= result.len) {
-            continue;
+        const index = controller.input_index;
+        if (controller.is_assigned()) {
+            result[index] = pollGamepad(@intCast(gamepad_id), previous[index]);
+
         }
-        result[controller_n] = pollGamepad(@intCast(gamepad_id), previous[controller_n]);
     }
     return result;
+}
+
+pub fn countAssigned(controllers: []Controller) usize {
+    var count: usize = 0;
+    for (controllers) |controller| {
+        if (controller.is_assigned()) {
+            count += 1;
+        }
+    }
+    return count;
 }

@@ -3,7 +3,23 @@ const std = @import("std");
 
 // TODO: We could add a NoneHeld in order to skip checking previous frames for 'instant' dpad movement.
 // TODO: Fix the naming convention to follow Zig 0.12 (lowercase)...
-pub const InputDirection = enum(u4) { None, East, North, West, South, NorthEast, NorthWest, SouthWest, SouthEast, Disconnected };
+pub const InputDirection = enum(u4) {
+    None, East, North, West, South, NorthEast, NorthWest, SouthWest, SouthEast, Disconnected,
+    pub fn shortDebugName(self: InputDirection) []const u8 {
+        return switch (self) {
+            .None => "**",
+            .East => "E.",
+            .West => "W.",
+            .North => "N.",
+            .South => "S.",
+            .NorthWest => "NW",
+            .NorthEast => "NE",
+            .SouthWest => "SW",
+            .SouthEast => "SE",
+            .Disconnected => "--",
+        };
+    }
+};
 pub const ButtonState = enum(u2) {
     Pressed, // TODO: Fix the naming convention to follow Zig 0.12 (lowercase)...
     Held,

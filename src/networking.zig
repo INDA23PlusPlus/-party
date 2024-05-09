@@ -32,6 +32,7 @@ const ConnectionType = enum(u8) {
     remote,
 };
 
+// TODO: Use in conns_write_buffers.
 const max_net_packet_size = 32768;
 
 fn debugPacket(packet: []u8) void {
@@ -73,9 +74,11 @@ const NetServerData = struct {
     }
 
     fn ingestPlayerInput(self: *NetServerData, change: NetworkingQueue.Packet) !void {
-        // TODO: Could be optimized such that we do not need to loop for every ingestPlayerInput.
+        if (!try self.input_history.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick)) {
+            // If input was already set, we can just exit early and not resend anything.
+            return;
+        }
 
-        _ = try self.input_history.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick);
         inline for (&self.conns_list, self.conns_type) |*connection, conn_type| {
             if (conn_type == .remote) {
                 connection.consistent_until = @min(connection.consistent_until, change.tick);
@@ -150,7 +153,7 @@ fn handlePacketFromClient(client_index_raw: ?*ConnectedClientIndex, l: *xev.Loop
 
     const packet = read_buffer.slice[0..packet_size];
 
-    debugPacket(packet);
+    //debugPacket(packet);
     parsePacketFromClient(client_index, server_data, packet) catch |e| {
         std.debug.print("error while handling package from client: {any}\n", .{e});
     };
@@ -205,17 +208,16 @@ fn clientConnected(_: ?*void, l: *xev.Loop, _: *xev.Completion, r: xev.TCP.Accep
 }
 
 fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *NetworkingQueue) !void {
-    // Give thethreads a chance to work.
-    try server_data.loop.run(.once);
+    // Give the threads a chance to work.
+    try server_data.loop.run(.no_wait);
 
     networking_queue.rw_lock.lock();
 
     // Ingest the updates from the local-client.
-    for (networking_queue.incoming_data[0..networking_queue.incoming_data_len]) |change| {
-        std.debug.print("emptying...\n", .{});
+    for (networking_queue.incoming_data[0..networking_queue.incoming_data_count]) |change| {
         try server_data.ingestPlayerInput(change);
     }
-    networking_queue.incoming_data_len = 0;
+    networking_queue.incoming_data_count = 0;
 
     // Ingest the updates from the connected clients.
     for (&server_data.conns_list, server_data.conns_type, &server_data.conns_incoming_packets) |*connection, conn_type, *conns_packets| {
@@ -239,15 +241,15 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
                 const inputs = server_data.input_history.buttons.items[tick_number];
                 for (inputs, 0..) |packet, player_index| {
                     // TODO: Reduce the nesting.
-                    if (networking_queue.outgoing_data_len >= networking_queue.outgoing_data.len) {
+                    if (networking_queue.outgoing_data_count >= networking_queue.outgoing_data.len) {
                         continue;
                     }
-                    networking_queue.outgoing_data[networking_queue.outgoing_data_len] = .{
+                    networking_queue.outgoing_data[networking_queue.outgoing_data_count] = .{
                         .tick = tick_number,
                         .player = @truncate(player_index),
                         .data = packet,
                     };
-                    networking_queue.outgoing_data_len += 1;
+                    networking_queue.outgoing_data_count += 1;
                 }
             }
         }
@@ -266,12 +268,19 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
         try cbor.writeArrayHeader(writer, input_tick_count);
         for (connection.consistent_until..connection.consistent_until + input_tick_count) |tick_index| {
             const inputs = server_data.input_history.buttons.items[tick_index];
+            const is_certain = server_data.input_history.is_certain.items[tick_index];
 
             try cbor.writeArrayHeader(writer, 2);
             try cbor.writeUint(writer, tick_index);
+            try cbor.writeUint(writer, is_certain.count());
             try cbor.writeArrayHeader(writer, inputs.len);
-            for (inputs) |input| {
-                try cbor.writeArrayHeader(writer, 3);
+            for(0..constants.max_player_count) |player| {
+                if (!is_certain.isSet(player)) {
+                    continue;
+                }
+                const input = inputs[player];
+                try cbor.writeArrayHeader(writer, 4);
+                try cbor.writeUint(writer, player);
                 try cbor.writeUint(writer, @intFromEnum(input.dpad));
                 try cbor.writeUint(writer, @intFromEnum(input.button_a));
                 try cbor.writeUint(writer, @intFromEnum(input.button_b));
@@ -279,6 +288,13 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
         }
         connection.stream.write(&server_data.loop, &connection.write_completion, .{ .slice = write_buffer[0..fb.pos] }, void, null, writeNoop);
     }
+
+    //if (server_data.input_history.buttons.items.len == 300) {
+    //    const file = std.io.getStdErr();
+    //    const writer = file.writer();
+    //    try server_data.input_history.dumpInputs(writer);
+    //    @panic("over");
+    //}
 
     networking_queue.rw_lock.unlock();
 
@@ -298,6 +314,7 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
     try server_data.listener.bind(address);
     try server_data.listener.listen(16);
     startNewConnectionHandler(&server_data);
+
 
     while (true) {
         // TODO: Take clock timestamp
@@ -326,19 +343,20 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !voi
         const frame_tick_index = try frame_ctx.readU64();
         var frame_inputs = try frame_ctx.readArray();
         std.debug.assert(frame_inputs.items == constants.max_player_count);
-        for (0..frame_inputs.items) |player_i| {
+        for (0..frame_inputs.items) |_| {
             var input_ctx = try frame_inputs.readArray();
-            std.debug.assert(input_ctx.items == 3);
+            std.debug.assert(input_ctx.items == 4);
+            const player_i = try input_ctx.readU64();
             const dpad = try input_ctx.readU64();
             const button_a = try input_ctx.readU64();
             const button_b = try input_ctx.readU64();
             try input_ctx.readEnd();
 
-            if (networking_queue.outgoing_data_len >= networking_queue.outgoing_data.len) {
+            if (networking_queue.outgoing_data_count >= networking_queue.outgoing_data.len) {
                 continue;
             }
 
-            networking_queue.outgoing_data[networking_queue.outgoing_data_len] = .{
+            networking_queue.outgoing_data[networking_queue.outgoing_data_count] = .{
                 .tick = @truncate(frame_tick_index),
                 .data = .{
                     .dpad = @enumFromInt(dpad),
@@ -348,7 +366,7 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !voi
                 .player = @truncate(player_i),
             };
 
-            networking_queue.outgoing_data_len += 1;
+            networking_queue.outgoing_data_count += 1;
         }
         try frame_inputs.readEnd();
         try frame_ctx.readEnd();
@@ -372,7 +390,7 @@ fn clientThread(networking_queue: *NetworkingQueue) !void {
         const incoming_packet_len = try stream.read(&incoming_packet_buf);
         const incoming_packet = incoming_packet_buf[0..incoming_packet_len];
 
-        debugPacket(incoming_packet);
+        //debugPacket(incoming_packet);
 
 
         // TODO: Parse packets.
@@ -387,8 +405,8 @@ fn clientThread(networking_queue: *NetworkingQueue) !void {
 
         try cbor.writeArrayHeader(writer, 2);
         try cbor.writeUint(writer, 200);
-        try cbor.writeArrayHeader(writer, networking_queue.incoming_data_len);
-        for (networking_queue.incoming_data[0..networking_queue.incoming_data_len]) |packet| {
+        try cbor.writeArrayHeader(writer, networking_queue.incoming_data_count);
+        for (networking_queue.incoming_data[0..networking_queue.incoming_data_count]) |packet| {
             try cbor.writeArrayHeader(writer, 5);
             try cbor.writeUint(writer, packet.tick);
             try cbor.writeUint(writer, packet.player);
@@ -396,7 +414,7 @@ fn clientThread(networking_queue: *NetworkingQueue) !void {
             try cbor.writeUint(writer, @intFromEnum(packet.data.button_a));
             try cbor.writeUint(writer, @intFromEnum(packet.data.button_b));
         }
-        networking_queue.incoming_data_len = 0;
+        networking_queue.incoming_data_count = 0;
         _ = try stream.write(write_buffer[0..fb.pos]);
 
         networking_queue.rw_lock.unlock();

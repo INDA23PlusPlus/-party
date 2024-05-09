@@ -87,7 +87,6 @@ pub fn main() !void {
     sim.meta.minigame_id = starting_minigame_id; // TODO: Maybe sim.init() is a better place. Just add a new arg.
 
     var input_consolidation = try InputConsolidation.init(std.heap.page_allocator);
-    var input_frames_sent: u64 = 0;
 
     var controllers = Controller.DefaultControllers;
     controllers[0].input_index = 0;
@@ -114,44 +113,80 @@ pub fn main() !void {
 
     // Game loop
     while (window.running) {
-
         // Fetch input.
         const tick = sim.meta.ticks_elapsed;
-        const current_input_timeline = try input_consolidation.localUpdate(std.heap.page_allocator, &controllers, tick);
+
+        const controllers_active = Controller.countAssigned(&controllers);
+
+        if (main_thread_queue.outgoing_data_count + controllers_active <= main_thread_queue.outgoing_data.len) {
+            // We can only get local input, if we have the ability to send it. If we can't send it, we 
+            // mustn't accept local input as that could cause desynchs.
+            _ = try input_consolidation.localUpdate(std.heap.page_allocator, &controllers, tick);
+
+            for(controllers) |controller| {
+                if (!controller.is_assigned()) {
+                    continue;
+                }
+                const player_index = controller.input_index;
+                const data = input_consolidation.buttons.items[tick][player_index];
+
+                main_thread_queue.outgoing_data[main_thread_queue.outgoing_data_count] = .{
+                    .tick = tick,
+                    .data = data,
+                    .player = @truncate(player_index),
+                };
+                main_thread_queue.outgoing_data_count += 1;
+            }
+        } else {
+            std.debug.print("unable to send further inputs as too many have been sent without answer\n", .{});
+        }
+
+        const current_input_timeline = input.Timeline { .buttons = input_consolidation.buttons.items[0..input_consolidation.buttons.items.len] };
 
         // Add the inputs.
         // TODO: Write this code.
 
-        for (input_frames_sent..input_consolidation.buttons.items.len) |tick_number| {
-            std.debug.print("try send\n", .{});
-            const all_buttons = input_consolidation.buttons.items[tick_number];
-            const local = input_consolidation.local.items[tick_number];
-            for (all_buttons, 0..) |buttons, i| {
-                if (main_thread_queue.outgoing_data_len >= main_thread_queue.outgoing_data.len) {
-                    std.debug.print("warning: outgoing_data of main is overfilled\n", .{});
-                    continue;
-                }
-                if (local.isSet(i)) {
-                    main_thread_queue.outgoing_data[main_thread_queue.outgoing_data_len] = .{
-                        .data = buttons,
-                        .tick = tick_number,
-                        .player = @truncate(i),
-                    };
-                    main_thread_queue.outgoing_data_len += 1;
-                    std.debug.print("sending packet to net thread\n", .{});
-                }
-            }
-        }
-        input_frames_sent = input_consolidation.buttons.items.len;
+        // for (input_frames_sent..input_consolidation.buttons.items.len) |tick_number| {
+        //     std.debug.print("try send\n", .{});
+        //     const all_buttons = input_consolidation.buttons.items[tick_number];
+        //     const local = input_consolidation.local.items[tick_number];
+        //     for (all_buttons, 0..) |buttons, i| {
+        //         if (main_thread_queue.outgoing_data_count >= main_thread_queue.outgoing_data.len) {
+        //             std.debug.print("warning: outgoing_data of main is overfilled\n", .{});
+        //             continue;
+        //         }
+        //         if (local.isSet(i)) {
+        //             main_thread_queue.outgoing_data[main_thread_queue.outgoing_data_count] = .{
+        //                 .data = buttons,
+        //                 .tick = tick_number,
+        //                 .player = @truncate(i),
+        //             };
+        //             main_thread_queue.outgoing_data_count += 1;
+        //             std.debug.print("sending packet to net thread\n", .{});
+        //         } else {
+        //             std.debug.print("local not set for: {d}\n", .{i});
+        //         }
+        //     }
+        //     std.debug.print("try send over\n", .{});
+        // }
+        // input_frames_sent = input_consolidation.buttons.items.len;
+
+
+        //if (tick == 300) {
+        //    const file = std.io.getStdErr();
+        //    const writer = file.writer();
+        //    try input_consolidation.dumpInputs(writer);
+        //    @panic("over");
+        //}
 
         main_thread_queue.interchange(&net_thread_queue);
 
         // Ingest the updates.
-        for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_len]) |change| {
-            std.debug.print("ingesting update\n", .{});
+        for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_count]) |change| {
+            //std.debug.print("ingesting update\n", .{});
             _ = try input_consolidation.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick);
         }
-        main_thread_queue.incoming_data_len = 0;
+        main_thread_queue.incoming_data_count = 0;
 
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure
