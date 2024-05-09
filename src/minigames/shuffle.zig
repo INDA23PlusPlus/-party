@@ -35,7 +35,7 @@ pub fn update(sim: *simulation.Simulation, _: input.Timeline, _: Invariables) si
     var counters = sim.world.query(&.{ecs.component.Ctr}, &.{});
     while (counters.next()) |_| {
         var ticks_left = counters.get(ecs.component.Ctr) catch unreachable;
-        ticks_left.count -= 1;
+        ticks_left.count = @max(0, @as(i32, @intCast(ticks_left.count)) - 1);
 
         if (ticks_left.count == 0) {
             sim.meta.minigame_id = @mod(sim.meta.minigame_prng.next(), game_list.list.len - 3) + 3;

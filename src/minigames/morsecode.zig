@@ -17,8 +17,8 @@ const morsecode_maxlen = 6;
 var keystrokes: [constants.max_player_count][morsecode_maxlen]u8 = undefined;
 var typed_len = std.mem.zeroes([constants.max_player_count]u8);
 var current_letter = std.mem.zeroes([constants.max_player_count]u8);
-var game_string: [:0]const u8 = undefined;
-var game_string_len: usize = 20;
+//var gm_string: [:0]const u8 = undefined;
+//var gm_string_len: usize = 20;
 //var current_placement: usize = 0;
 //var player_finish_order = [_]u32{100} ** constants.max_player_count;
 
@@ -39,12 +39,12 @@ const game_strings = [_][:0]const u8{
     "DATA",
 };
 
-fn set_string_info() void {
-    // TODO: pick random from list
-    game_string = game_strings[0];
-    game_string_len = game_string.len;
-    // return "plusplusparty";
-}
+//fn set_string_info() void {
+// TODO: pick random from list
+//game_string = game_strings[0];
+//game_string_len = game_string.len;
+// return "plusplusparty";
+//}
 
 const player_strings: [constants.max_player_count][:0]const u8 = blk: {
     var res: [constants.max_player_count][:0]const u8 = undefined;
@@ -56,7 +56,23 @@ const player_strings: [constants.max_player_count][:0]const u8 = blk: {
 
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     sim.meta.minigame_timer = 50;
-    set_string_info();
+
+    //gm_string = game_strings[0]; // temp
+    //gm_string_len = gm_string.len; // temp
+    const game_string = game_strings[0];
+    const string_info = try sim.world.spawnWith(.{
+        ecs.component.Txt{ .string = game_string },
+        ecs.component.Ctr{ .count = 5 },
+        //ecs.component.Lnk{ .child = string_info },
+        //ecs.component.Ctr{ .id = @intCast(id), .count = @intCast(id + 1) },
+    });
+    //const game_string_len = game_string.len;
+    //_ = try sim.world.spawnWith(.{
+    //ecs.component.Lnk{ .child = game_string },
+    //ecs.component.Ctr{ .id = @intCast(id), .count = @intCast(id + 1) },
+    //});
+
+    //set_string_info();
 
     for (timeline.latest(), 0..) |inp, id| {
         if (inp.is_connected()) {
@@ -73,6 +89,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
         if (inp.is_connected()) {
             _ = try sim.world.spawnWith(.{
                 // ecs.component.Plr{ .id = @intCast(id) }, // only use this to name the players
+                // cats
                 ecs.component.Txt{
                     .string = player_strings[id],
                     .font_size = 10,
@@ -80,7 +97,6 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                     .subpos = .{ 10, 20 },
                 },
                 ecs.component.Pos{ .pos = assigned_pos(id) },
-                ecs.component.Mov{ .velocity = ecs.component.Vec2.init(0, 0) },
                 ecs.component.Tex{
                     .texture_hash = AssetManager.pathHash("assets/kattis.png"),
                     .tint = constants.player_colors[id],
@@ -90,10 +106,12 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             var button_position: @Vector(2, i32) = assigned_pos(id);
             button_position[1] += @intCast(-17);
 
+            // buttons
             _ = try sim.world.spawnWith(.{
                 ecs.component.Plr{ .id = @intCast(id) },
                 ecs.component.Pos{ .pos = .{ button_position[0], button_position[1] } },
                 ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis_testcases.png") },
+                ecs.component.Lnk{ .child = string_info },
                 //ecs.component.Ctr{ .id = @intCast(id), .count = @intCast(id + 1) },
             });
         }
@@ -171,32 +189,47 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
 }
 
 fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
-    _ = world;
-    for (0..constants.max_player_count) |id| {
-        if (typed_len[id] == 0) continue;
+    //var stringQuery = world.query(&.{ecs.component.Txt}, &.{ecs.component.Pos}); // TODO: try to do this with Lnk and inspect
+    //var game_string: [:0]const u8 = undefined;
+    //while (stringQuery.next()) |_| { // this is ugly but I don't know how else to do it
+    //const temp_comp = try stringQuery.get(ecs.component.Txt);
+    //game_string = temp_comp.string;
+    //}
 
-        if (keystrokes[id][typed_len[id] - 1] == 3) {
-            const character: u8 = code_to_char(id);
-            if (character == game_string[current_letter[id]]) {
-                typed_len[id] = 0;
-                current_letter[id] += 1;
-                keystrokes[id] = .{ 0, 0, 0, 0, 0, 0 };
-                if (current_letter[id] == game_string_len) {
+    //std.debug.print("game_string: {any}\n", .{game_string});
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Lnk }, &.{});
+    while (query.next()) |_| {
+        const plr = try query.get(ecs.component.Plr);
+        const lnk = query.get(ecs.component.Lnk) catch unreachable;
+        const game_string_comp = world.inspect(lnk.child.?, ecs.component.Txt) catch unreachable;
+        const game_string = game_string_comp.string;
+
+        std.debug.print("game_string{any}\n", .{game_string});
+        if (typed_len[plr.id] == 0) continue;
+
+        if (keystrokes[plr.id][typed_len[plr.id] - 1] == 3) {
+            const character: u8 = code_to_char(plr.id);
+            if (character == game_string[current_letter[plr.id]]) {
+                //if (character == 0) {
+                typed_len[plr.id] = 0;
+                current_letter[plr.id] += 1;
+                keystrokes[plr.id] = .{ 0, 0, 0, 0, 0, 0 };
+                if (current_letter[plr.id] == game_string.len) {
                     // There is a small problem with this, lower ids get prioritized in this check
-                    meta.minigame_placements[meta.minigame_counter] = @intCast(id);
+                    meta.minigame_placements[meta.minigame_counter] = @intCast(plr.id);
                     meta.minigame_counter += 1;
-                    std.debug.print("minigame_placement: {any}\n", .{meta.minigame_counter});
-                    std.debug.print("Player finish order: {any}\n", .{meta.minigame_placements});
+                    //std.debug.print("minigame_placement: {any}\n", .{meta.minigame_counter});
+                    //std.debug.print("Player finish order: {any}\n", .{meta.minigame_placements});
                     // player has finished
                     // TODO: ignore this players inputs from now on
                 }
             } else {
-                typed_len[id] = 0;
-                keystrokes[id] = .{ 0, 0, 0, 0, 0, 0 };
+                typed_len[plr.id] = 0;
+                keystrokes[plr.id] = .{ 0, 0, 0, 0, 0, 0 };
             }
-        } else if (typed_len[id] == morsecode_maxlen) {
-            keystrokes[id] = .{ 0, 0, 0, 0, 0, 0 };
-            typed_len[id] = 0;
+        } else if (typed_len[plr.id] == morsecode_maxlen) {
+            keystrokes[plr.id] = .{ 0, 0, 0, 0, 0, 0 };
+            typed_len[plr.id] = 0;
         }
     }
 }
