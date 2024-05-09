@@ -10,8 +10,8 @@ const Invariables = @import("../Invariables.zig");
 
 var menu_items: [2]ecs.entity.Entity = undefined;
 
-var selected: i8 = 0;
-var current_resolution: i8 = 0;
+var selected: i8 = 1;
+var current_resolution: i8 = 1;
 
 const resolution_strings: [4][:0]const u8 = .{
     "Resolution: 640 x 360",
@@ -43,12 +43,12 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) simulation.Simulatio
     });
 
     const item0 = try sim.world.spawnWith(.{
-        ecs.component.Txt{ .string = "START!", .color = 0xDE3163FF, .font_size = 48 },
+        ecs.component.Txt{ .string = "START!", .color = 0x000000FF, .font_size = 48 },
         ecs.component.Pos{ .pos = .{ 256, 96 } },
     });
 
     const item1 = try sim.world.spawnWith(.{
-        ecs.component.Txt{ .string = resolution_strings[@intCast(current_resolution)], .color = 0x000000FF, .font_size = 36 },
+        ecs.component.Txt{ .string = resolution_strings[@intCast(current_resolution)], .color = 0xDE3163FF, .font_size = 36 },
         ecs.component.Pos{ .pos = .{ 256, 167 } },
     });
 

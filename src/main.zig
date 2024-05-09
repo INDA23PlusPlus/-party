@@ -36,6 +36,7 @@ const BC_COLOR = rl.Color.white;
 const StartNetRole = enum {
     client,
     server,
+    local,
 };
 
 const LaunchErrors = error{UnknownRole};
@@ -58,6 +59,8 @@ const LaunchOptions = struct {
             result.start_as_role = .server;
         } else if (std.mem.eql(u8, role, "client")) {
             result.start_as_role = .client;
+        } else if (std.mem.eql(u8, role, "local")) {
+            result.start_as_role = .local;
         } else {
             return error.UnknownRole;
         }
@@ -89,17 +92,19 @@ pub fn main() !void {
     var input_consolidation = try InputConsolidation.init(std.heap.page_allocator);
 
     var controllers = Controller.DefaultControllers;
-    controllers[0].input_index = 0;
-    controllers[1].input_index = 1;
 
     var main_thread_queue = NetworkingQueue{};
     var net_thread_queue = NetworkingQueue{};
 
     // Networking
     if (launch_options.start_as_role == .client) {
+        std.debug.print("starting server thread\n", .{});
         try networking.startClient(&net_thread_queue);
-    } else {
+    } else if (launch_options.start_as_role == .server) {
+        std.debug.print("starting client thread\n", .{});
         try networking.startServer(&net_thread_queue);
+    } else {
+        std.debug.print("warning: multiplayer is disabled\n", .{});
     }
 
     const invariables = Invariables{
@@ -116,7 +121,7 @@ pub fn main() !void {
         // Fetch input.
         const tick = sim.meta.ticks_elapsed;
 
-        const controllers_active = Controller.countAssigned(&controllers);
+        const controllers_active = Controller.autoAssign(&controllers);
 
         if (main_thread_queue.outgoing_data_count + controllers_active <= main_thread_queue.outgoing_data.len) {
             // We can only get local input, if we have the ability to send it. If we can't send it, we 
@@ -143,43 +148,20 @@ pub fn main() !void {
 
         const current_input_timeline = input.Timeline { .buttons = input_consolidation.buttons.items[0..input_consolidation.buttons.items.len] };
 
-        // Add the inputs.
-        // TODO: Write this code.
-
-        // for (input_frames_sent..input_consolidation.buttons.items.len) |tick_number| {
-        //     std.debug.print("try send\n", .{});
-        //     const all_buttons = input_consolidation.buttons.items[tick_number];
-        //     const local = input_consolidation.local.items[tick_number];
-        //     for (all_buttons, 0..) |buttons, i| {
-        //         if (main_thread_queue.outgoing_data_count >= main_thread_queue.outgoing_data.len) {
-        //             std.debug.print("warning: outgoing_data of main is overfilled\n", .{});
-        //             continue;
-        //         }
-        //         if (local.isSet(i)) {
-        //             main_thread_queue.outgoing_data[main_thread_queue.outgoing_data_count] = .{
-        //                 .data = buttons,
-        //                 .tick = tick_number,
-        //                 .player = @truncate(i),
-        //             };
-        //             main_thread_queue.outgoing_data_count += 1;
-        //             std.debug.print("sending packet to net thread\n", .{});
-        //         } else {
-        //             std.debug.print("local not set for: {d}\n", .{i});
-        //         }
-        //     }
-        //     std.debug.print("try send over\n", .{});
-        // }
-        // input_frames_sent = input_consolidation.buttons.items.len;
-
-
-        //if (tick == 300) {
+        //if (tick == 1000) {
         //    const file = std.io.getStdErr();
         //    const writer = file.writer();
         //    try input_consolidation.dumpInputs(writer);
+        //    std.time.sleep(std.time.ns_per_s * 2);
         //    @panic("over");
         //}
 
-        main_thread_queue.interchange(&net_thread_queue);
+        if (launch_options.start_as_role == .local) {
+            // Make sure we can scream into the void as much as we wish.
+            main_thread_queue.outgoing_data_count = 0;
+        } else {
+            main_thread_queue.interchange(&net_thread_queue);
+        }
 
         // Ingest the updates.
         for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_count]) |change| {

@@ -99,7 +99,19 @@ pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, player: u32, new_
     return true;
 }
 
+pub fn createChecksum(self: *Self) u32 {
+    var hasher = std.hash.crc.Crc32.init();
+    for (self.buttons.items) |buttons| {
+        for (buttons) |button| {
+            const state: u8 = @intFromEnum(button.dpad);
+            hasher.update(&[_]u8{state});
+        }
+    }
+    return hasher.final();
+}
+
 pub fn dumpInputs(self: *Self, writer: anytype) !void {
+    const checksum = self.createChecksum();
     try writer.print("input frames: {d}\n", .{self.buttons.items.len});
     for (self.buttons.items, self.is_certain.items, 0..) |inputs, is_certain, frame_index| {
         try writer.print("{d}: ", .{frame_index});
@@ -109,4 +121,5 @@ pub fn dumpInputs(self: *Self, writer: anytype) !void {
         }
         try writer.print("\n", .{});
     }
+    try writer.print("checksum: {x}\n", .{checksum});
 }

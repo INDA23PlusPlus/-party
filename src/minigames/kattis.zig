@@ -209,9 +209,12 @@ fn updateRankings(sim: *simulation.Simulation, timeline: input.Timeline) void {
 
     std.mem.sort(u32, &player_scores, {}, std.sort.desc(u32));
 
-    var current_rank: u8 = 1;
+    var current_rank: u8 = 0;
     for (0..constants.max_player_count) |i| {
-        if (!inputs[i].is_connected()) continue;
+        if (!inputs[i].is_connected()) {
+            sim.meta.minigame_placements[i] = 7;
+            continue;
+        }
 
         if (i != 0 and player_scores[i] >> 3 != player_scores[i - 1] >> 3) {
             current_rank += 1;

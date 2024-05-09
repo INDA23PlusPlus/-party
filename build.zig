@@ -37,14 +37,19 @@ pub fn build(b: *std.Build) !void {
     exe.root_module.addImport("xev", xev.module("xev"));
 
     const run_cmd = b.addRunArtifact(exe);
-    run_cmd.addArg("client");
-    const run_step = b.step("run", "Run ++party");
+    run_cmd.addArg("local");
+    const run_step = b.step("run", "Run ++party in local (default) mode");
     run_step.dependOn(&run_cmd.step);
 
     const run_server_cmd = b.addRunArtifact(exe);
     run_server_cmd.addArg("server");
-    const run_server_step = b.step("run-server", "Run ++party in server/host mode");
+    const run_server_step = b.step("run-server", "Run ++party in server mode");
     run_server_step.dependOn(&run_server_cmd.step);
+
+    const run_client_cmd = b.addRunArtifact(exe);
+    run_client_cmd.addArg("client");
+    const run_client_step = b.step("run-client", "Run ++party in client mode");
+    run_client_step.dependOn(&run_client_cmd.step);
 
     const minigame = b.option([]const u8, "minigame", "Run a specific minigame using the name specified in list.zig") orelse ""; //++ minigames_string ++ ")") orelse "";
 
