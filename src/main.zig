@@ -90,8 +90,6 @@ pub fn main() !void {
     var input_frames_sent: u64 = 0;
 
     var controllers = Controller.DefaultControllers;
-    // controllers[0].input_index = 0;
-    // controllers[1].input_index = 1;
 
     var main_thread_queue = NetworkingQueue{};
     var net_thread_queue = NetworkingQueue{};
@@ -114,13 +112,11 @@ pub fn main() !void {
 
     // Game loop
     while (window.running) {
-        const poll_result = Controller.poll();
-        for (poll_result, 0..) |inp, i| {
-            std.debug.print("A key was pressed!", .{});
-        }
-
         // Fetch input.
         const tick = sim.meta.ticks_elapsed;
+
+        Controller.autoAssign(&controllers, input_consolidation.buttons.items[tick - 1]);
+
         const current_input_timeline = try input_consolidation.localUpdate(std.heap.page_allocator, &controllers, tick);
 
         // Add the inputs.
