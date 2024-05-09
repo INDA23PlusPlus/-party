@@ -37,6 +37,7 @@ pub const components: []const type = &.{
     Hit,
     Blk,
     Kng,
+    Nub,
 };
 
 /// Entities with this component are positionable.
@@ -94,16 +95,17 @@ pub const Txt = struct {
 
 /// Entities with this component have an associated texture.
 pub const Tex = struct {
-    texture_hash: u64 = AssetManager.default_hash, // TODO: add default texture to renderer/assets?
+    texture_hash: u64 = AssetManager.default_hash,
     u: u32 = 0,
     v: u32 = 0,
     w: u32 = 1,
     h: u32 = 1,
     subpos: @Vector(2, i32) = .{ 0, 0 },
-    tint: rl.Color = rl.Color.white, // TODO: does this work for serialization?
+    tint: rl.Color = rl.Color.white,
     rotate: enum { R0, R90, R180, R270 } = .R0,
     flip_horizontal: bool = false,
     flip_vertical: bool = false,
+    size: u8 = 1, // TODO: scale texture when rendering
 };
 
 /// Entities with this component are animated.
@@ -146,3 +148,6 @@ pub const Blk = struct {};
 /// The crown entity uses this tag as an identifier.
 /// Could potentially be used to make the leading player behave differently.
 pub const Kng = struct {};
+
+/// Entities with this component act as the root of something.
+pub const Nub = struct {};
