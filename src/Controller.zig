@@ -137,3 +137,41 @@ pub fn poll(controllers: []Controller, previous: input.AllPlayerButtons) input.A
     }
     return result;
 }
+
+pub fn autoAssign(controllers: []Controller, previous: input.AllPlayerButtons) void {
+    for (0..8) |i| {
+        // This controller has an index, skip it.
+        if (controllers[i].input_index < 8) {
+            continue;
+        }
+
+        var input_state: input.PlayerInputState = undefined;
+        switch (i) {
+            0 => {
+                input_state = pollKeyboard1(previous[i]);
+            },
+            1 => {
+                input_state = pollKeyboard2(previous[i]);
+            },
+            else => {
+                input_state = pollGamepad(@intCast(i), previous[i]);
+            },
+        }
+
+        // Pressed A/B, trying to join.
+        if (input_state.button_a.is_down() or input_state.button_b.is_down()) {
+            // Find indices that are available, first is best
+            var unavailable = [_]usize{std.math.maxInt(usize)} ** 8;
+            for (controllers) |con| {
+                if (con.input_index < 8) {
+                    unavailable[con.input_index] = con.input_index;
+                }
+            }
+            const available = std.mem.indexOfScalar(usize, &unavailable, std.math.maxInt(usize));
+            if (available) |av| {
+                std.debug.print("Controller {} joined with id {}\n", .{ i, av });
+                controllers[i].input_index = av;
+            }
+        }
+    }
+}
