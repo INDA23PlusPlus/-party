@@ -26,12 +26,11 @@ fn findMinigameID(preferred_minigame: []const u8) u32 {
     }
 
     std.debug.print("here is a list of possible minigames:\n", .{});
-    for(minigames_list) |minigame| {
+    for (minigames_list) |minigame| {
         std.debug.print("\t{s}\n", .{minigame.name});
     }
     std.debug.panic("unknown minigame: {s}", .{preferred_minigame});
 }
-
 
 // Settings
 // TODO: move to settings file
@@ -61,7 +60,7 @@ const LaunchOptions = struct {
         // Skip the filename.
         _ = args.next();
 
-        while(args.next()) |arg| {
+        while (args.next()) |arg| {
             if (std.mem.eql(u8, arg, "server")) {
                 result.start_as_role = .server;
             } else if (std.mem.eql(u8, arg, "client")) {
@@ -160,11 +159,11 @@ pub fn main() !void {
         const controllers_active = input_consolidation.autoAssign(&controllers, tick);
 
         if (main_thread_queue.outgoing_data_count + controllers_active <= main_thread_queue.outgoing_data.len) {
-            // We can only get local input, if we have the ability to send it. If we can't send it, we 
+            // We can only get local input, if we have the ability to send it. If we can't send it, we
             // mustn't accept local input as that could cause desynchs.
             try input_consolidation.localUpdate(&controllers, tick);
 
-            for(controllers) |controller| {
+            for (controllers) |controller| {
                 if (!controller.isAssigned()) {
                     continue;
                 }
@@ -182,7 +181,7 @@ pub fn main() !void {
             std.debug.print("unable to send further inputs as too many have been sent without answer\n", .{});
         }
 
-        const current_input_timeline = input.Timeline { .buttons = input_consolidation.buttons.items[0..input_consolidation.buttons.items.len] };
+        const current_input_timeline = input.Timeline{ .buttons = input_consolidation.buttons.items[0..input_consolidation.buttons.items.len] };
 
         //if (tick == 1000) {
         //    const file = std.io.getStdErr();
