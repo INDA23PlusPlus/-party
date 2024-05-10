@@ -13,8 +13,8 @@ const animator = @import("../animation/animator.zig");
 // 1 for * , 2 for -, 0 otherwise, could be done with bitmasks if we choose to not have a "new_word" key
 const morsecode_maxlen = 6;
 var keystrokes: [constants.max_player_count][morsecode_maxlen]u8 = undefined;
-var typed_len = std.mem.zeroes([constants.max_player_count]u8);
-var current_letter = std.mem.zeroes([constants.max_player_count]u8);
+//var typed_len = std.mem.zeroes([constants.max_player_count]u8);
+//var current_letter = std.mem.zeroes([constants.max_player_count]u8);
 
 fn assigned_pos(id: usize) @Vector(2, i32) {
     const top_left_x = 120;
@@ -92,7 +92,8 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                 ecs.component.Pos{ .pos = .{ button_position[0], button_position[1] } },
                 ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis_testcases.png") },
                 ecs.component.Lnk{ .child = string_info },
-                //ecs.component.Ctr{ .id = @intCast(id), .count = @intCast(id + 1) },
+                ecs.component.Ctr{ .count = 0 }, // for typed_len
+                ecs.component.Tmr{ .ticks = 0 }, // for current_letter
             });
         }
     }
@@ -106,9 +107,19 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
         },
     });
 
+    // morsecode table
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Pos{ .pos = [2]i32{ 300, 55 } },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/mors.jpg"),
+            .w = 256 / 16,
+            .h = 144 / 16,
+        },
+    });
+
     // Count down.
     _ = try sim.world.spawnWith(.{
-        ecs.component.Ctr{ .count = 30 * 60 }, // change the 30 while debugging
+        ecs.component.Ctr{ .count = 20 * 60 }, // change the 30 while debugging
     });
 }
 
@@ -122,7 +133,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
 }
 
 fn scoreSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
-    var query = world.query(&.{ecs.component.Ctr}, &.{});
+    var query = world.query(&.{ecs.component.Ctr}, &.{ecs.component.Plr});
     while (query.next()) |_| {
         const ctr = query.get(ecs.component.Ctr) catch unreachable;
         if (ctr.count <= 0) {
@@ -143,25 +154,26 @@ fn scoreSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
 
 fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
     const inputs: input.AllPlayerButtons = timeline.latest();
-    var query = world.query(&.{ ecs.component.Plr, ecs.component.Tex }, &.{});
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Tex, ecs.component.Ctr }, &.{});
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
+        const typed_len = try query.get(ecs.component.Ctr);
         const state = inputs[plr.id];
         var tex = query.get(ecs.component.Tex) catch unreachable;
 
         if (state.is_connected()) {
-            if (state.button_a == .Pressed or state.button_a == .Pressed) {
-                keystrokes[plr.id][typed_len[plr.id]] = if (state.button_a == .Pressed) 1 else 2;
-                typed_len[plr.id] += 1;
+            if (state.button_a == .Pressed or state.button_b == .Pressed) {
+                keystrokes[plr.id][typed_len.count] = if (state.button_a == .Pressed) 1 else 2;
+                typed_len.count += 1;
                 tex.u = if (state.button_a == .Pressed) 1 else 2;
             } else if (timeline.vertical_pressed(plr.id) != 0) {
-                keystrokes[plr.id][typed_len[plr.id]] = 3;
-                typed_len[plr.id] += 1;
+                keystrokes[plr.id][typed_len.count] = 3;
+                typed_len.count += 1;
                 tex.u = 0;
             } else if (timeline.horizontal_pressed(plr.id) != 0) {
                 // should work as a backspace / undo
-                typed_len[plr.id] = @max(0, @as(i8, @intCast(typed_len[plr.id])) - 1);
-                keystrokes[plr.id][typed_len[plr.id]] = 0;
+                typed_len.count = @max(0, @as(i8, @intCast(typed_len.count)) - 1);
+                keystrokes[plr.id][typed_len.count] = 0;
                 tex.u = 0;
             }
         }
@@ -169,37 +181,43 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
 }
 
 fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
-    var query = world.query(&.{ ecs.component.Plr, ecs.component.Lnk }, &.{});
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Lnk, ecs.component.Ctr, ecs.component.Tmr }, &.{});
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
         const lnk = query.get(ecs.component.Lnk) catch unreachable;
+        const typed_len = query.get(ecs.component.Ctr) catch unreachable;
+        const current_letter = query.get(ecs.component.Tmr) catch unreachable;
+        //std.debug.print("plr: {any}\n", .{plr.id});
+        //std.debug.print("typed_len: {any}\n", .{typed_len.count});
+        //std.debug.print("current_letter: {any}\n\n", .{current_letter.ticks});
+
         const game_string_comp = world.inspect(lnk.child.?, ecs.component.Txt) catch unreachable;
         const game_string = game_string_comp.string;
 
-        if (typed_len[plr.id] == 0) continue;
+        if (typed_len.count == 0) continue;
 
-        if (keystrokes[plr.id][typed_len[plr.id] - 1] == 3) {
+        if (keystrokes[plr.id][typed_len.count - 1] == 3) {
             const character: u8 = code_to_char(plr.id);
-            if (character == game_string[current_letter[plr.id]]) {
-                typed_len[plr.id] = 0;
-                current_letter[plr.id] += 1;
+            if (character == game_string[current_letter.ticks]) {
+                typed_len.count = 0;
+                current_letter.ticks += 1;
                 keystrokes[plr.id] = .{ 0, 0, 0, 0, 0, 0 };
-                if (current_letter[plr.id] == game_string.len) {
+                if (current_letter.ticks == game_string.len) {
                     // There is a small problem with this, lower ids get prioritized in this check
                     meta.minigame_placements[meta.minigame_counter] = @intCast(plr.id);
                     meta.minigame_counter += 1;
-                    //std.debug.print("minigame_placement: {any}\n", .{meta.minigame_counter});
-                    //std.debug.print("Player finish order: {any}\n", .{meta.minigame_placements});
+                    std.debug.print("minigame_placement: {any}\n", .{meta.minigame_counter});
+                    std.debug.print("Player finish order: {any}\n", .{meta.minigame_placements});
                     // player has finished
                     // TODO: ignore this players inputs from now on
                 }
             } else {
-                typed_len[plr.id] = 0;
+                typed_len.count = 0;
                 keystrokes[plr.id] = .{ 0, 0, 0, 0, 0, 0 };
             }
-        } else if (typed_len[plr.id] == morsecode_maxlen) {
+        } else if (typed_len.count == morsecode_maxlen) {
             keystrokes[plr.id] = .{ 0, 0, 0, 0, 0, 0 };
-            typed_len[plr.id] = 0;
+            typed_len.count = 0;
         }
     }
 }
