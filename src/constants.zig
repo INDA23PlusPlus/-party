@@ -34,3 +34,9 @@ pub const player_colors: [max_player_count]rl.Color = .{
     rl.Color.sky_blue,
     rl.Color.violet,
 };
+
+// TODO: This is really ugly. But it is better than introducing a circular dependency.
+// TODO: What one should do instead is add a findMinigame to Invariables as it has the list of minigames (without introducing a circular dependency)
+// TODO: This is already done in lobby.zig, so it could be used as reference. Feel free to refactor.
+pub const minigame_scoreboard = 4;
+pub const minigame_gamewheel = 5;

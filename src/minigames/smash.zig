@@ -171,7 +171,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
 
     try @import("../crown.zig").update(sim);
 
-    if (sim.meta.minigame_counter <= 1) sim.meta.minigame_id = 3;
+    if (sim.meta.minigame_counter <= 1) sim.meta.minigame_id = constants.minigame_scoreboard;
 }
 
 fn actionSystem(sim: *simulation.Simulation, timeline: input.Timeline) !void {

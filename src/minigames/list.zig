@@ -1,5 +1,5 @@
-const Minigame = @import("Minigame.zig");
 
+const std = @import("std");
 const menu = @import("menu.zig");
 const morsecode = @import("morsecode.zig");
 const tron = @import("tron.zig");
@@ -11,9 +11,17 @@ const gamewheel = @import("gamewheel.zig");
 const shuffle = @import("shuffle.zig");
 const example = @import("example.zig");
 const scoreboard = @import("scoreboard.zig");
+const preferred = @import("preferred.zig");
+
+const Minigame = @import("Minigame.zig");
 
 /// Create a list of Minigames.
 pub const list = [_]Minigame{
+    .{
+        .name = "preferred",
+        .update = preferred.update,
+        .init = preferred.init,
+    },
     .{
         .name = "menu",
         .update = menu.update,
@@ -78,3 +86,12 @@ pub const list = [_]Minigame{
     //     .init = example.init,
     // },
 };
+
+fn findPreferredMinigameID(preferred_minigame: []const u8) u32 {
+    for (list, 0..) |mg, i| {
+        if (std.mem.eql(u8, mg.name, preferred_minigame)) {
+            return @truncate(i);
+        }
+    }
+    @panic("unknown minigame");
+}

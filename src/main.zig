@@ -9,7 +9,6 @@ const networking = @import("networking.zig");
 const linear = @import("math/linear.zig");
 const fixed = @import("math/fixed.zig");
 const simulation = @import("simulation.zig");
-const minigames = @import("minigames/list.zig");
 
 const AssetManager = @import("AssetManager.zig");
 const Controller = @import("Controller.zig");
@@ -18,16 +17,21 @@ const Invariables = @import("Invariables.zig");
 const NetworkingQueue = @import("NetworkingQueue.zig");
 
 const minigames_list = @import("minigames/list.zig").list;
-const config = @import("config");
-const starting_minigame_id = blk: {
-    for (minigames_list, 0..minigames_list.len) |mg, i| {
-        if (std.mem.eql(u8, mg.name, config.minigame)) {
-            break :blk i;
+
+fn findMinigameID(preferred_minigame: []const u8) u32 {
+    for (minigames_list, 0..) |mg, i| {
+        if (std.mem.eql(u8, mg.name, preferred_minigame)) {
+            return @truncate(i);
         }
     }
 
-    break :blk 0;
-};
+    std.debug.print("here is a list of possible minigames:\n", .{});
+    for(minigames_list) |minigame| {
+        std.debug.print("\t{s}\n", .{minigame.name});
+    }
+    std.debug.panic("unknown minigame: {s}", .{preferred_minigame});
+}
+
 
 // Settings
 // TODO: move to settings file
@@ -39,10 +43,13 @@ const StartNetRole = enum {
     local,
 };
 
-const LaunchErrors = error{UnknownRole};
+const LaunchErrors = error{UnknownArg};
 
 const LaunchOptions = struct {
-    start_as_role: StartNetRole = StartNetRole.client,
+    start_as_role: StartNetRole = StartNetRole.local,
+    force_wasd: bool = false,
+    force_ijkl: bool = false,
+    force_minigame: u32 = 1,
     fn parse() !LaunchOptions {
         var result = LaunchOptions{};
         var mem: [1024]u8 = undefined;
@@ -54,15 +61,24 @@ const LaunchOptions = struct {
         // Skip the filename.
         _ = args.next();
 
-        const role = args.next() orelse return error.UnknownRole;
-        if (std.mem.eql(u8, role, "server")) {
-            result.start_as_role = .server;
-        } else if (std.mem.eql(u8, role, "client")) {
-            result.start_as_role = .client;
-        } else if (std.mem.eql(u8, role, "local")) {
-            result.start_as_role = .local;
-        } else {
-            return error.UnknownRole;
+        while(args.next()) |arg| {
+            if (std.mem.eql(u8, arg, "server")) {
+                result.start_as_role = .server;
+            } else if (std.mem.eql(u8, arg, "client")) {
+                result.start_as_role = .client;
+            } else if (std.mem.eql(u8, arg, "local")) {
+                result.start_as_role = .local;
+            } else if (std.mem.eql(u8, arg, "--wasd")) {
+                result.force_wasd = true;
+            } else if (std.mem.eql(u8, arg, "--ijkl")) {
+                result.force_ijkl = true;
+            } else if (std.mem.eql(u8, arg, "--minigame")) {
+                result.force_minigame = findMinigameID(args.next() orelse "");
+                std.debug.print("will launch minigame {d}\n", .{result.force_minigame});
+            } else {
+                std.debug.print("unknown argument: {s}\n", .{arg});
+                return error.UnknownArg;
+            }
         }
 
         return result;
@@ -87,7 +103,7 @@ pub fn main() !void {
     defer assets.deinit();
 
     var sim = simulation.Simulation{};
-    sim.meta.minigame_id = starting_minigame_id; // TODO: Maybe sim.init() is a better place. Just add a new arg.
+    sim.meta.preferred_minigame_id = launch_options.force_minigame;
 
     var input_consolidation = try InputConsolidation.init(std.heap.page_allocator);
 
@@ -96,23 +112,38 @@ pub fn main() !void {
     var main_thread_queue = NetworkingQueue{};
     var net_thread_queue = NetworkingQueue{};
 
+    // Force WASD or IJKL for games that do not support hot-joining.
+    if (launch_options.force_wasd or launch_options.force_ijkl) {
+        try input_consolidation.extendTimeline(std.heap.page_allocator, 1);
+        sim.meta.ticks_elapsed += 1;
+    }
+    if (launch_options.force_wasd) {
+        _ = input_consolidation.forceAutoAssign(1, &controllers, 0);
+    }
+    if (launch_options.force_ijkl) {
+        _ = input_consolidation.forceAutoAssign(1, &controllers, 1);
+    }
+
     // Networking
     if (launch_options.start_as_role == .client) {
-        std.debug.print("starting server thread\n", .{});
+        std.debug.print("starting client thread\n", .{});
         try networking.startClient(&net_thread_queue);
     } else if (launch_options.start_as_role == .server) {
-        std.debug.print("starting client thread\n", .{});
+        std.debug.print("starting server thread\n", .{});
         try networking.startServer(&net_thread_queue);
     } else {
         std.debug.print("warning: multiplayer is disabled\n", .{});
+    }
+
+    if (launch_options.start_as_role != .local and launch_options.force_minigame != 1) {
+        // TODO: To solve this, we should synchronize this info to all players such that we retain determinism.
+        std.debug.print("warning: using --force-minigame and multiplayer is currently unsafe\n", .{});
     }
 
     const invariables = Invariables{
         .minigames_list = &minigames_list,
         .arena = frame_allocator,
     };
-
-    try simulation.start(&sim, invariables);
 
     // var benchmarker = try @import("Benchmarker.zig").init("Simulation");
 
@@ -121,15 +152,20 @@ pub fn main() !void {
         // Fetch input.
         const tick = sim.meta.ticks_elapsed;
 
-        const controllers_active = Controller.autoAssign(&controllers);
+        // Make sure that the timeline extends far enough for the input polling to work.
+        try input_consolidation.extendTimeline(std.heap.page_allocator, tick);
+
+        // We want to know how many controllers are active locally in order to know if
+        // all of their states can be sent over to the networking thread later on.
+        const controllers_active = input_consolidation.autoAssign(&controllers, tick);
 
         if (main_thread_queue.outgoing_data_count + controllers_active <= main_thread_queue.outgoing_data.len) {
             // We can only get local input, if we have the ability to send it. If we can't send it, we 
             // mustn't accept local input as that could cause desynchs.
-            _ = try input_consolidation.localUpdate(std.heap.page_allocator, &controllers, tick);
+            try input_consolidation.localUpdate(&controllers, tick);
 
             for(controllers) |controller| {
-                if (!controller.is_assigned()) {
+                if (!controller.isAssigned()) {
                     continue;
                 }
                 const player_index = controller.input_index;

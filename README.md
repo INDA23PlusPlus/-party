@@ -7,9 +7,9 @@ git clone git@github.com:INDA23PlusPlus/plusplusparty.git --recursive
 cd plusplusparty
 zig build run
 ```
-To run a specific example, use the `-Dminigame=<name>` flag. For example:
+To run a specific example, use the `--minigame <name>` argument. For example:
 ```bash
-zig build run -Dminigame=example
+zig build run -- --minigame example
 ```
 Some available minigames are:
 - Menu (`menu`)
@@ -17,8 +17,14 @@ Some available minigames are:
 - Morse code (`morsecode`)
 - Hot n' steamy (`hns`)
 
+### Launching a Server (Multiplayer)
 To run as a server, use run-server:
 ```bash
 zig build run-server
 ```
-can also use the `-Dminigame=<name>` flag to run a specific minigame as a server.
+
+### Launching a Client (Multiplayer)
+To run as a client, use run-client:
+```bash
+zig build run-client
+```

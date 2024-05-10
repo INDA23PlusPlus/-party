@@ -8,39 +8,34 @@ const seed = 555;
 
 /// Data that is kept between minigames (such as seed, scores, etc)
 pub const Metadata = struct {
-    global_score: [constants.max_player_count]u32 = [_]u32{0} ** constants.max_player_count,
+
+    /// We always start at 1 because the input system needs to have a
+    /// frame zero that the input system can use for prediction.
     ticks_elapsed: u64 = 1,
 
-    minigame_id: usize = 0,
+    /// What minigame the minigame known as "preferred" will jump to.
+    /// Note that if it is set to 0, you will be presented with a whitescreen
+    /// as that is the current ID of "preferred".
+    preferred_minigame_id: u32 = 0,
+
+    minigame_id: u32 = 0,
     minigame_prng: std.rand.DefaultPrng = std.rand.DefaultPrng.init(seed),
-    minigame_placements: [constants.max_player_count]u32 = [_]u32{0} ** constants.max_player_count,
     minigame_timer: u32 = 0,
     minigame_counter: u32 = 0,
+
+    /// Score realted things:
+    global_score: [constants.max_player_count]u32 = [_]u32{0} ** constants.max_player_count,
+    minigame_placements: [constants.max_player_count]u32 = [_]u32{0} ** constants.max_player_count,
 };
 
+// TODO: Convert simulation.zig into Simulation.zig
 pub const Simulation = struct {
     world: ecs.world.World = .{},
     meta: Metadata = .{},
 };
 
-/// A Simulation paired together with an rw_lock used
-/// to coordinate two (or more) threads accessing the same Simulation.
-/// OBS: This does not automatically make procedures inside
-/// of World thread-safe. The rw_lock must be properly used first.
-pub const SharedSimulation = struct {
-    sim: Simulation,
-    rw_lock: std.Thread.RwLock,
-};
-
 /// All the errors that may happen during simulation.
 pub const SimulationError = ecs.world.WorldError;
-
-/// Should this be here?
-pub fn start(sim: *Simulation, rt: Invariables) !void {
-    try rt.minigames_list[sim.meta.minigame_id].init(sim, .{
-        .buttons = &.{},
-    });
-}
 
 /// Simulate one tick in the game world.
 /// All generic game code will be called from this function and should not

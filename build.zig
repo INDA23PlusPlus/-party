@@ -38,25 +38,29 @@ pub fn build(b: *std.Build) !void {
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.addArg("local");
+    run_cmd.addArg("--wasd");
+    run_cmd.addArg("--ijkl");
+    if (b.args) |args| {
+        run_cmd.addArgs(args);
+    }
     const run_step = b.step("run", "Run ++party in local (default) mode");
     run_step.dependOn(&run_cmd.step);
 
     const run_server_cmd = b.addRunArtifact(exe);
     run_server_cmd.addArg("server");
+    if (b.args) |args| {
+        run_server_cmd.addArgs(args);
+    }
     const run_server_step = b.step("run-server", "Run ++party in server mode");
     run_server_step.dependOn(&run_server_cmd.step);
 
     const run_client_cmd = b.addRunArtifact(exe);
     run_client_cmd.addArg("client");
+    if (b.args) |args| {
+        run_client_cmd.addArgs(args);
+    }
     const run_client_step = b.step("run-client", "Run ++party in client mode");
     run_client_step.dependOn(&run_client_cmd.step);
-
-    const minigame = b.option([]const u8, "minigame", "Run a specific minigame using the name specified in list.zig") orelse ""; //++ minigames_string ++ ")") orelse "";
-
-    const options = b.addOptions();
-    options.addOption([]const u8, "minigame", minigame);
-
-    exe.root_module.addOptions("config", options);
 
     b.installArtifact(exe);
 

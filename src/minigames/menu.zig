@@ -87,7 +87,9 @@ fn handleInputs(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                 try changeResolution(sim, current_resolution);
             }
             if (inp.button_b == .Pressed and selected == 0) {
-                sim.meta.minigame_id = 1; // Send to lobby
+                // The minigame after menu is assumed to be lobby in the minigame list.
+                // So take us to the lobby!
+                sim.meta.minigame_id += 1;
             }
         }
     }

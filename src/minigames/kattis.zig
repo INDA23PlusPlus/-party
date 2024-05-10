@@ -75,7 +75,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
         const ctr = query.get(ecs.component.Ctr) catch unreachable;
         if (ctr.count == 0) {
             updateRankings(sim, timeline);
-            sim.meta.minigame_id = 3;
+            sim.meta.minigame_id = constants.minigame_scoreboard;
             return;
         }
         ctr.count -= 1;

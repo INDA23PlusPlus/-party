@@ -149,7 +149,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
                 }
             }
             std.debug.print("ending miniplaces: {any}\n", .{sim.meta.minigame_placements});
-            sim.meta.minigame_id = 3;
+            sim.meta.minigame_id = constants.minigame_scoreboard;
             return;
         } else {
             ctr.count -= 1;

@@ -108,7 +108,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
         sim.meta.minigame_id = 0;
         for (rt.minigames_list, 0..) |minigame, minigame_id| {
             if (std.mem.eql(u8, minigame.name, "gamewheel")) {
-                sim.meta.minigame_id = minigame_id;
+                sim.meta.minigame_id = @truncate(minigame_id);
                 break;
             }
         }

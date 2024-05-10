@@ -35,7 +35,7 @@ pub fn init(allocator: std.mem.Allocator) !Self {
     };
 }
 
-fn extendTimeline(self: *Self, allocator: std.mem.Allocator, tick: u64) !void {
+pub fn extendTimeline(self: *Self, allocator: std.mem.Allocator, tick: u64) !void {
     if (tick + 1 < self.buttons.items.len) {
         // No need to extend the timeline.
         return;
@@ -58,13 +58,14 @@ fn extendTimeline(self: *Self, allocator: std.mem.Allocator, tick: u64) !void {
     }
 }
 
-pub fn localUpdate(self: *Self, allocator: std.mem.Allocator, controllers: []Controller, tick: u64) !void {
+pub fn localUpdate(self: *Self, controllers: []Controller, tick: u64) !void {
     if (tick >= self.newest_remote_frame) {
-        try self.extendTimeline(allocator, tick);
+        // Make sure that extendTimeline() is called before.
+        std.debug.assert(tick < self.buttons.items.len);
         self.buttons.items[tick] = Controller.poll(controllers, self.buttons.items[tick - 1]);
         var is_local = input.IsLocalBitfield.initEmpty();
         for (controllers) |controller| {
-            if (controller.is_assigned()) {
+            if (controller.isAssigned()) {
                 is_local.set(controller.input_index);
             }
         }
@@ -97,6 +98,52 @@ pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, player: u32, new_
 
     self.newest_remote_frame = tick;
     return true;
+}
+
+pub fn forceAutoAssign(self: *Self, tick: u64, controllers: []Controller, nth_controller: usize) bool {
+    // Works a bit like localUpdate() but forces a controller to go online (for testing).
+
+    // Make sure that extendTimeline() is called before.
+    std.debug.assert(tick < self.buttons.items.len);
+    var result = self.buttons.items[tick];
+
+    // Find an available player.
+    var unavailable = [_]usize{std.math.maxInt(usize)} ** constants.max_player_count;
+    for (result, 0..) |inp, player_index| {
+        if (inp.is_connected()) {
+            unavailable[player_index] = player_index;
+        }
+    }
+    const available = std.mem.indexOfScalar(usize, &unavailable, std.math.maxInt(usize));
+
+    // Assign the available plyer to nth_controller.
+    if (available) |available_player| {
+        std.debug.print("Controller {} joined with id {}\n", .{ nth_controller, available_player });
+        controllers[nth_controller].input_index = available_player;
+        result[available_player].dpad = .None;
+        self.buttons.items[tick] = result;
+        return true;
+    }
+    return false;
+}
+
+pub fn autoAssign(self: *Self, controllers: []Controller, tick: u64) usize {
+    var count: usize = 0;
+    for(controllers, 0..) |controller, nth_controller| {
+        if (controller.isAssigned()) {
+            count += 1;
+            continue;
+        }
+        if (!Controller.isActive(nth_controller)) {
+            continue;
+        }
+        if (self.forceAutoAssign(tick, controllers, nth_controller)) {
+            // Increase if we are successful in force-assigning this controller.
+            // The if-statement will change our state a bit.
+            count += 1;
+        }
+    }
+    return count;
 }
 
 pub fn createChecksum(self: *Self) u32 {

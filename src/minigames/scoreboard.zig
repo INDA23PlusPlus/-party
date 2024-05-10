@@ -134,7 +134,7 @@ fn tickNextGameTimer(sim: *simulation.Simulation) !void {
             ctr.count -= 1;
             return;
         }
-        sim.meta.minigame_id = 4;
+        sim.meta.minigame_id = constants.minigame_gamewheel;
     }
 }
 
