@@ -11,16 +11,10 @@ const animator = @import("../animation/animator.zig");
 
 // all morse characters are less than 8 long
 // 1 for * , 2 for -, 0 otherwise, could be done with bitmasks if we choose to not have a "new_word" key
-//var keystrokes: [constants.max_player_count][8]u8 = undefined;
-//std.mem.zero(keystrokes[0..]);
 const morsecode_maxlen = 6;
 var keystrokes: [constants.max_player_count][morsecode_maxlen]u8 = undefined;
 var typed_len = std.mem.zeroes([constants.max_player_count]u8);
 var current_letter = std.mem.zeroes([constants.max_player_count]u8);
-//var gm_string: [:0]const u8 = undefined;
-//var gm_string_len: usize = 20;
-//var current_placement: usize = 0;
-//var player_finish_order = [_]u32{100} ** constants.max_player_count;
 
 fn assigned_pos(id: usize) @Vector(2, i32) {
     const top_left_x = 120;
@@ -39,12 +33,11 @@ const game_strings = [_][:0]const u8{
     "DATA",
 };
 
-//fn set_string_info() void {
-// TODO: pick random from list
-//game_string = game_strings[0];
-//game_string_len = game_string.len;
-// return "plusplusparty";
-//}
+fn set_string_info() [:0]const u8 {
+    // TODO: pick random from list
+    std.debug.print("game_string: {any}\n", .{game_strings[0]});
+    return game_strings[0];
+}
 
 const player_strings: [constants.max_player_count][:0]const u8 = blk: {
     var res: [constants.max_player_count][:0]const u8 = undefined;
@@ -55,24 +48,12 @@ const player_strings: [constants.max_player_count][:0]const u8 = blk: {
 };
 
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
-    sim.meta.minigame_timer = 50;
+    sim.meta.minigame_timer = 300;
 
-    //gm_string = game_strings[0]; // temp
-    //gm_string_len = gm_string.len; // temp
-    const game_string = game_strings[0];
+    const game_string = set_string_info();
     const string_info = try sim.world.spawnWith(.{
         ecs.component.Txt{ .string = game_string },
-        ecs.component.Ctr{ .count = 5 },
-        //ecs.component.Lnk{ .child = string_info },
-        //ecs.component.Ctr{ .id = @intCast(id), .count = @intCast(id + 1) },
     });
-    //const game_string_len = game_string.len;
-    //_ = try sim.world.spawnWith(.{
-    //ecs.component.Lnk{ .child = game_string },
-    //ecs.component.Ctr{ .id = @intCast(id), .count = @intCast(id + 1) },
-    //});
-
-    //set_string_info();
 
     for (timeline.latest(), 0..) |inp, id| {
         if (inp.is_connected()) {
@@ -88,7 +69,6 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     for (timeline.latest(), 0..) |inp, id| {
         if (inp.is_connected()) {
             _ = try sim.world.spawnWith(.{
-                // ecs.component.Plr{ .id = @intCast(id) }, // only use this to name the players
                 // cats
                 ecs.component.Txt{
                     .string = player_strings[id],
@@ -138,18 +118,22 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
     try wordSystem(&sim.world, &sim.meta);
     animator.update(&sim.world);
 
-    var query = sim.world.query(&.{ecs.component.Ctr}, &.{});
+    try scoreSystem(&sim.world, &sim.meta);
+}
+
+fn scoreSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
+    var query = world.query(&.{ecs.component.Ctr}, &.{});
     while (query.next()) |_| {
         const ctr = query.get(ecs.component.Ctr) catch unreachable;
         if (ctr.count <= 0) {
-            std.debug.print("ending pfo: {any}\n", .{sim.meta.minigame_placements});
+            std.debug.print("ending pfo: {any}\n", .{meta.minigame_placements});
             for (0..constants.max_player_count) |j| {
-                if (sim.meta.minigame_placements[j] == constants.max_player_count - 1) {
-                    sim.meta.minigame_placements[j] = @as(u32, @intCast(sim.meta.minigame_counter));
+                if (meta.minigame_placements[j] == constants.max_player_count - 1) {
+                    meta.minigame_placements[j] = @as(u32, @intCast(meta.minigame_counter));
                 }
             }
-            std.debug.print("ending miniplaces: {any}\n", .{sim.meta.minigame_placements});
-            sim.meta.minigame_id = constants.minigame_scoreboard;
+            std.debug.print("ending miniplaces: {any}\n", .{meta.minigame_placements});
+            meta.minigame_id = constants.minigame_scoreboard;
             return;
         } else {
             ctr.count -= 1;
@@ -166,14 +150,10 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
         var tex = query.get(ecs.component.Tex) catch unreachable;
 
         if (state.is_connected()) {
-            if (state.button_a == .Pressed) {
-                keystrokes[plr.id][typed_len[plr.id]] = 1;
+            if (state.button_a == .Pressed or state.button_a == .Pressed) {
+                keystrokes[plr.id][typed_len[plr.id]] = if (state.button_a == .Pressed) 1 else 2;
                 typed_len[plr.id] += 1;
-                tex.u = 1;
-            } else if (state.button_b == .Pressed) {
-                keystrokes[plr.id][typed_len[plr.id]] = 2;
-                typed_len[plr.id] += 1;
-                tex.u = 2;
+                tex.u = if (state.button_a == .Pressed) 1 else 2;
             } else if (timeline.vertical_pressed(plr.id) != 0) {
                 keystrokes[plr.id][typed_len[plr.id]] = 3;
                 typed_len[plr.id] += 1;
@@ -189,14 +169,6 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
 }
 
 fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
-    //var stringQuery = world.query(&.{ecs.component.Txt}, &.{ecs.component.Pos}); // TODO: try to do this with Lnk and inspect
-    //var game_string: [:0]const u8 = undefined;
-    //while (stringQuery.next()) |_| { // this is ugly but I don't know how else to do it
-    //const temp_comp = try stringQuery.get(ecs.component.Txt);
-    //game_string = temp_comp.string;
-    //}
-
-    //std.debug.print("game_string: {any}\n", .{game_string});
     var query = world.query(&.{ ecs.component.Plr, ecs.component.Lnk }, &.{});
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
@@ -204,13 +176,11 @@ fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
         const game_string_comp = world.inspect(lnk.child.?, ecs.component.Txt) catch unreachable;
         const game_string = game_string_comp.string;
 
-        std.debug.print("game_string{any}\n", .{game_string});
         if (typed_len[plr.id] == 0) continue;
 
         if (keystrokes[plr.id][typed_len[plr.id] - 1] == 3) {
             const character: u8 = code_to_char(plr.id);
             if (character == game_string[current_letter[plr.id]]) {
-                //if (character == 0) {
                 typed_len[plr.id] = 0;
                 current_letter[plr.id] += 1;
                 keystrokes[plr.id] = .{ 0, 0, 0, 0, 0, 0 };

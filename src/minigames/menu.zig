@@ -52,6 +52,8 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) simulation.Simulatio
         ecs.component.Pos{ .pos = .{ 256, 167 } },
     });
 
+    // _ = try @import("../counter.zig").spawnCounter(&sim.world, [2]i32{ 100, 100 }, 1);
+
     // Save identifiers
     menu_items = .{
         item0,
@@ -61,6 +63,20 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) simulation.Simulatio
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) simulation.SimulationError!void {
     try handleInputs(sim, timeline);
+
+    // if (rl.isKeyPressed(rl.KeyboardKey.key_i) or rl.isKeyPressedRepeat(rl.KeyboardKey.key_i)) {
+    //     var query = sim.world.query(&.{
+    //         ecs.component.Pos,
+    //         ecs.component.Tex,
+    //         ecs.component.Ctr,
+    //         ecs.component.Lnk,
+    //         ecs.component.Nub,
+    //     }, &.{});
+
+    //     while (query.next()) |entity| {
+    //         _ = try @import("../counter.zig").increment(&sim.world, entity);
+    //     }
+    // }
 }
 
 fn handleInputs(sim: *simulation.Simulation, timeline: input.Timeline) !void {

@@ -100,8 +100,8 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/smash_platform.png"),
             .w = 20,
-            .h = 3,
-            .v = 2,
+            .h = 5,
+            .subpos = .{ 0, -32 },
         },
     });
 
