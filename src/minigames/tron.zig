@@ -14,7 +14,9 @@ const constants = @import("../constants.zig");
 const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
 
-pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
+pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
+    sim.meta.minigame_counter = @intCast(timeline.connectedPlayerCount());
+
     sim.meta.minigame_timer = 16;
 
     // Background
@@ -46,15 +48,29 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     });
 
     // Players
-    _ = try sim.world.spawnWith(.{
-        ecs.component.Plr{},
-        ecs.component.Pos{ .pos = [_]i32{ 48, 16 } },
-        ecs.component.Col{ .dim = [_]i32{ 16, 16 } },
-        ecs.component.Mov{ .velocity = ecs.component.Vec2.init(1, 0) },
-        ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis.png") },
-        ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 8, .looping = true },
-        ecs.component.Dir{ .facing = .East },
-    });
+    for (timeline.latest(), 0..) |plr, i| {
+        if (plr.dpad == .Disconnected) continue;
+
+        const id: u32 = @intCast(i);
+        const x: i32 = @intCast(128 + i * 64);
+
+        _ = try sim.world.spawnWith(.{
+            ecs.component.Plr{ .id = id },
+            ecs.component.Pos{ .pos = [_]i32{ x, 256 } },
+            ecs.component.Col{ .dim = [_]i32{ 16, 16 } },
+            ecs.component.Mov{ .velocity = ecs.component.Vec2.init(1, 0) },
+            ecs.component.Tex{
+                .texture_hash = AssetManager.pathHash("assets/kattis.png"),
+                .tint = constants.player_colors[id],
+            },
+            ecs.component.Anm{
+                .animation = Animation.KattisIdle,
+                .interval = 8,
+                .looping = true,
+            },
+            ecs.component.Dir{ .facing = .East },
+        });
+    }
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
@@ -81,6 +97,8 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
 
     // Animate sprites.
     animator.update(&sim.world);
+
+    if (sim.meta.minigame_counter <= 1) sim.meta.minigame_id = constants.minigame_scoreboard;
 }
 
 fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) void {
@@ -240,7 +258,9 @@ fn deathSystem(sim: *simulation.Simulation) void {
         ecs.component.Col,
     }, &.{});
 
-    while (player_query.next()) |ent1| {
+    var dead_players: u32 = 0;
+
+    while (player_query.next()) |player| {
         const player_pos = player_query.get(ecs.component.Pos) catch unreachable;
         const player_col = player_query.get(ecs.component.Col) catch unreachable;
 
@@ -249,16 +269,44 @@ fn deathSystem(sim: *simulation.Simulation) void {
             ecs.component.Col,
         }, &.{});
 
-        while (collidable_query.next()) |ent2| {
-            if (ent1.eq(ent2)) continue;
+        while (collidable_query.next()) |entity| {
+            if (player.eq(entity)) continue;
 
             const collidable_pos = collidable_query.get(ecs.component.Pos) catch unreachable;
             const collidable_col = collidable_query.get(ecs.component.Col) catch unreachable;
 
             if (collision.intersects(player_pos, player_col, collidable_pos, collidable_col)) {
-                sim.world.kill(ent1);
+                dead_players += 1;
+                sim.meta.minigame_counter -= 1;
+                sim.world.demote(player, &.{
+                    ecs.component.Pos,
+                    ecs.component.Col,
+                    ecs.component.Mov,
+                    ecs.component.Tex,
+                    ecs.component.Anm,
+                    ecs.component.Dir,
+                });
+
                 break;
             }
         }
+    }
+
+    var dead_player_query = sim.world.query(&.{
+        ecs.component.Plr,
+    }, &.{
+        ecs.component.Pos,
+        ecs.component.Col,
+        ecs.component.Mov,
+        ecs.component.Tex,
+        ecs.component.Anm,
+        ecs.component.Dir,
+    });
+
+    while (dead_player_query.next()) |player| {
+        const plr = dead_player_query.get(ecs.component.Plr) catch unreachable;
+
+        sim.meta.minigame_placements[plr.id] = sim.meta.minigame_counter + dead_players - 1;
+        sim.world.kill(player);
     }
 }
