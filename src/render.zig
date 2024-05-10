@@ -33,12 +33,14 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
             @as(f32, @floatFromInt(window.height)) / constants.world_height,
         };
 
+        const size: f32 = @floatFromInt(tex_component.size);
+
         const dst_pos = @as(@Vector(2, f32), @floatFromInt(pos_component.pos + tex_component.subpos)) * scaling;
 
         const dst_x = dst_pos[0];
         const dst_y = dst_pos[1];
-        const dst_w = src_w * scaling[0];
-        const dst_h = src_h * scaling[1];
+        const dst_w = src_w * scaling[0] * size;
+        const dst_h = src_h * scaling[1] * size;
 
         const dst = rl.Rectangle{ .x = dst_x, .y = dst_y, .width = dst_w, .height = dst_h };
 

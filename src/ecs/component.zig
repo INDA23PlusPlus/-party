@@ -37,7 +37,8 @@ pub const components: []const type = &.{
     Hit,
     Blk,
     Kng,
-    Nub,
+    Src,
+    Dst,
 };
 
 /// Entities with this component are positionable.
@@ -149,5 +150,8 @@ pub const Blk = struct {};
 /// Could potentially be used to make the leading player behave differently.
 pub const Kng = struct {};
 
-/// Entities with this component act as the root of something.
-pub const Nub = struct {};
+/// Entities with this component act as the source of something.
+pub const Src = struct {};
+
+/// Entities with this component act as the destination of something.
+pub const Dst = struct {};

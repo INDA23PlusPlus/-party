@@ -52,7 +52,7 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) simulation.Simulatio
         ecs.component.Pos{ .pos = .{ 256, 167 } },
     });
 
-    // _ = try @import("../counter.zig").spawnCounter(&sim.world, [2]i32{ 100, 100 }, 1);
+    // _ = try @import("../counter.zig").spawnCounter(&sim.world, [2]i32{ 100, 100 }, 2, rl.Color.blue);
 
     // Save identifiers
     menu_items = .{
