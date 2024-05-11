@@ -144,7 +144,14 @@ pub fn main() !void {
         .arena = frame_allocator,
     };
 
+    // Used by networking code.
+    var rewind_to_tick: u64 = std.math.maxInt(u64);
+
     // var benchmarker = try @import("Benchmarker.zig").init("Simulation");
+
+    // TODO: Perhaps a delay should be added to that (to non-local mode)
+    // TODO: the networking thread has time to receive some updates?
+    // TOOD: Or maybe something smarter like waiting for the first packet.
 
     // Game loop
     while (window.running) {
@@ -190,12 +197,27 @@ pub fn main() !void {
             main_thread_queue.interchange(&net_thread_queue);
         }
 
+        // TODO: Move to before polling local inputs.
         // Ingest the updates.
         for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_count]) |change| {
             //std.debug.print("ingesting update\n", .{});
-            _ = try input_consolidation.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick);
+            if (try input_consolidation.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick)) {
+                if (change.tick == 0) {
+                    std.debug.print("tick 0: {any}\n", .{change});
+                }
+                std.debug.assert(change.tick != 0);
+                rewind_to_tick = @min(change.tick, rewind_to_tick);
+            }
         }
         main_thread_queue.incoming_data_count = 0;
+
+        if (rewind_to_tick < simulation_cache.head_tick_elapsed) {
+            simulation_cache.rewind(rewind_to_tick);
+
+            // The rewind is done. Reset it so that next tick
+            // doesn't also rewind.
+            rewind_to_tick = std.math.maxInt(u64);
+        }
 
         //if (tick == 300) {
         //    const file = std.io.getStdErr();

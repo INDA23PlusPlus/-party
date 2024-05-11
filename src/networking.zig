@@ -189,6 +189,7 @@ fn clientConnected(_: ?*void, l: *xev.Loop, _: *xev.Completion, r: xev.TCP.Accep
     if (server_data.reservSlot()) |slot| {
         server_data.conns_list[slot].packets_available = 0;
         server_data.conns_list[slot].stream = stream;
+        server_data.conns_list[slot].consistent_until = 1;
         const completion = &server_data.conns_list[slot].read_completion;
         const buffer = &server_data.conns_list[slot].read_buffer;
         stream.read(l, completion, .{ .slice = buffer }, ConnectedClientIndex, toClientIndex(slot), handlePacketFromClient);

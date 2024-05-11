@@ -1,3 +1,5 @@
+// TODO: InputMerger would be a more obvious name.
+
 const std = @import("std");
 const input = @import("input.zig");
 const constants = @import("constants.zig");
@@ -8,6 +10,7 @@ const InputStateArrayList = std.ArrayListUnmanaged(input.AllPlayerButtons);
 const PlayerBitSet = std.bit_set.IntegerBitSet(constants.max_player_count);
 const PlayerBitSetArrayList = std.ArrayListUnmanaged(PlayerBitSet);
 const empty_player_bit_set = PlayerBitSet.initEmpty();
+const full_player_bit_set = PlayerBitSet.initFull();
 
 rw_lock: std.Thread.RwLock = .{},
 buttons: InputStateArrayList,
@@ -22,8 +25,11 @@ pub fn init(allocator: std.mem.Allocator) !Self {
     // such that it can be used as inspiration for the rest of the timeline.
     var buttons = try InputStateArrayList.initCapacity(allocator, 1024);
     try buttons.append(allocator, input.default_input_state);
+
+    // We are always certain of the zero frame as changes to it
+    // should be ignored.
     var is_certain = try PlayerBitSetArrayList.initCapacity(allocator, 1024);
-    try is_certain.append(allocator, empty_player_bit_set);
+    try is_certain.append(allocator, full_player_bit_set);
     //var received = try PlayerBitSetArrayList.initCapacity(allocator, 1024);
     //try received.append(allocator, PlayerBitSet.initEmpty());
     return .{
@@ -57,20 +63,24 @@ pub fn extendTimeline(self: *Self, allocator: std.mem.Allocator, tick: u64) !voi
 }
 
 pub fn localUpdate(self: *Self, controllers: []Controller, tick: u64) !void {
-    if (tick >= self.newest_remote_frame) {
-        // Make sure that extendTimeline() is called before.
-        std.debug.assert(tick < self.buttons.items.len);
-        self.buttons.items[tick] = Controller.poll(controllers, self.buttons.items[tick - 1]);
-        var is_local = input.IsLocalBitfield.initEmpty();
-        for (controllers) |controller| {
-            if (controller.isAssigned()) {
-                is_local.set(controller.input_index);
-            }
-        }
-        self.is_certain.items[tick].setUnion(is_local);
+    if (tick < self.newest_remote_frame) {
+        // No need to submit frames that happened.
+        return;
     }
+
+    // Make sure that extendTimeline() is called before.
+    std.debug.assert(tick < self.buttons.items.len);
+    self.buttons.items[tick] = Controller.poll(controllers, self.buttons.items[tick - 1]);
+    var is_local = input.IsLocalBitfield.initEmpty();
+    for (controllers) |controller| {
+        if (controller.isAssigned()) {
+            is_local.set(controller.input_index);
+        }
+    }
+    self.is_certain.items[tick].setUnion(is_local);
 }
 
+/// Returns true if the timeline was changed by this call.
 pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, player: u32, new_state: input.PlayerInputState, tick: u64) !bool {
     //if (tick < self.newest_remote_frame) {
     //    std.debug.print("newest_remote_frame: {d}, tick: {d}\n", .{self.newest_remote_frame, tick});
@@ -78,24 +88,34 @@ pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, player: u32, new_
     //}
 
     try self.extendTimeline(allocator, tick);
+
+    // The amount of player inputs that were mutated by this call.
+    var changes: u64 = 0;
+
     //std.debug.print("remote update for player {d} at tick {d}\n", .{player, tick});
     for (self.buttons.items[tick..], self.is_certain.items[tick..]) |*frame, is_certain| {
         if (is_certain.isSet(player)) {
             // We are already certain of this input. Nothing to do here.
             // This is probably just the server re-broadcasting the input that the client sent it.
             // But it could also be an error... Oh well!
-            return false;
+            return changes != 0;
+        }
+        if (std.meta.eql(frame[player], new_state)) {
+            // No need to change this frame in particular.
+            continue;
         }
         frame[player] = new_state;
+        changes += 1;
     }
 
     // We will not let anyone override this input in the future.
     // It is locked in for consistency.
     // Setting this flag also lets us know that it is worth sending in the net-code.
+    // We only set consistency for <tick> because future values are just "guesses".
     self.is_certain.items[tick].set(player);
 
     self.newest_remote_frame = tick;
-    return true;
+    return changes != 0;
 }
 
 pub fn forceAutoAssign(self: *Self, tick: u64, controllers: []Controller, nth_controller: usize) bool {
