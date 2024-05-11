@@ -291,13 +291,13 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
 
     networking_queue.rw_lock.unlock();
 
-    if (server_data.input_history.buttons.items.len == 300 + 1) {
-        const file = std.io.getStdErr();
-        const writer = file.writer();
-        try server_data.input_history.dumpInputs(writer);
-        std.time.sleep(std.time.ns_per_s * 10);
-        @panic("net over");
-    }
+    //if (server_data.input_history.buttons.items.len == 300 + 1) {
+    //    const file = std.io.getStdErr();
+    //    const writer = file.writer();
+    //    try server_data.input_history.dumpInputs(writer);
+    //    std.time.sleep(std.time.ns_per_s * 10);
+    //    @panic("net over");
+    //}
 }
 
 fn serverThread(networking_queue: *NetworkingQueue) !void {
