@@ -8,10 +8,7 @@ const seed = 555;
 
 /// Data that is kept between minigames (such as seed, scores, etc)
 pub const Metadata = struct {
-
-    /// We always start at 1 because the input system needs to have a
-    /// frame zero that the input system can use for prediction.
-    ticks_elapsed: u64 = 1,
+    ticks_elapsed: u64 = 0,
 
     /// What minigame the minigame known as "preferred" will jump to.
     /// Note that if it is set to 0, you will be presented with a whitescreen

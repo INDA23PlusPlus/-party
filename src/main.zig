@@ -8,8 +8,8 @@ const ecs = @import("ecs/ecs.zig");
 const networking = @import("networking.zig");
 const linear = @import("math/linear.zig");
 const fixed = @import("math/fixed.zig");
-const simulation = @import("simulation.zig");
 
+const SimulationCache = @import("SimulationCache.zig");
 const AssetManager = @import("AssetManager.zig");
 const Controller = @import("Controller.zig");
 const InputConsolidation = @import("InputConsolidation.zig");
@@ -101,8 +101,9 @@ pub fn main() !void {
     var assets = AssetManager.init(static_allocator);
     defer assets.deinit();
 
-    var sim = simulation.Simulation{};
-    sim.meta.preferred_minigame_id = launch_options.force_minigame;
+    var simulation_cache = SimulationCache{};
+
+    simulation_cache.latest().meta.preferred_minigame_id = launch_options.force_minigame;
 
     var input_consolidation = try InputConsolidation.init(std.heap.page_allocator);
 
@@ -114,7 +115,6 @@ pub fn main() !void {
     // Force WASD or IJKL for games that do not support hot-joining.
     if (launch_options.force_wasd or launch_options.force_ijkl) {
         try input_consolidation.extendTimeline(std.heap.page_allocator, 1);
-        sim.meta.ticks_elapsed += 1;
     }
     if (launch_options.force_wasd) {
         _ = input_consolidation.forceAutoAssign(1, &controllers, 0);
@@ -149,19 +149,19 @@ pub fn main() !void {
     // Game loop
     while (window.running) {
         // Fetch input.
-        const tick = sim.meta.ticks_elapsed;
+        const tick = simulation_cache.head_tick_elapsed;
 
         // Make sure that the timeline extends far enough for the input polling to work.
-        try input_consolidation.extendTimeline(std.heap.page_allocator, tick);
+        try input_consolidation.extendTimeline(std.heap.page_allocator, tick + 1);
 
         // We want to know how many controllers are active locally in order to know if
         // all of their states can be sent over to the networking thread later on.
-        const controllers_active = input_consolidation.autoAssign(&controllers, tick);
+        const controllers_active = input_consolidation.autoAssign(&controllers, tick + 1);
 
         if (main_thread_queue.outgoing_data_count + controllers_active <= main_thread_queue.outgoing_data.len) {
             // We can only get local input, if we have the ability to send it. If we can't send it, we
             // mustn't accept local input as that could cause desynchs.
-            try input_consolidation.localUpdate(&controllers, tick);
+            try input_consolidation.localUpdate(&controllers, tick + 1);
 
             for (controllers) |controller| {
                 if (!controller.isAssigned()) {
@@ -210,7 +210,7 @@ pub fn main() !void {
         // should be placed inside of the simulate procedure as the simulate procedure
         // is called in other places. Not doing so will lead to inconsistencies.
         // benchmarker.start();
-        try simulation.simulate(&sim, current_input_timeline, invariables);
+        try simulation_cache.simulate(current_input_timeline, invariables);
         _ = static_arena.reset(.retain_capacity);
         // benchmarker.stop();
         // if (benchmarker.laps % 360 == 0) {
@@ -222,7 +222,7 @@ pub fn main() !void {
         window.update();
         rl.beginDrawing();
         rl.clearBackground(BC_COLOR);
-        render.update(&sim.world, &assets, &window);
+        render.update(&simulation_cache.latest().world, &assets, &window);
 
         // Stop rendering.
         rl.endDrawing();
