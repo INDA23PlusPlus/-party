@@ -12,20 +12,14 @@ const cbor = @import("cbor.zig");
 const NetworkingQueue = @import("NetworkingQueue.zig");
 const InputConsolidation = @import("InputConsolidation.zig");
 
-const NetData = struct {
-    // Any common data.
-    // No clue if even needed.
-};
-
 const ConnectedClient = struct {
     stream: xev.TCP,
     read_completion: xev.Completion,
     write_completion: xev.Completion,
     read_buffer: [256]u8,
     consistent_until: u64,
-    packets_available: u64,
-
-    // TODO: Add latest_response_tick (or something like that, such that we do not flood a player).
+    tick_acknowledged: u64,
+    packets_available: u32,
 };
 
 const ConnectionType = enum(u8) {
@@ -52,7 +46,6 @@ fn debugPacket(packet: []u8) void {
 }
 
 const NetServerData = struct {
-    common: NetData = NetData{},
     input_history: InputConsolidation,
 
     conns_list: [constants.max_connected_count]ConnectedClient = undefined,
@@ -110,7 +103,7 @@ fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packe
     var scanner = cbor.Scanner{};
     var ctx = scanner.begin(packet);
     var header = try ctx.readArray();
-    client.consistent_until = try header.readU64();
+    client.tick_acknowledged = try header.readU64();
     var packets = try header.readArray();
     for (0..packets.items) |_| {
         var packet_ctx = try packets.readArray();
@@ -260,6 +253,12 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
             continue;
         }
 
+        // TODO: make 20 a constant
+        if (connection.tick_acknowledged + 20 < connection.consistent_until) {
+            // We have sent too much without a response, time to wait for a response.
+            continue;
+        }
+
         if (connection.write_completion.state() == .active) {
             // We are still writing data.
             continue;
@@ -268,7 +267,8 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
         var fb = std.io.fixedBufferStream(write_buffer);
         const writer = fb.writer();
         try cbor.writeArrayHeader(writer, input_tick_count);
-        for (connection.consistent_until..connection.consistent_until + input_tick_count) |tick_index| {
+        const targeted_tick = connection.consistent_until + input_tick_count;
+        for (connection.consistent_until..targeted_tick) |tick_index| {
             const inputs = server_data.input_history.buttons.items[tick_index];
             const is_certain = server_data.input_history.is_certain.items[tick_index];
 
@@ -288,6 +288,7 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
             }
         }
         connection.stream.write(&server_data.loop, &connection.write_completion, .{ .slice = write_buffer[0..fb.pos] }, void, null, writeNoop);
+        connection.consistent_until = targeted_tick;
     }
 
     networking_queue.rw_lock.unlock();
@@ -329,34 +330,32 @@ pub fn startServer(networking_queue: *NetworkingQueue) !void {
     _ = try std.Thread.spawn(.{}, serverThread, .{networking_queue});
 }
 
-const NetClientData = struct {
-    common: NetData,
-};
-
-fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !void {
+fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !u64 {
     var scanner = cbor.Scanner{};
     var ctx = scanner.begin(packet);
-    var packets = try ctx.readArray();
-    for (0..packets.items) |_| {
-        var frame_ctx = try packets.readArray();
-        std.debug.assert(frame_ctx.items == 2);
-        const frame_tick_index = try frame_ctx.readU64();
-        var frame_inputs = try frame_ctx.readArray();
-        for (0..frame_inputs.items) |_| {
-            var input_ctx = try frame_inputs.readArray();
-            std.debug.assert(input_ctx.items == 4);
-            const player_i = try input_ctx.readU64();
-            const dpad = try input_ctx.readU64();
-            const button_a = try input_ctx.readU64();
-            const button_b = try input_ctx.readU64();
-            try input_ctx.readEnd();
+    var all_packets = try ctx.readArray();
+    var newest_input_tick: u64 = 0;
+    for (0..all_packets.items) |_| {
+        var tick_info = try all_packets.readArray();
+        std.debug.assert(tick_info.items == 2);
+        const input_tick_index = try tick_info.readU64();
+        newest_input_tick = @max(newest_input_tick, input_tick_index);
+        var all_inputs = try tick_info.readArray();
+        for (0..all_inputs.items) |_| {
+            var player_input = try all_inputs.readArray();
+            std.debug.assert(player_input.items == 4);
+            const player_i = try player_input.readU64();
+            const dpad = try player_input.readU64();
+            const button_a = try player_input.readU64();
+            const button_b = try player_input.readU64();
+            try player_input.readEnd();
 
             if (networking_queue.outgoing_data_count >= networking_queue.outgoing_data.len) {
                 continue;
             }
 
             networking_queue.outgoing_data[networking_queue.outgoing_data_count] = .{
-                .tick = @truncate(frame_tick_index),
+                .tick = @truncate(input_tick_index),
                 .data = .{
                     .dpad = @enumFromInt(dpad),
                     .button_a = @enumFromInt(button_a),
@@ -367,10 +366,12 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !voi
 
             networking_queue.outgoing_data_count += 1;
         }
-        try frame_inputs.readEnd();
-        try frame_ctx.readEnd();
+        try all_inputs.readEnd();
+        try tick_info.readEnd();
     }
-    try packets.readEnd();
+    try all_packets.readEnd();
+
+    return newest_input_tick;
 }
 
 fn clientThread(networking_queue: *NetworkingQueue) !void {
@@ -380,11 +381,13 @@ fn clientThread(networking_queue: *NetworkingQueue) !void {
     var alloc = std.heap.FixedBufferAllocator.init(&mem);
     const allocator = alloc.allocator();
     const stream = try std.net.tcpConnectToHost(allocator, "127.0.0.1", 8080);
+    // TODO: Use non-blocking reads such that input is always send even if other inputs are still in air.
+
+    var newest_input_tick: u64 = 0;
 
     //std.time.sleep(std.time.ns_per_s * 1);
     while (true) {
         var incoming_packet_buf: [1024]u8 = undefined;
-        //std.debug.print("begin read\n", .{});
         const incoming_packet_len = try stream.read(&incoming_packet_buf);
         const incoming_packet = incoming_packet_buf[0..incoming_packet_len];
 
@@ -394,14 +397,15 @@ fn clientThread(networking_queue: *NetworkingQueue) !void {
 
         networking_queue.rw_lock.lock();
 
-        try handlePacketFromServer(networking_queue, incoming_packet);
+        const possibly_newer = try handlePacketFromServer(networking_queue, incoming_packet);
+        newest_input_tick = @max(possibly_newer, newest_input_tick);
 
         var write_buffer: [4096]u8 = undefined;
         var fb = std.io.fixedBufferStream(&write_buffer);
         const writer = fb.writer();
 
         try cbor.writeArrayHeader(writer, 2);
-        try cbor.writeUint(writer, 200); // TODO: Send something smarter.
+        try cbor.writeUint(writer, newest_input_tick);
         try cbor.writeArrayHeader(writer, networking_queue.incoming_data_count);
         for (networking_queue.incoming_data[0..networking_queue.incoming_data_count]) |packet| {
             try cbor.writeArrayHeader(writer, 5);
