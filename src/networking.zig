@@ -24,6 +24,8 @@ const ConnectedClient = struct {
     read_buffer: [256]u8,
     consistent_until: u64,
     packets_available: u64,
+
+    // TODO: Add latest_response_tick (or something like that, such that we do not flood a player).
 };
 
 const ConnectionType = enum(u8) {
@@ -272,8 +274,7 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
 
             try cbor.writeArrayHeader(writer, 2);
             try cbor.writeUint(writer, tick_index);
-            try cbor.writeUint(writer, is_certain.count());
-            try cbor.writeArrayHeader(writer, inputs.len);
+            try cbor.writeArrayHeader(writer, is_certain.count());
             for (0..constants.max_player_count) |player| {
                 if (!is_certain.isSet(player)) {
                     continue;
@@ -341,7 +342,6 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !voi
         std.debug.assert(frame_ctx.items == 2);
         const frame_tick_index = try frame_ctx.readU64();
         var frame_inputs = try frame_ctx.readArray();
-        std.debug.assert(frame_inputs.items == constants.max_player_count);
         for (0..frame_inputs.items) |_| {
             var input_ctx = try frame_inputs.readArray();
             std.debug.assert(input_ctx.items == 4);
@@ -396,12 +396,12 @@ fn clientThread(networking_queue: *NetworkingQueue) !void {
 
         try handlePacketFromServer(networking_queue, incoming_packet);
 
-        var write_buffer: [1024]u8 = undefined;
+        var write_buffer: [4096]u8 = undefined;
         var fb = std.io.fixedBufferStream(&write_buffer);
         const writer = fb.writer();
 
         try cbor.writeArrayHeader(writer, 2);
-        try cbor.writeUint(writer, 200);
+        try cbor.writeUint(writer, 200); // TODO: Send something smarter.
         try cbor.writeArrayHeader(writer, networking_queue.incoming_data_count);
         for (networking_queue.incoming_data[0..networking_queue.incoming_data_count]) |packet| {
             try cbor.writeArrayHeader(writer, 5);
