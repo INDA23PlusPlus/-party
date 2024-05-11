@@ -136,7 +136,7 @@ pub fn main() !void {
 
     if (launch_options.start_as_role != .local and launch_options.force_minigame != 1) {
         // TODO: To solve this, we should synchronize this info to all players such that we retain determinism.
-        std.debug.print("warning: using --force-minigame and multiplayer is currently unsafe\n", .{});
+        std.debug.print("warning: using --minigame and multiplayer is currently unsafe\n", .{});
     }
 
     const invariables = Invariables{
@@ -183,14 +183,6 @@ pub fn main() !void {
 
         const current_input_timeline = input.Timeline{ .buttons = input_consolidation.buttons.items[0..input_consolidation.buttons.items.len] };
 
-        //if (tick == 1000) {
-        //    const file = std.io.getStdErr();
-        //    const writer = file.writer();
-        //    try input_consolidation.dumpInputs(writer);
-        //    std.time.sleep(std.time.ns_per_s * 2);
-        //    @panic("over");
-        //}
-
         if (launch_options.start_as_role == .local) {
             // Make sure we can scream into the void as much as we wish.
             main_thread_queue.outgoing_data_count = 0;
@@ -204,6 +196,15 @@ pub fn main() !void {
             _ = try input_consolidation.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick);
         }
         main_thread_queue.incoming_data_count = 0;
+
+        //if (tick == 300) {
+        //    const file = std.io.getStdErr();
+        //    const writer = file.writer();
+        //    std.time.sleep(std.time.ns_per_s * 1);
+        //    try input_consolidation.dumpInputs(writer);
+        //    std.time.sleep(std.time.ns_per_s * 9);
+        //    @panic("main over");
+        //}
 
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure

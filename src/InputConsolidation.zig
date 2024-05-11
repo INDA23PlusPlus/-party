@@ -14,10 +14,8 @@ buttons: InputStateArrayList,
 is_certain: PlayerBitSetArrayList,
 //received: PlayerBitSetArrayList,
 
-
 // TODO: Remove
 newest_remote_frame: u64 = 0,
-
 
 pub fn init(allocator: std.mem.Allocator) !Self {
     // We append one to each array because extendTimeline() must have at least one frame available
@@ -42,7 +40,7 @@ pub fn extendTimeline(self: *Self, allocator: std.mem.Allocator, tick: u64) !voi
     }
 
     const guess_buttons = self.buttons.getLast();
-    const start = self.buttons.items.len - 1;
+    const start = self.buttons.items.len;
 
     try self.buttons.ensureTotalCapacity(allocator, tick + 1);
     self.buttons.items.len = tick + 1;
@@ -129,7 +127,7 @@ pub fn forceAutoAssign(self: *Self, tick: u64, controllers: []Controller, nth_co
 
 pub fn autoAssign(self: *Self, controllers: []Controller, tick: u64) usize {
     var count: usize = 0;
-    for(controllers, 0..) |controller, nth_controller| {
+    for (controllers, 0..) |controller, nth_controller| {
         if (controller.isAssigned()) {
             count += 1;
             continue;
@@ -163,8 +161,8 @@ pub fn dumpInputs(self: *Self, writer: anytype) !void {
     for (self.buttons.items, self.is_certain.items, 0..) |inputs, is_certain, frame_index| {
         try writer.print("{d}: ", .{frame_index});
         for (inputs, 0..) |inp, i| {
-            const on = if (is_certain.isSet(i)) "YES" else "IDK";
-            try writer.print("{s}({s}) ", .{inp.dpad.shortDebugName(), on});
+            const on = if (is_certain.isSet(i)) "+" else "?";
+            try writer.print("{s}({s}) ", .{ inp.dpad.shortDebugName(), on });
         }
         try writer.print("\n", .{});
     }

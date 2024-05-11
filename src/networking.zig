@@ -274,7 +274,7 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
             try cbor.writeUint(writer, tick_index);
             try cbor.writeUint(writer, is_certain.count());
             try cbor.writeArrayHeader(writer, inputs.len);
-            for(0..constants.max_player_count) |player| {
+            for (0..constants.max_player_count) |player| {
                 if (!is_certain.isSet(player)) {
                     continue;
                 }
@@ -289,15 +289,15 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
         connection.stream.write(&server_data.loop, &connection.write_completion, .{ .slice = write_buffer[0..fb.pos] }, void, null, writeNoop);
     }
 
-    //if (server_data.input_history.buttons.items.len == 300) {
-    //    const file = std.io.getStdErr();
-    //    const writer = file.writer();
-    //    try server_data.input_history.dumpInputs(writer);
-    //    @panic("over");
-    //}
-
     networking_queue.rw_lock.unlock();
 
+    if (server_data.input_history.buttons.items.len == 300 + 1) {
+        const file = std.io.getStdErr();
+        const writer = file.writer();
+        try server_data.input_history.dumpInputs(writer);
+        std.time.sleep(std.time.ns_per_s * 10);
+        @panic("net over");
+    }
 }
 
 fn serverThread(networking_queue: *NetworkingQueue) !void {
@@ -314,7 +314,6 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
     try server_data.listener.bind(address);
     try server_data.listener.listen(16);
     startNewConnectionHandler(&server_data);
-
 
     while (true) {
         // TODO: Take clock timestamp
@@ -374,7 +373,6 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !voi
     try packets.readEnd();
 }
 
-
 fn clientThread(networking_queue: *NetworkingQueue) !void {
     // The client doesn't currently do evented IO. I don't think it will be necessary.
 
@@ -391,7 +389,6 @@ fn clientThread(networking_queue: *NetworkingQueue) !void {
         const incoming_packet = incoming_packet_buf[0..incoming_packet_len];
 
         //debugPacket(incoming_packet);
-
 
         // TODO: Parse packets.
 
