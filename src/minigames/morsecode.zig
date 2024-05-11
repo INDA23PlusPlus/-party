@@ -13,8 +13,6 @@ const animator = @import("../animation/animator.zig");
 // 1 for * , 2 for -, 0 otherwise, could be done with bitmasks if we choose to not have a "new_word" key
 const morsecode_maxlen = 6;
 var keystrokes: [constants.max_player_count][morsecode_maxlen]u8 = undefined;
-//var typed_len = std.mem.zeroes([constants.max_player_count]u8);
-//var current_letter = std.mem.zeroes([constants.max_player_count]u8);
 
 fn assigned_pos(id: usize) @Vector(2, i32) {
     const top_left_x = 120;
@@ -31,12 +29,17 @@ const game_strings = [_][:0]const u8{
     "PLUSPLUS",
     "KTH",
     "DATA",
+    "RAUNAK",
+    "ERIK",
 };
 
 fn set_string_info() [:0]const u8 {
-    // TODO: pick random from list
-    std.debug.print("game_string: {any}\n", .{game_strings[0]});
-    return game_strings[0];
+    var rand_impl = std.rand.DefaultPrng.init(@as(u64, @bitCast(std.time.milliTimestamp())));
+    const num = @mod(rand_impl.random().int(u8), game_strings.len);
+
+    _ = num;
+    //std.debug.print("game_string: {any}\n", .{game_strings[0]});
+    return game_strings[0]; // TODO: change 0 to num when polishing
 }
 
 const player_strings: [constants.max_player_count][:0]const u8 = blk: {
@@ -48,23 +51,16 @@ const player_strings: [constants.max_player_count][:0]const u8 = blk: {
 };
 
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
-    sim.meta.minigame_timer = 300;
+    sim.meta.minigame_timer = 50;
+
+    for (0..constants.max_player_count) |id| {
+        sim.meta.minigame_placements[id] = constants.max_player_count - 1;
+    }
 
     const game_string = set_string_info();
     const string_info = try sim.world.spawnWith(.{
         ecs.component.Txt{ .string = game_string },
     });
-
-    for (timeline.latest(), 0..) |inp, id| {
-        if (inp.is_connected()) {
-            for (0..morsecode_maxlen) |j| {
-                keystrokes[id][j] = 0;
-            }
-        }
-    }
-    for (0..constants.max_player_count) |id| {
-        sim.meta.minigame_placements[id] = constants.max_player_count - 1;
-    }
 
     for (timeline.latest(), 0..) |inp, id| {
         if (inp.is_connected()) {
@@ -91,9 +87,9 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                 ecs.component.Plr{ .id = @intCast(id) },
                 ecs.component.Pos{ .pos = .{ button_position[0], button_position[1] } },
                 ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis_testcases.png") },
+                ecs.component.Ctr{ .count = 0, .id = 0 }, // count = bit_index, id = current letter
                 ecs.component.Lnk{ .child = string_info },
-                ecs.component.Ctr{ .count = 0 }, // for typed_len
-                ecs.component.Tmr{ .ticks = 0 }, // for current_letter
+                ecs.component.Tmr{ .ticks = 0 }, // for keystroke_bitset
             });
         }
     }
@@ -154,26 +150,31 @@ fn scoreSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
 
 fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
     const inputs: input.AllPlayerButtons = timeline.latest();
-    var query = world.query(&.{ ecs.component.Plr, ecs.component.Tex, ecs.component.Ctr }, &.{});
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Tex, ecs.component.Ctr, ecs.component.Tmr }, &.{});
+
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
-        const typed_len = try query.get(ecs.component.Ctr);
         const state = inputs[plr.id];
+        var bit_index = try query.get(ecs.component.Ctr);
+        var keystroke_bitset = try query.get(ecs.component.Tmr);
+        //std.debug.print("plr: {any}\n", .{plr.id});
+        //std.debug.print("keystroke_bitset: {any}\n\n", .{keystroke_bitset.ticks});
         var tex = query.get(ecs.component.Tex) catch unreachable;
 
         if (state.is_connected()) {
             if (state.button_a == .Pressed or state.button_b == .Pressed) {
-                keystrokes[plr.id][typed_len.count] = if (state.button_a == .Pressed) 1 else 2;
-                typed_len.count += 1;
+                bit_index.count += if (state.button_b == .Pressed) 1 else 0;
+                keystroke_bitset.ticks |= (@as(u32, 1) << @as(u5, @intCast(bit_index.count)));
+                bit_index.count += 1;
                 tex.u = if (state.button_a == .Pressed) 1 else 2;
-            } else if (timeline.vertical_pressed(plr.id) != 0) {
-                keystrokes[plr.id][typed_len.count] = 3;
-                typed_len.count += 1;
-                tex.u = 0;
-            } else if (timeline.horizontal_pressed(plr.id) != 0) {
+            } else if (timeline.horizontal_pressed(plr.id) != 0 and bit_index.count > 0) {
                 // should work as a backspace / undo
-                typed_len.count = @max(0, @as(i8, @intCast(typed_len.count)) - 1);
-                keystrokes[plr.id][typed_len.count] = 0;
+                keystroke_bitset.ticks &= ~(@as(u32, 1) << @as(u5, @intCast(bit_index.count - 1)));
+                if ((bit_index.count >= 2) and (keystroke_bitset.ticks & (@as(u32, 1) << @as(u5, @intCast(bit_index.count - 2))) == 0)) {
+                    bit_index.count -= 2;
+                } else {
+                    bit_index.count = @max(0, @as(i8, @intCast(bit_index.count)) - 1);
+                }
                 tex.u = 0;
             }
         }
@@ -182,101 +183,72 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
 
 fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
     var query = world.query(&.{ ecs.component.Plr, ecs.component.Lnk, ecs.component.Ctr, ecs.component.Tmr }, &.{});
+    //var game_string_linked_list = world.query(&.{ecs.component.Src, ecs.component.Ctr, ecs.component.Lnk}, &.{});
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
         const lnk = query.get(ecs.component.Lnk) catch unreachable;
-        const typed_len = query.get(ecs.component.Ctr) catch unreachable;
-        const current_letter = query.get(ecs.component.Tmr) catch unreachable;
-        //std.debug.print("plr: {any}\n", .{plr.id});
-        //std.debug.print("typed_len: {any}\n", .{typed_len.count});
-        //std.debug.print("current_letter: {any}\n\n", .{current_letter.ticks});
+        var ctr = query.get(ecs.component.Ctr) catch unreachable; // count = bit_index, id = current letter
+        var keystrokes_bitset = query.get(ecs.component.Tmr) catch unreachable;
 
         const game_string_comp = world.inspect(lnk.child.?, ecs.component.Txt) catch unreachable;
         const game_string = game_string_comp.string;
 
-        if (typed_len.count == 0) continue;
+        if (ctr.count == 0) continue;
 
-        if (keystrokes[plr.id][typed_len.count - 1] == 3) {
-            const character: u8 = code_to_char(plr.id);
-            if (character == game_string[current_letter.ticks]) {
-                typed_len.count = 0;
-                current_letter.ticks += 1;
-                keystrokes[plr.id] = .{ 0, 0, 0, 0, 0, 0 };
-                if (current_letter.ticks == game_string.len) {
-                    // There is a small problem with this, lower ids get prioritized in this check
-                    meta.minigame_placements[meta.minigame_counter] = @intCast(plr.id);
-                    meta.minigame_counter += 1;
-                    std.debug.print("minigame_placement: {any}\n", .{meta.minigame_counter});
-                    std.debug.print("Player finish order: {any}\n", .{meta.minigame_placements});
-                    // player has finished
-                    // TODO: ignore this players inputs from now on
-                }
-            } else {
-                typed_len.count = 0;
-                keystrokes[plr.id] = .{ 0, 0, 0, 0, 0, 0 };
+        // get the current letter's corresponding u8
+
+        const character: u8 = code_to_char(keystrokes_bitset.ticks);
+        //std.debug.print("char: {any}\n", .{character});
+        //std.debug.print("real: {any}\n\n", .{game_string[ctr.id]});
+        if (character == game_string[ctr.id]) {
+            //std.debug.print("IN\n", .{});
+            ctr.count = 0;
+            ctr.id += 1;
+            keystrokes_bitset.ticks = 0;
+            if (ctr.id == game_string.len) {
+                meta.minigame_placements[meta.minigame_counter] = @intCast(plr.id);
+                meta.minigame_counter += 1;
+                std.debug.print("Player finish order: {any}\n", .{meta.minigame_placements});
+                // player has finished
+                // TODO: ignore this players inputs from now on
             }
-        } else if (typed_len.count == morsecode_maxlen) {
-            keystrokes[plr.id] = .{ 0, 0, 0, 0, 0, 0 };
-            typed_len.count = 0;
+        }
+
+        if (ctr.count == 31) {
+            keystrokes_bitset.ticks = 0;
+            ctr.count = 0;
         }
     }
 }
 
-fn code_to_char(id: usize) u8 {
-    var a = keystrokes[id];
-    var res: u8 = '0';
-    if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 3, 0, 0, 0 })) {
-        res = 'A';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 1, 1, 3, 0 })) {
-        res = 'B';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 2, 1, 3, 0 })) {
-        res = 'C';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 1, 3, 0, 0 })) {
-        res = 'D';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 3, 0, 0, 0, 0 })) {
-        res = 'E';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 2, 1, 3, 0 })) {
-        res = 'F';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 1, 3, 0, 0 })) {
-        res = 'G';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 1, 1, 3, 0 })) {
-        res = 'H';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 3, 0, 0, 0 })) {
-        res = 'I';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 2, 2, 3, 0 })) {
-        res = 'J';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 2, 3, 0, 0 })) {
-        res = 'K';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 1, 1, 3, 0 })) {
-        res = 'L';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 3, 0, 0, 0 })) {
-        res = 'M';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 3, 0, 0, 0 })) {
-        res = 'N';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 2, 3, 0, 0 })) {
-        res = 'O';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 2, 1, 3, 0 })) {
-        res = 'P';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 1, 2, 3, 0 })) {
-        res = 'Q';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 1, 3, 0, 0 })) {
-        res = 'R';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 1, 3, 0, 0 })) {
-        res = 'S';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 3, 0, 0, 0, 0 })) {
-        res = 'T';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 2, 3, 0, 0 })) {
-        res = 'U';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 1, 1, 2, 3, 0 })) {
-        res = 'V';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 1, 2, 2, 3, 0, 0 })) {
-        res = 'W';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 1, 2, 3, 0 })) {
-        res = 'X';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 1, 2, 2, 3, 0 })) {
-        res = 'Y';
-    } else if (std.mem.eql(u8, &a, &[_]u8{ 2, 2, 1, 1, 3, 0 })) {
-        res = 'Z';
-    }
-    return res;
+fn code_to_char(code: u32) u8 {
+    return switch (code) {
+        5 => 'A',
+        30 => 'B',
+        54 => 'C',
+        14 => 'D',
+        1 => 'E',
+        27 => 'F',
+        26 => 'G',
+        15 => 'H',
+        3 => 'I',
+        85 => 'J',
+        22 => 'K',
+        29 => 'L',
+        10 => 'M',
+        6 => 'N',
+        42 => 'O',
+        53 => 'P',
+        90 => 'Q',
+        13 => 'R',
+        7 => 'S',
+        2 => 'T',
+        11 => 'U',
+        23 => 'V',
+        21 => 'W',
+        46 => 'X',
+        86 => 'Y',
+        58 => 'Z',
+        else => '0',
+    };
 }
