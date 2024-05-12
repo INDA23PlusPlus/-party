@@ -57,6 +57,7 @@ const paths = [_][:0]const u8{
     "assets/crown.png",
     "assets/monogram_bitmap.png",
     "assets/roulette.png",
+    "assets/menu.png",
 };
 
 hashmap: map_type,
