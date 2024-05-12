@@ -8,18 +8,6 @@ const AssetManager = @import("../AssetManager.zig");
 
 const Invariables = @import("../Invariables.zig");
 
-var menu_items: [2]ecs.entity.Entity = undefined;
-
-var selected: i8 = 1;
-var current_resolution: i8 = 1;
-
-const resolution_strings: [4][:0]const u8 = .{
-    "Resolution: 640 x 360",
-    "Resolution: 960 x 540",
-    "Resolution: 1280 x 720",
-    "Resolution: 1920 x 1080",
-};
-
 pub fn init(sim: *simulation.Simulation, _: input.Timeline) simulation.SimulationError!void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Tex{
@@ -33,105 +21,107 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) simulation.Simulatio
     });
 
     _ = try sim.world.spawnWith(.{
-        ecs.component.Txt{ .string = "++Party", .color = 0x00FF99FF, .font_size = 72 },
-        ecs.component.Pos{ .pos = .{ 256, 36 } },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/menu.png"),
+            .w = 3,
+            .size = 4,
+        },
+        ecs.component.Pos{ .pos = .{ 164, 32 } },
     });
 
     _ = try sim.world.spawnWith(.{
-        ecs.component.Txt{ .string = "ESC to EXIT", .color = 0xFFAA00FF, .font_size = 48 },
-        ecs.component.Pos{ .pos = .{ 256, 240 } },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/menu.png"),
+            .w = 6,
+            .h = 3,
+            .v = 3,
+            .size = 2,
+        },
+        ecs.component.Pos{
+            .pos = .{ 160, 96 + 16 },
+        },
     });
 
-    const item0 = try sim.world.spawnWith(.{
-        ecs.component.Txt{ .string = "START!", .color = 0x000000FF, .font_size = 48 },
-        ecs.component.Pos{ .pos = .{ 256, 96 } },
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/menu.png"),
+            .w = 4,
+            .size = 2,
+            .u = 6,
+            .v = 4,
+        },
+        ecs.component.Pos{ .pos = .{ 192, 128 } },
     });
 
-    const item1 = try sim.world.spawnWith(.{
-        ecs.component.Txt{ .string = resolution_strings[@intCast(current_resolution)], .color = 0xDE3163FF, .font_size = 36 },
-        ecs.component.Pos{ .pos = .{ 256, 167 } },
+    const resolution = try sim.world.spawnWith(.{
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/menu.png"),
+            .w = 4,
+            .size = 2,
+            .u = 6,
+            .v = 1,
+        },
+        ecs.component.Pos{ .pos = .{ 192, 160 } },
+        ecs.component.Ctr{ .count = 1 },
     });
 
-    // _ = try @import("../counter.zig").spawnCounter(&sim.world, [2]i32{ 100, 100 }, 2, rl.Color.blue);
-
-    // Save identifiers
-    menu_items = .{
-        item0,
-        item1,
-    };
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/menu.png"),
+            .w = 6,
+            .size = 2,
+            .u = 0,
+            .v = 1,
+        },
+        ecs.component.Pos{ .pos = .{ 160, 128 } },
+        ecs.component.Ctr{},
+        ecs.component.Lnk{ .child = resolution },
+    });
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) simulation.SimulationError!void {
-    try handleInputs(sim, timeline);
-
-    // if (rl.isKeyPressed(rl.KeyboardKey.key_i) or rl.isKeyPressedRepeat(rl.KeyboardKey.key_i)) {
-    //     var query = sim.world.query(&.{
-    //         ecs.component.Pos,
-    //         ecs.component.Tex,
-    //         ecs.component.Ctr,
-    //         ecs.component.Lnk,
-    //         ecs.component.Nub,
-    //     }, &.{});
-
-    //     while (query.next()) |entity| {
-    //         _ = try @import("../counter.zig").increment(&sim.world, entity);
-    //     }
-    // }
-}
-
-fn handleInputs(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     for (timeline.latest(), 0..) |inp, player_index| {
-        if (inp.is_connected()) {
-            const horizontal = timeline.horizontal_pressed(player_index);
-            const vertical = timeline.vertical_pressed(player_index);
-            if (vertical == -1) {
-                const previous = selected;
-                selected = @mod(selected + 1, 2);
-                try changeSelection(sim, selected, previous);
-            }
-            if (vertical == 1) {
-                const previous = selected;
-                selected = @mod(selected - 1, 2);
-                try changeSelection(sim, selected, previous);
-            }
-            if (horizontal == 1 and selected == 1) {
-                current_resolution = @mod(current_resolution + 1, 4);
-                try changeResolution(sim, current_resolution);
-            }
-            if (horizontal == -1 and selected == 1) {
-                current_resolution = @mod(current_resolution - 1, 4);
-                try changeResolution(sim, current_resolution);
-            }
-            if (inp.button_b == .Pressed and selected == 0) {
-                // The minigame after menu is assumed to be lobby in the minigame list.
-                // So take us to the lobby!
+        if (!inp.is_connected()) continue;
+
+        const horizontal = timeline.horizontal_pressed(player_index);
+        const vertical = timeline.vertical_pressed(player_index);
+
+        var query = sim.world.query(&.{
+            ecs.component.Pos,
+            ecs.component.Tex,
+            ecs.component.Ctr,
+            ecs.component.Lnk,
+        }, &.{});
+
+        while (query.next()) |_| {
+            const pos = query.get(ecs.component.Pos) catch unreachable;
+            const tex = query.get(ecs.component.Tex) catch unreachable;
+            const ctr = query.get(ecs.component.Ctr) catch unreachable;
+            const lnk = query.get(ecs.component.Lnk) catch unreachable;
+
+            const child_tex = sim.world.inspect(lnk.child.?, ecs.component.Tex) catch unreachable;
+            const child_ctr = sim.world.inspect(lnk.child.?, ecs.component.Ctr) catch unreachable;
+
+            if (vertical != 0) {
+                const switcheroo: u32 = @intFromBool(ctr.count == 0);
+                ctr.count = switcheroo;
+                tex.v = switcheroo + 1;
+                pos.pos = .{ 160, @intCast(128 + 32 * ctr.count) };
+            } else if (ctr.count == 0 and inp.button_a == .Pressed) {
                 sim.meta.minigame_id += 1;
+            } else if (ctr.count != 0 and horizontal != 0) {
+                const switcheroo: u32 = @intCast(horizontal + 4);
+                child_ctr.count = @mod(child_ctr.count + switcheroo, 4);
+                child_tex.v = child_ctr.count;
+
+                switch (child_ctr.count) {
+                    0 => rl.setWindowSize(640, 360),
+                    1 => rl.setWindowSize(960, 540),
+                    2 => rl.setWindowSize(1280, 720),
+                    3 => rl.setWindowSize(1980, 1080),
+                    else => unreachable,
+                }
             }
         }
-    }
-}
-
-fn changeSelection(sim: *simulation.Simulation, cur: i8, prev: i8) !void {
-    var prev_txt_comp = try sim.world.inspect(menu_items[@intCast(prev)], ecs.component.Txt);
-    var cur_txt_comp = try sim.world.inspect(menu_items[@intCast(cur)], ecs.component.Txt);
-
-    prev_txt_comp.color = 0x000000FF;
-    cur_txt_comp.color = 0xDE3163FF;
-}
-
-fn changeResolution(sim: *simulation.Simulation, cur: i8) !void {
-    var txt_comp = try sim.world.inspect(menu_items[@intCast(selected)], ecs.component.Txt);
-    txt_comp.string = resolution_strings[@intCast(cur)];
-
-    setWindowSize();
-}
-
-fn setWindowSize() void {
-    switch (current_resolution) {
-        0 => rl.setWindowSize(640, 360),
-        1 => rl.setWindowSize(960, 540),
-        2 => rl.setWindowSize(1280, 720),
-        3 => rl.setWindowSize(1980, 1080),
-        else => unreachable,
     }
 }
