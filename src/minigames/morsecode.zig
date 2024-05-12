@@ -12,7 +12,6 @@ const animator = @import("../animation/animator.zig");
 // all morse characters are less than 8 long
 // 1 for * , 2 for -, 0 otherwise, could be done with bitmasks if we choose to not have a "new_word" key
 const morsecode_maxlen = 6;
-var keystrokes: [constants.max_player_count][morsecode_maxlen]u8 = undefined;
 
 fn assigned_pos(id: usize) @Vector(2, i32) {
     const top_left_x = 120;
@@ -33,10 +32,10 @@ const game_strings = [_][:0]const u8{
     "ERIK",
 };
 
-fn set_string_info() [:0]const u8 {
-    var rand_impl = std.rand.DefaultPrng.init(@as(u64, @bitCast(std.time.milliTimestamp())));
-    const num = @mod(rand_impl.random().int(u8), game_strings.len);
-
+fn set_string_info(meta: *simulation.Metadata) [:0]const u8 {
+    //var rand_impl = std.rand.DefaultPrng.init(@as(u64, @bitCast(std.time.milliTimestamp())));
+    var prng = meta.minigame_prng;
+    const num = @mod(prng.random().int(u8), game_strings.len);
     _ = num;
     //std.debug.print("game_string: {any}\n", .{game_strings[0]});
     return game_strings[0]; // TODO: change 0 to num when polishing
@@ -51,15 +50,21 @@ const player_strings: [constants.max_player_count][:0]const u8 = blk: {
 };
 
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
-    sim.meta.minigame_timer = 50;
-
     for (0..constants.max_player_count) |id| {
         sim.meta.minigame_placements[id] = constants.max_player_count - 1;
     }
 
-    const game_string = set_string_info();
+    const game_string = set_string_info(&sim.meta);
     const string_info = try sim.world.spawnWith(.{
         ecs.component.Txt{ .string = game_string },
+    });
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Pos{ .pos = [2]i32{ 10, 10 } },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/BABBA.png"),
+            .w = 2,
+            .h = 1,
+        },
     });
 
     for (timeline.latest(), 0..) |inp, id| {
@@ -82,13 +87,19 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             var button_position: @Vector(2, i32) = assigned_pos(id);
             button_position[1] += @intCast(-17);
 
+            // data_entity cause I need it
+            const data_entity = try sim.world.spawnWith(.{
+                ecs.component.Ctr{ .count = 0 },
+                ecs.component.Lnk{ .child = string_info },
+            });
+
             // buttons
             _ = try sim.world.spawnWith(.{
                 ecs.component.Plr{ .id = @intCast(id) },
                 ecs.component.Pos{ .pos = .{ button_position[0], button_position[1] } },
                 ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis_testcases.png") },
                 ecs.component.Ctr{ .count = 0, .id = 0 }, // count = bit_index, id = current letter
-                ecs.component.Lnk{ .child = string_info },
+                ecs.component.Lnk{ .child = data_entity },
                 ecs.component.Tmr{ .ticks = 0 }, // for keystroke_bitset
             });
         }
@@ -109,14 +120,12 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/morsetable.png"),
             .w = 256 / 16,
-            .h = 144 / 16,
+            .h = 144 / 8,
         },
     });
 
     // Count down.
-    _ = try sim.world.spawnWith(.{
-        ecs.component.Ctr{ .count = 20 * 60 }, // change the 30 while debugging
-    });
+    sim.meta.minigame_timer = 40 * 60;
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
@@ -124,27 +133,22 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
     try inputSystem(&sim.world, timeline);
     try wordSystem(&sim.world, &sim.meta);
     animator.update(&sim.world);
-
-    try scoreSystem(&sim.world, &sim.meta);
+    try scoreSystem(&sim.meta);
 }
 
-fn scoreSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
-    var query = world.query(&.{ecs.component.Ctr}, &.{ecs.component.Plr});
-    while (query.next()) |_| {
-        const ctr = query.get(ecs.component.Ctr) catch unreachable;
-        if (ctr.count <= 0) {
-            std.debug.print("ending pfo: {any}\n", .{meta.minigame_placements});
-            for (0..constants.max_player_count) |j| {
-                if (meta.minigame_placements[j] == constants.max_player_count - 1) {
-                    meta.minigame_placements[j] = @as(u32, @intCast(meta.minigame_counter));
-                }
+fn scoreSystem(meta: *simulation.Metadata) !void {
+    if (meta.minigame_timer <= 0) {
+        std.debug.print("ending pfo: {any}\n", .{meta.minigame_placements});
+        for (0..constants.max_player_count) |j| {
+            if (meta.minigame_placements[j] == constants.max_player_count - 1) {
+                meta.minigame_placements[j] = @as(u32, @intCast(meta.minigame_counter));
             }
-            std.debug.print("ending miniplaces: {any}\n", .{meta.minigame_placements});
-            meta.minigame_id = constants.minigame_scoreboard;
-            return;
-        } else {
-            ctr.count -= 1;
         }
+        std.debug.print("ending miniplaces: {any}\n", .{meta.minigame_placements});
+        meta.minigame_id = constants.minigame_scoreboard;
+        return;
+    } else {
+        meta.minigame_timer -= 1;
     }
 }
 
@@ -190,22 +194,22 @@ fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
         var ctr = query.get(ecs.component.Ctr) catch unreachable; // count = bit_index, id = current letter
         var keystrokes_bitset = query.get(ecs.component.Tmr) catch unreachable;
 
-        const game_string_comp = world.inspect(lnk.child.?, ecs.component.Txt) catch unreachable;
+        var current_letter = world.inspect(lnk.child.?, ecs.component.Ctr) catch unreachable;
+        const child_lnk = world.inspect(lnk.child.?, ecs.component.Lnk) catch unreachable;
+        const game_string_comp = world.inspect(child_lnk.child.?, ecs.component.Txt) catch unreachable;
         const game_string = game_string_comp.string;
 
         if (ctr.count == 0) continue;
 
-        // get the current letter's corresponding u8
-
         const character: u8 = code_to_char(keystrokes_bitset.ticks);
-        //std.debug.print("char: {any}\n", .{character});
-        //std.debug.print("real: {any}\n\n", .{game_string[ctr.id]});
-        if (character == game_string[ctr.id]) {
-            //std.debug.print("IN\n", .{});
+        std.debug.print("char: {any}\n", .{character});
+        std.debug.print("real: {any}\n\n", .{game_string[current_letter.count]});
+        if (character == game_string[current_letter.count]) {
+            std.debug.print("IN\n", .{});
             ctr.count = 0;
-            ctr.id += 1;
+            current_letter.count += 1;
             keystrokes_bitset.ticks = 0;
-            if (ctr.id == game_string.len) {
+            if (current_letter.count == game_string.len) {
                 meta.minigame_placements[meta.minigame_counter] = @intCast(plr.id);
                 meta.minigame_counter += 1;
                 std.debug.print("Player finish order: {any}\n", .{meta.minigame_placements});
