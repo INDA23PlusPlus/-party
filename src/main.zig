@@ -215,12 +215,12 @@ pub fn main() !void {
             rewind_to_tick = std.math.maxInt(u64);
         }
 
-        // if (input_consolidation.buttons.items.len == 300 + 1) {
-        //     const file = std.io.getStdErr();
-        //     const writer = file.writer();
-        //     std.time.sleep(std.time.ns_per_s * 1);
-        //     try input_consolidation.dumpInputs(writer);
-        // }
+        //if (input_consolidation.buttons.items.len == 300 + 1) {
+        //    const file = std.io.getStdErr();
+        //    const writer = file.writer();
+        //    std.time.sleep(std.time.ns_per_s * 1);
+        //    try input_consolidation.dumpInputs(writer);
+        //}
 
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure

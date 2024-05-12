@@ -1,6 +1,3 @@
-// Let it be known that the complexity of this code really isn't something I am proud of.
-// TODO: Keep track of old state and request resimulation
-
 const std = @import("std");
 const constants = @import("constants.zig");
 
@@ -12,10 +9,9 @@ const NetworkingQueue = @import("NetworkingQueue.zig");
 const InputConsolidation = @import("InputConsolidation.zig");
 
 const ConnectedClient = struct {
-    read_buffer: [256]u8,
-    consistent_until: u64,
-    tick_acknowledged: u64,
-    packets_available: u32,
+    consistent_until: u64 = 0,
+    tick_acknowledged: u64 = 0,
+    packets_available: u32 = 0,
 };
 
 const ConnectionType = enum(u8) {
@@ -24,10 +20,10 @@ const ConnectionType = enum(u8) {
     remote,
 };
 
-// TODO: Use in conns_write_buffers.
 const max_net_packet_size = 32768;
 
 fn debugPacket(packet: []u8) void {
+    // Print the CBOR contents.
     var debug_log_buffer: [1024]u8 = undefined;
     var debug_fb = std.io.fixedBufferStream(&debug_log_buffer);
     const debug_writer = debug_fb.writer();
@@ -46,11 +42,9 @@ const NetServerData = struct {
 
     conns_list: [constants.max_connected_count]ConnectedClient = undefined,
     conns_type: [constants.max_connected_count]ConnectionType = [_]ConnectionType{.unused} ** constants.max_connected_count,
+    conns_sockets: [constants.max_connected_count]std.posix.socket_t = undefined,
     conns_incoming_packets: [constants.max_connected_count][20]NetworkingQueue.Packet = undefined,
-    conns_write_buffers: [constants.max_connected_count][1024]u8 = undefined,
-    conns_read_buffers: [constants.max_connected_count][1024]u8 = undefined,
-
-    networking_queue: *NetworkingQueue,
+    conns_should_read: [constants.max_connected_count]bool = undefined,
 
     fn reservSlot(self: *NetServerData) ?usize {
         for (self.conns_type, 0..) |t, i| {
@@ -77,13 +71,11 @@ const NetServerData = struct {
 };
 
 fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packet: []u8) !void {
-    std.debug.print("message from client\n", .{});
     var client = &server_data.conns_list[client_index];
     var scanner = cbor.Scanner{};
     var ctx = scanner.begin(packet);
     var header = try ctx.readArray();
     client.tick_acknowledged = try header.readU64();
-    std.debug.print("tick_ack: {d}\n", .{client.tick_acknowledged});
     var packets = try header.readArray();
     for (0..packets.items) |_| {
         var packet_ctx = try packets.readArray();
@@ -113,77 +105,18 @@ fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packe
     try header.readEnd();
 }
 
-// TODO: Readd
-// fn handlePacketFromClient(client_index_raw: ?*ConnectedClientIndex, l: *xev.Loop, _: *xev.Completion, s: xev.TCP, read_buffer: xev.ReadBuffer, packet_size_res: xev.ReadError!usize) xev.CallbackAction {
-//     _ = s;
-//     var server_data = loopToServerData(l);
-//     const client_index = fromClientIndex(client_index_raw);
-//     var client = &server_data.conns_list[client_index];
-// 
-//     const packet_size = packet_size_res catch |e| {
-//         server_data.conns_type[client_index] = .unused;
-//         client.stream.shutdown(l, &client.read_completion, void, null, afterOverfullDisconnect);
-//         std.debug.print("error: {any}\n", .{e});
-//         return .disarm;
-//     };
-// 
-//     const packet = read_buffer.slice[0..packet_size];
-// 
-//     //debugPacket(packet);
-//     parsePacketFromClient(client_index, server_data, packet) catch |e| {
-//         std.debug.print("error while handling package from client: {any}\n", .{e});
-//     };
-// 
-//     // TODO: Parse packet and ingest into input_history.
-// 
-//     //std.debug.print("message from ({d}): {s}\n", .{ fromClientIndex(client_index), packet });
-// 
-//     //const write_buffer: xev.WriteBuffer = .{ .array = .{
-//     //    .array = [2]u8{ 'h', 'i' } ** 16,
-//     //    .len = 2,
-//     //} };
-//     //s.write(l, &client.write_completion, write_buffer, void, null, writeNoop);
-// 
-//     return .rearm;
-// }
-// 
-// fn afterOverfullDisconnect(_: ?*void, l: *xev.Loop, _: *xev.Completion, _: xev.TCP, _: xev.ShutdownError!void) xev.CallbackAction {
-//     const server_data = loopToServerData(l);
-//     startNewConnectionHandler(server_data);
-//     return .disarm;
-// }
-// 
-// fn startNewConnectionHandler(server_data: *NetServerData) void {
-//     server_data.listener.accept(&server_data.loop, &server_data.accept_completion, void, null, clientConnected);
-// }
-// 
-// fn clientConnected(_: ?*void, l: *xev.Loop, _: *xev.Completion, r: xev.TCP.AcceptError!xev.TCP) xev.CallbackAction {
-//     const server_data = loopToServerData(l);
-// 
-//     var stream = r catch |e| {
-//         std.debug.print("e: {any}", .{e});
-//         return .disarm;
-//     };
-// 
-//     std.debug.print("incoming player\n", .{});
-// 
-//     if (server_data.reservSlot()) |slot| {
-//         server_data.conns_list[slot].packets_available = 0;
-//         server_data.conns_list[slot].stream = stream;
-//         server_data.conns_list[slot].consistent_until = 1;
-//         server_data.conns_list[slot].tick_acknowledged = 0;
-//         const completion = &server_data.conns_list[slot].read_completion;
-//         const buffer = &server_data.conns_list[slot].read_buffer;
-//         stream.read(l, completion, .{ .slice = buffer }, ConnectedClientIndex, toClientIndex(slot), handlePacketFromClient);
-// 
-//         startNewConnectionHandler(server_data);
-//         return .disarm;
-//     } else {
-//         std.log.warn("too many players", .{});
-//         stream.shutdown(l, &server_data.accept_completion, void, null, afterOverfullDisconnect);
-//         return .disarm;
-//     }
-// }
+fn clientConnected(server_data: *NetServerData, conn: std.net.Server.Connection) void {
+    std.debug.print("incoming player\n", .{});
+
+    if (server_data.reservSlot()) |slot| {
+        server_data.conns_list[slot] = .{};
+        server_data.conns_should_read[slot] = false;
+        server_data.conns_sockets[slot] = conn.stream.handle;
+    } else {
+        std.log.warn("too many players", .{});
+        conn.stream.close();
+    }
+}
 
 fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *NetworkingQueue) !void {
     networking_queue.rw_lock.lock();
@@ -205,14 +138,18 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
         connection.packets_available = 0;
     }
 
+    // Scratch place for sending packets to clietns.
+    var send_buffer: [max_net_packet_size]u8 = undefined;
+
     // Send the updates to the clients.
-    for (&server_data.conns_list, server_data.conns_type, &server_data.conns_write_buffers) |*connection, conn_type, *write_buffer| {
+    for (&server_data.conns_list, server_data.conns_type, &server_data.conns_sockets) |*connection, conn_type, fd| {
         // Send the missing inputs. But only N at the time.
-        const send_until = @min(server_data.input_history.buttons.items.len, connection.consistent_until + 40);
-        const input_tick_count = send_until -| connection.consistent_until;
+        const send_start = connection.consistent_until + 1;
+        const send_until = @min(server_data.input_history.buttons.items.len, send_start + 40);
+        const input_tick_count = send_until -| send_start;
 
         if (conn_type == .local) {
-            for (connection.consistent_until..connection.consistent_until + input_tick_count) |tick_number| {
+            for (send_start .. send_start + input_tick_count) |tick_number| {
                 const inputs = server_data.input_history.buttons.items[tick_number];
                 for (inputs, 0..) |packet, player_index| {
                     // TODO: Reduce the nesting.
@@ -240,13 +177,7 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
             continue;
         }
 
-        // if (connection.write_completion.state() == .active) {
-        //     // We are still writing data.
-        //     continue;
-        // }
-
-
-        var fb = std.io.fixedBufferStream(write_buffer);
+        var fb = std.io.fixedBufferStream(&send_buffer);
         const writer = fb.writer();
         try cbor.writeArrayHeader(writer, input_tick_count);
         const targeted_tick = connection.consistent_until + input_tick_count;
@@ -268,11 +199,10 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
                 try cbor.writeUint(writer, @intFromEnum(input.button_a));
                 try cbor.writeUint(writer, @intFromEnum(input.button_b));
 
-                std.debug.print("sending: to player ?? tick {d} from player {d} with dpad {s}\n", .{tick_index, player, @tagName(input.dpad)});
+                //std.debug.print("sending: to player X tick {d} from player {d} with dpad {s}\n", .{tick_index, player, @tagName(input.dpad)});
             }
         }
-        // TODO: Readd
-        //connection.stream.write(&server_data.loop, &connection.write_completion, .{ .slice = write_buffer[0..fb.pos] }, void, null, writeNoop);
+        _ = try std.posix.send(fd, send_buffer[0..fb.pos], 0);
         connection.consistent_until = targeted_tick;
     }
 
@@ -285,23 +215,92 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
     //}
 }
 
+fn pollAllSockets(server_data: *NetServerData) void {
+    if (@import("builtin").os.tag == .windows) {
+        var read_fd_set = std.os.windows.ws2_32.fd_set {
+            .fd_array = undefined,
+            .fd_count = 0,
+        };
+
+        const timeval = std.os.windows.ws2_32.timeval {
+            .tv_sec = 0,
+            .tv_usec = 1000,
+        };
+
+        var fd_count: u32 = 0;
+        for (server_data.conns_type, server_data.conns_sockets) |conn_type, conn_socket| {
+            if (conn_type == .remote) {
+                std.debug.assert(fd_count < read_fd_set.fd_array.len);
+                read_fd_set.fd_array[fd_count] = conn_socket;
+                fd_count += 1;
+            }
+        }
+        read_fd_set.fd_count = fd_count;
+
+        const i = std.os.windows.ws2_32.select(0, &read_fd_set, null, null, &timeval);
+        if (i <= 0) {
+            return;
+        }
+
+        for (read_fd_set.fd_array[0..read_fd_set.fd_count]) |fd| {
+            // O complexity is n^2. Luckily a read_fd_set can not be larger than 64...
+            for (server_data.conns_sockets, 0..) |other, conn_index| {
+                if (other == fd) {
+                    server_data.conns_should_read[conn_index] = true;
+                }
+            }
+        }
+    } else {
+        // TODO: Write code for Linux.
+    }
+}
+
+fn readFromSockets(server_data: *NetServerData) void {
+    var read_buffer: [max_net_packet_size]u8 = undefined;
+    pollAllSockets(server_data);
+    for(&server_data.conns_list, server_data.conns_sockets, server_data.conns_type, server_data.conns_should_read, 0..) |*connection, fd, conn_type, should_read, conn_index| {
+        if (conn_type != .remote) {
+            continue;
+        }
+        if (!should_read) {
+            continue;
+        }
+        server_data.conns_should_read[conn_index] = false;
+
+        _ = connection;
+        const length = std.posix.read(fd, &read_buffer) catch 0;
+        if (length == 0) {
+            server_data.conns_type[conn_index] = .unused;
+            std.posix.close(fd);
+            continue;
+        }
+
+        //std.debug.print("reading from player {d} length {d}", .{conn_index, length});
+        //debugPacket(read_buffer[0..length]);
+
+        parsePacketFromClient(conn_index, server_data, read_buffer[0..length]) catch |e| {
+            std.debug.print("error while parsing packet of player {d}: {any}\n", .{conn_index, e});
+        };
+    }
+}
+
 fn serverThread(networking_queue: *NetworkingQueue) !void {
-    var server_data = NetServerData{ .input_history = undefined, .networking_queue = networking_queue };
+    var server_data = NetServerData{ .input_history = undefined, };
     server_data.conns_type[0] = .local;
 
     server_data.input_history = try InputConsolidation.init(std.heap.page_allocator);
     //defer server_data.input_history.deinit(std.heap.page_allocator);
 
-    //const address = try std.net.Address.parseIp("0.0.0.0", 8080);
-    //server_data.listener = try xev.TCP.init(address);
-    //try server_data.listener.bind(address);
-    //try server_data.listener.listen(16);
-    //startNewConnectionHandler(&server_data);
-
-    // If this isn't done, then connections can not be made on Windows.
-    //try server_data.loop.run(.once);
+    const address = try std.net.Address.parseIp("0.0.0.0", 8080);
+    var listening = try address.listen(.{ .force_nonblocking = true });
 
     while (true) {
+        if (listening.accept()) |new_client| {
+            clientConnected(&server_data, new_client);
+        } else |_| {}
+
+        readFromSockets(&server_data);
+
         // TODO: Take clock timestamp
         try serverThreadQueueTransfer(&server_data, networking_queue);
         std.time.sleep(std.time.ns_per_ms * 20);
@@ -361,19 +360,20 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !u64
 }
 
 fn clientThread(networking_queue: *NetworkingQueue) !void {
-    // The client doesn't currently do evented IO. I don't think it will be necessary.
+    // We need the GPA because tcpConnectToHost needs to store the DNS lookups somewhere.
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const alloc = gpa.allocator();
 
-    var mem: [1024]u8 = undefined;
-    var alloc = std.heap.FixedBufferAllocator.init(&mem);
-    const allocator = alloc.allocator();
-    const stream = try std.net.tcpConnectToHost(allocator, "127.0.0.1", 8080);
+    const stream = try std.net.tcpConnectToHost(alloc, "127.0.0.1", 8080);
+
     // TODO: Use non-blocking reads such that input is always send even if other inputs are still in air.
     std.debug.print("connection established\n", .{});
     var newest_input_tick: u64 = 0;
 
     //std.time.sleep(std.time.ns_per_s * 1);
     while (true) {
-        var incoming_packet_buf: [1024]u8 = undefined;
+        var incoming_packet_buf: [max_net_packet_size]u8 = undefined;
         const incoming_packet_len = try stream.read(&incoming_packet_buf);
         const incoming_packet = incoming_packet_buf[0..incoming_packet_len];
 
@@ -386,7 +386,7 @@ fn clientThread(networking_queue: *NetworkingQueue) !void {
         const possibly_newer = try handlePacketFromServer(networking_queue, incoming_packet);
         newest_input_tick = @max(possibly_newer, newest_input_tick);
 
-        var write_buffer: [4096]u8 = undefined;
+        var write_buffer: [max_net_packet_size]u8 = undefined;
         var fb = std.io.fixedBufferStream(&write_buffer);
         const writer = fb.writer();
 
