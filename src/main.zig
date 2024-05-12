@@ -200,11 +200,7 @@ pub fn main() !void {
         // TODO: Move to before polling local inputs.
         // Ingest the updates.
         for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_count]) |change| {
-            //std.debug.print("ingesting update\n", .{});
             if (try input_consolidation.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick)) {
-                if (change.tick == 0) {
-                    std.debug.print("tick 0: {any}\n", .{change});
-                }
                 std.debug.assert(change.tick != 0);
                 rewind_to_tick = @min(change.tick, rewind_to_tick);
             }
@@ -219,14 +215,12 @@ pub fn main() !void {
             rewind_to_tick = std.math.maxInt(u64);
         }
 
-        //if (tick == 300) {
-        //    const file = std.io.getStdErr();
-        //    const writer = file.writer();
-        //    std.time.sleep(std.time.ns_per_s * 1);
-        //    try input_consolidation.dumpInputs(writer);
-        //    std.time.sleep(std.time.ns_per_s * 9);
-        //    @panic("main over");
-        //}
+        // if (input_consolidation.buttons.items.len == 300 + 1) {
+        //     const file = std.io.getStdErr();
+        //     const writer = file.writer();
+        //     std.time.sleep(std.time.ns_per_s * 1);
+        //     try input_consolidation.dumpInputs(writer);
+        // }
 
         // All code that controls how objects behave over time in our game
         // should be placed inside of the simulate procedure as the simulate procedure

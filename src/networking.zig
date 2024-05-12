@@ -3,7 +3,6 @@
 
 const std = @import("std");
 const constants = @import("constants.zig");
-const xev = @import("xev");
 
 const sim = @import("simulation.zig");
 const ecs = @import("ecs/world.zig");
@@ -13,9 +12,6 @@ const NetworkingQueue = @import("NetworkingQueue.zig");
 const InputConsolidation = @import("InputConsolidation.zig");
 
 const ConnectedClient = struct {
-    stream: xev.TCP,
-    read_completion: xev.Completion,
-    write_completion: xev.Completion,
     read_buffer: [256]u8,
     consistent_until: u64,
     tick_acknowledged: u64,
@@ -54,9 +50,7 @@ const NetServerData = struct {
     conns_write_buffers: [constants.max_connected_count][1024]u8 = undefined,
     conns_read_buffers: [constants.max_connected_count][1024]u8 = undefined,
 
-    loop: xev.Loop,
-    accept_completion: xev.Completion = undefined,
-    listener: xev.TCP = undefined,
+    networking_queue: *NetworkingQueue,
 
     fn reservSlot(self: *NetServerData) ?usize {
         for (self.conns_type, 0..) |t, i| {
@@ -82,28 +76,14 @@ const NetServerData = struct {
     }
 };
 
-const ConnectedClientIndex = opaque {};
-pub fn fromClientIndex(index: ?*ConnectedClientIndex) usize {
-    return @intFromPtr(index);
-}
-pub fn toClientIndex(i: usize) ?*ConnectedClientIndex {
-    return @ptrFromInt(i);
-}
-
-fn loopToServerData(loop: *xev.Loop) *NetServerData {
-    return @fieldParentPtr(NetServerData, "loop", loop);
-}
-
-fn writeNoop(_: ?*void, _: *xev.Loop, _: *xev.Completion, _: xev.TCP, _: xev.WriteBuffer, _: xev.WriteError!usize) xev.CallbackAction {
-    return .disarm;
-}
-
 fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packet: []u8) !void {
+    std.debug.print("message from client\n", .{});
     var client = &server_data.conns_list[client_index];
     var scanner = cbor.Scanner{};
     var ctx = scanner.begin(packet);
     var header = try ctx.readArray();
     client.tick_acknowledged = try header.readU64();
+    std.debug.print("tick_ack: {d}\n", .{client.tick_acknowledged});
     var packets = try header.readArray();
     for (0..packets.items) |_| {
         var packet_ctx = try packets.readArray();
@@ -133,80 +113,79 @@ fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packe
     try header.readEnd();
 }
 
-fn handlePacketFromClient(client_index_raw: ?*ConnectedClientIndex, l: *xev.Loop, _: *xev.Completion, s: xev.TCP, read_buffer: xev.ReadBuffer, packet_size_res: xev.ReadError!usize) xev.CallbackAction {
-    _ = s;
-    var server_data = loopToServerData(l);
-    const client_index = fromClientIndex(client_index_raw);
-    var client = &server_data.conns_list[client_index];
-
-    const packet_size = packet_size_res catch |e| {
-        server_data.conns_type[client_index] = .unused;
-        client.stream.shutdown(l, &client.read_completion, void, null, afterOverfullDisconnect);
-        std.debug.print("error: {any}\n", .{e});
-        return .disarm;
-    };
-
-    const packet = read_buffer.slice[0..packet_size];
-
-    //debugPacket(packet);
-    parsePacketFromClient(client_index, server_data, packet) catch |e| {
-        std.debug.print("error while handling package from client: {any}\n", .{e});
-    };
-
-    // TODO: Parse packet and ingest into input_history.
-
-    //std.debug.print("message from ({d}): {s}\n", .{ fromClientIndex(client_index), packet });
-
-    //const write_buffer: xev.WriteBuffer = .{ .array = .{
-    //    .array = [2]u8{ 'h', 'i' } ** 16,
-    //    .len = 2,
-    //} };
-    //s.write(l, &client.write_completion, write_buffer, void, null, writeNoop);
-
-    return .rearm;
-}
-
-fn afterOverfullDisconnect(_: ?*void, l: *xev.Loop, _: *xev.Completion, _: xev.TCP, _: xev.ShutdownError!void) xev.CallbackAction {
-    const server_data = loopToServerData(l);
-    startNewConnectionHandler(server_data);
-    return .disarm;
-}
-
-fn startNewConnectionHandler(server_data: *NetServerData) void {
-    server_data.listener.accept(&server_data.loop, &server_data.accept_completion, void, null, clientConnected);
-}
-
-fn clientConnected(_: ?*void, l: *xev.Loop, _: *xev.Completion, r: xev.TCP.AcceptError!xev.TCP) xev.CallbackAction {
-    const server_data = loopToServerData(l);
-
-    var stream = r catch |e| {
-        std.debug.print("e: {any}", .{e});
-        return .disarm;
-    };
-
-    std.debug.print("incoming player\n", .{});
-
-    if (server_data.reservSlot()) |slot| {
-        server_data.conns_list[slot].packets_available = 0;
-        server_data.conns_list[slot].stream = stream;
-        server_data.conns_list[slot].consistent_until = 1;
-        const completion = &server_data.conns_list[slot].read_completion;
-        const buffer = &server_data.conns_list[slot].read_buffer;
-        stream.read(l, completion, .{ .slice = buffer }, ConnectedClientIndex, toClientIndex(slot), handlePacketFromClient);
-
-        startNewConnectionHandler(server_data);
-        return .disarm;
-    } else {
-        std.log.warn("too many players", .{});
-        stream.shutdown(l, &server_data.accept_completion, void, null, afterOverfullDisconnect);
-        return .disarm;
-    }
-}
+// TODO: Readd
+// fn handlePacketFromClient(client_index_raw: ?*ConnectedClientIndex, l: *xev.Loop, _: *xev.Completion, s: xev.TCP, read_buffer: xev.ReadBuffer, packet_size_res: xev.ReadError!usize) xev.CallbackAction {
+//     _ = s;
+//     var server_data = loopToServerData(l);
+//     const client_index = fromClientIndex(client_index_raw);
+//     var client = &server_data.conns_list[client_index];
+// 
+//     const packet_size = packet_size_res catch |e| {
+//         server_data.conns_type[client_index] = .unused;
+//         client.stream.shutdown(l, &client.read_completion, void, null, afterOverfullDisconnect);
+//         std.debug.print("error: {any}\n", .{e});
+//         return .disarm;
+//     };
+// 
+//     const packet = read_buffer.slice[0..packet_size];
+// 
+//     //debugPacket(packet);
+//     parsePacketFromClient(client_index, server_data, packet) catch |e| {
+//         std.debug.print("error while handling package from client: {any}\n", .{e});
+//     };
+// 
+//     // TODO: Parse packet and ingest into input_history.
+// 
+//     //std.debug.print("message from ({d}): {s}\n", .{ fromClientIndex(client_index), packet });
+// 
+//     //const write_buffer: xev.WriteBuffer = .{ .array = .{
+//     //    .array = [2]u8{ 'h', 'i' } ** 16,
+//     //    .len = 2,
+//     //} };
+//     //s.write(l, &client.write_completion, write_buffer, void, null, writeNoop);
+// 
+//     return .rearm;
+// }
+// 
+// fn afterOverfullDisconnect(_: ?*void, l: *xev.Loop, _: *xev.Completion, _: xev.TCP, _: xev.ShutdownError!void) xev.CallbackAction {
+//     const server_data = loopToServerData(l);
+//     startNewConnectionHandler(server_data);
+//     return .disarm;
+// }
+// 
+// fn startNewConnectionHandler(server_data: *NetServerData) void {
+//     server_data.listener.accept(&server_data.loop, &server_data.accept_completion, void, null, clientConnected);
+// }
+// 
+// fn clientConnected(_: ?*void, l: *xev.Loop, _: *xev.Completion, r: xev.TCP.AcceptError!xev.TCP) xev.CallbackAction {
+//     const server_data = loopToServerData(l);
+// 
+//     var stream = r catch |e| {
+//         std.debug.print("e: {any}", .{e});
+//         return .disarm;
+//     };
+// 
+//     std.debug.print("incoming player\n", .{});
+// 
+//     if (server_data.reservSlot()) |slot| {
+//         server_data.conns_list[slot].packets_available = 0;
+//         server_data.conns_list[slot].stream = stream;
+//         server_data.conns_list[slot].consistent_until = 1;
+//         server_data.conns_list[slot].tick_acknowledged = 0;
+//         const completion = &server_data.conns_list[slot].read_completion;
+//         const buffer = &server_data.conns_list[slot].read_buffer;
+//         stream.read(l, completion, .{ .slice = buffer }, ConnectedClientIndex, toClientIndex(slot), handlePacketFromClient);
+// 
+//         startNewConnectionHandler(server_data);
+//         return .disarm;
+//     } else {
+//         std.log.warn("too many players", .{});
+//         stream.shutdown(l, &server_data.accept_completion, void, null, afterOverfullDisconnect);
+//         return .disarm;
+//     }
+// }
 
 fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *NetworkingQueue) !void {
-    // Give the threads a chance to work.
-    try server_data.loop.run(.no_wait);
-
     networking_queue.rw_lock.lock();
 
     // Ingest the updates from the local-client.
@@ -254,16 +233,18 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
             continue;
         }
 
+
         // TODO: make 20 a constant
         if (connection.tick_acknowledged + 20 < connection.consistent_until) {
             // We have sent too much without a response, time to wait for a response.
             continue;
         }
 
-        if (connection.write_completion.state() == .active) {
-            // We are still writing data.
-            continue;
-        }
+        // if (connection.write_completion.state() == .active) {
+        //     // We are still writing data.
+        //     continue;
+        // }
+
 
         var fb = std.io.fixedBufferStream(write_buffer);
         const writer = fb.writer();
@@ -286,9 +267,12 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
                 try cbor.writeUint(writer, @intFromEnum(input.dpad));
                 try cbor.writeUint(writer, @intFromEnum(input.button_a));
                 try cbor.writeUint(writer, @intFromEnum(input.button_b));
+
+                std.debug.print("sending: to player ?? tick {d} from player {d} with dpad {s}\n", .{tick_index, player, @tagName(input.dpad)});
             }
         }
-        connection.stream.write(&server_data.loop, &connection.write_completion, .{ .slice = write_buffer[0..fb.pos] }, void, null, writeNoop);
+        // TODO: Readd
+        //connection.stream.write(&server_data.loop, &connection.write_completion, .{ .slice = write_buffer[0..fb.pos] }, void, null, writeNoop);
         connection.consistent_until = targeted_tick;
     }
 
@@ -298,25 +282,24 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
     //    const file = std.io.getStdErr();
     //    const writer = file.writer();
     //    try server_data.input_history.dumpInputs(writer);
-    //    std.time.sleep(std.time.ns_per_s * 10);
-    //    @panic("net over");
     //}
 }
 
 fn serverThread(networking_queue: *NetworkingQueue) !void {
-    var server_data = NetServerData{ .loop = undefined, .input_history = undefined };
+    var server_data = NetServerData{ .input_history = undefined, .networking_queue = networking_queue };
     server_data.conns_type[0] = .local;
-    server_data.loop = try xev.Loop.init(.{ .entries = 128 });
-    defer server_data.loop.deinit();
 
     server_data.input_history = try InputConsolidation.init(std.heap.page_allocator);
     //defer server_data.input_history.deinit(std.heap.page_allocator);
 
-    const address = try std.net.Address.parseIp("0.0.0.0", 8080);
-    server_data.listener = try xev.TCP.init(address);
-    try server_data.listener.bind(address);
-    try server_data.listener.listen(16);
-    startNewConnectionHandler(&server_data);
+    //const address = try std.net.Address.parseIp("0.0.0.0", 8080);
+    //server_data.listener = try xev.TCP.init(address);
+    //try server_data.listener.bind(address);
+    //try server_data.listener.listen(16);
+    //startNewConnectionHandler(&server_data);
+
+    // If this isn't done, then connections can not be made on Windows.
+    //try server_data.loop.run(.once);
 
     while (true) {
         // TODO: Take clock timestamp
@@ -351,6 +334,7 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !u64
             const button_b = try player_input.readU64();
             try player_input.readEnd();
 
+
             if (networking_queue.outgoing_data_count >= networking_queue.outgoing_data.len) {
                 continue;
             }
@@ -364,6 +348,7 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !u64
                 },
                 .player = @truncate(player_i),
             };
+            //std.debug.print("received dpad: {any} for player {d} and tick {d}\n", .{networking_queue.outgoing_data[networking_queue.outgoing_data_count].data.dpad, player_i, input_tick_index});
 
             networking_queue.outgoing_data_count += 1;
         }
@@ -383,7 +368,7 @@ fn clientThread(networking_queue: *NetworkingQueue) !void {
     const allocator = alloc.allocator();
     const stream = try std.net.tcpConnectToHost(allocator, "127.0.0.1", 8080);
     // TODO: Use non-blocking reads such that input is always send even if other inputs are still in air.
-
+    std.debug.print("connection established\n", .{});
     var newest_input_tick: u64 = 0;
 
     //std.time.sleep(std.time.ns_per_s * 1);

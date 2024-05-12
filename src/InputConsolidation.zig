@@ -17,7 +17,7 @@ buttons: InputStateArrayList,
 is_certain: PlayerBitSetArrayList,
 //received: PlayerBitSetArrayList,
 
-// TODO: Remove
+/// TODO: Currently used to prevent overriding of server submitted inputs by localUpdate(). But we can just use is_certain for that.
 newest_remote_frame: u64 = 0,
 
 pub fn init(allocator: std.mem.Allocator) !Self {
@@ -70,7 +70,7 @@ pub fn localUpdate(self: *Self, controllers: []Controller, tick: u64) !void {
 
     // Make sure that extendTimeline() is called before.
     std.debug.assert(tick < self.buttons.items.len);
-    self.buttons.items[tick] = Controller.poll(controllers, self.buttons.items[tick - 1]);
+    self.buttons.items[tick] = Controller.poll(controllers, self.buttons.items[tick]);
     var is_local = input.IsLocalBitfield.initEmpty();
     for (controllers) |controller| {
         if (controller.isAssigned()) {
@@ -98,7 +98,7 @@ pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, player: u32, new_
             // We are already certain of this input. Nothing to do here.
             // This is probably just the server re-broadcasting the input that the client sent it.
             // But it could also be an error... Oh well!
-            return changes != 0;
+            break;
         }
         if (std.meta.eql(frame[player], new_state)) {
             // No need to change this frame in particular.
@@ -114,7 +114,8 @@ pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, player: u32, new_
     // We only set consistency for <tick> because future values are just "guesses".
     self.is_certain.items[tick].set(player);
 
-    self.newest_remote_frame = tick;
+    self.newest_remote_frame = @max(self.newest_remote_frame, tick);
+
     return changes != 0;
 }
 
@@ -179,7 +180,7 @@ pub fn dumpInputs(self: *Self, writer: anytype) !void {
     const checksum = self.createChecksum();
     try writer.print("input frames: {d}\n", .{self.buttons.items.len});
     for (self.buttons.items, self.is_certain.items, 0..) |inputs, is_certain, frame_index| {
-        try writer.print("{d}: ", .{frame_index});
+        try writer.print("{d:0>4}: ", .{frame_index});
         for (inputs, 0..) |inp, i| {
             const on = if (is_certain.isSet(i)) "+" else "?";
             try writer.print("{s}({s}) ", .{ inp.dpad.shortDebugName(), on });
