@@ -62,8 +62,6 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
         ecs.component.Pos{ .pos = [2]i32{ 10, 10 } },
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/BABBA.png"),
-            .w = 2,
-            .h = 1,
         },
     });
 
