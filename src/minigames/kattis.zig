@@ -17,6 +17,17 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     const inputs = timeline.latest();
     var player_count: u8 = 0;
 
+    // Visuals
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/tron_map.png"),
+            .tint = rl.Color.fromHSV(230.0, 0.4, 0.8),
+            .w = constants.world_width_tiles,
+            .h = constants.world_height_tiles,
+        },
+        ecs.component.Pos{ .pos = .{ 0, 0 } },
+    });
+
     // Players
     for (inputs, 0..) |inp, id| {
         if (inp.is_connected()) {
@@ -41,14 +52,12 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
             _ = try sim.world.spawnWith(.{
                 ecs.component.Plr{ .id = @intCast(id) }, // Turns out this one was important (._.  )
-                ecs.component.Pos{ .pos = .{ 32, 40 + 28 * @as(i32, @intCast(id)) } },
+                ecs.component.Pos{ .pos = .{ 32, 32 + 28 * @as(i32, @intCast(id)) } },
                 ecs.component.Tex{
-                    .texture_hash = AssetManager.pathHash("assets/smash_cat.png"),
-                    .w = 2,
-                    .subpos = .{ -21, -10 },
+                    .texture_hash = AssetManager.pathHash("assets/cat_portrait.png"),
                     .tint = constants.player_colors[id],
                 },
-                ecs.component.Anm{ .animation = Animation.SmashFall, .interval = 4, .looping = true },
+                ecs.component.Anm{ .animation = Animation.CatPortrait, .interval = 20, .looping = true },
                 ecs.component.Ctr{ .count = 1 }, // Don't use ID field
                 ecs.component.Tmr{ .ticks = bitset }, // Timer can store the solution lmao
                 ecs.component.Lnk{ .child = previous },
@@ -89,6 +98,7 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) void {
         ecs.component.Ctr,
         ecs.component.Tmr,
         ecs.component.Lnk,
+        ecs.component.Anm,
     }, &.{});
     var ended = false;
 
@@ -97,6 +107,7 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) void {
         const ctr = query.get(ecs.component.Ctr) catch unreachable;
         const tmr = query.get(ecs.component.Tmr) catch unreachable;
         const lnk = query.get(ecs.component.Lnk) catch unreachable;
+        const anm = query.get(ecs.component.Anm) catch unreachable;
         const state = inputs[plr.id];
 
         const ctrlog2 = std.math.log2(ctr.count & 0x7FFFFFFF);
@@ -111,9 +122,11 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) void {
         }
 
         if (wrong) {
-            var timer = world.inspect(lnk.child.?, ecs.component.Ctr) catch unreachable;
+            const timer = world.inspect(lnk.child.?, ecs.component.Ctr) catch unreachable;
             ctr.count |= 0x80000000;
-            timer.count = ctrlog2 * 20;
+            timer.count = ctrlog2 * 20 + 19;
+            anm.animation = Animation.CatPortraitDie;
+            anm.interval = 3;
         }
         if (ctrlog2 >= 26 and ctr.count & 0x80000000 == 0) {
             ended = true;
@@ -135,11 +148,13 @@ fn updateTextures(world: *ecs.world.World, timeline: input.Timeline) void {
         ecs.component.Plr,
         ecs.component.Ctr,
         ecs.component.Lnk,
+        ecs.component.Anm,
     }, &.{});
 
     while (query_p.next()) |_| {
         const plr = query_p.get(ecs.component.Plr) catch unreachable;
-        var ctr = query_p.get(ecs.component.Ctr) catch unreachable;
+        const ctr = query_p.get(ecs.component.Ctr) catch unreachable;
+        const anm = query_p.get(ecs.component.Anm) catch unreachable;
         var lnk = query_p.get(ecs.component.Lnk) catch unreachable;
         var pos = std.math.log2(ctr.count & 0x7FFFFFFF);
 
@@ -173,6 +188,8 @@ fn updateTextures(world: *ecs.world.World, timeline: input.Timeline) void {
 
                 timer.count = timer.count - 1;
             } else {
+                anm.animation = Animation.CatPortrait;
+                anm.interval = 20;
                 ctr.count = 1;
                 pos = 0;
             }
@@ -182,7 +199,7 @@ fn updateTextures(world: *ecs.world.World, timeline: input.Timeline) void {
                 const tex_c = world.inspect(tick, ecs.component.Tex) catch unreachable;
                 const lnk_c = world.inspect(tick, ecs.component.Lnk) catch unreachable;
                 if (ctr_c.count <= pos) {
-                    tex_c.u = 2;
+                    tex_c.u = if (timer.count % 80 < 40) 2 else 3;
                 } else {
                     tex_c.u = 0;
                 }
