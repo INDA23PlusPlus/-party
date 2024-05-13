@@ -1,4 +1,3 @@
-
 const std = @import("std");
 const menu = @import("menu.zig");
 const morsecode = @import("morsecode.zig");

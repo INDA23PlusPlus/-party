@@ -1,6 +1,5 @@
 const std = @import("std");
 const rl = @import("raylib");
-
 const AssetManager = @import("../AssetManager.zig");
 const Animation = @import("../animation/animations.zig").Animation;
 const Invariables = @import("../Invariables.zig");
@@ -13,11 +12,6 @@ const animator = @import("../animation/animator.zig");
 const constants = @import("../constants.zig");
 
 const PlayerChange = enum { remove, add, nothing };
-
-const ready_strings: [2][:0]const u8 = .{
-    "Not Ready",
-    "Ready",
-};
 
 const left_texture_offset = [_]i32{ 0, -8 };
 const right_texture_offset = [_]i32{ -16, -8 };
@@ -61,6 +55,16 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
 
     for (player_changes, player_ids, 0..) |change, entity, index| {
         if (change == .add) {
+            const text = try sim.world.spawnWith(.{
+                ecs.component.Tex{
+                    .texture_hash = AssetManager.pathHash("assets/lobby.png"),
+                    .v = 1,
+                    .w = 4,
+                    .subpos = .{ -18, 0 },
+                    .tint = rl.Color.red,
+                },
+                ecs.component.Pos{},
+            });
             player_ids[index] = try sim.world.spawnWith(.{
                 ecs.component.Plr{ .id = @truncate(index) },
                 ecs.component.Pos{ .pos = .{ 256, 144 } },
@@ -74,9 +78,8 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
                 ecs.component.Mov{},
                 ecs.component.Anm{ .animation = Animation.SmashIdle, .interval = 16, .looping = true },
                 ecs.component.Ctr{ .id = @truncate(index), .count = 0 },
-                ecs.component.Txt{ .string = ready_strings[0], .color = 0x999999FF, .subpos = .{ 0, -10 }, .font_size = 12 },
                 ecs.component.Col{ .dim = .{ 16, 8 }, .layer = .{ .base = false } },
-                // ecs.component.Dbg{},
+                ecs.component.Lnk{ .child = text },
             });
         } else if (change == .remove) {
             if (entity) |e| {
@@ -90,6 +93,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
     try inputSystem(&sim.world, inputs);
     try flipSystem(&sim.world, inputs);
     movement.update(&sim.world, &collisions, rt.arena) catch @panic("movement");
+    try textFollowSystem(&sim.world);
     try containSystem(&sim.world);
     animator.update(&sim.world);
 
@@ -116,19 +120,28 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
 }
 
 fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
-    var query = world.query(&.{ ecs.component.Mov, ecs.component.Plr, ecs.component.Anm, ecs.component.Ctr, ecs.component.Txt }, &.{});
+    var query = world.query(&.{
+        ecs.component.Mov,
+        ecs.component.Plr,
+        ecs.component.Anm,
+        ecs.component.Ctr,
+        ecs.component.Lnk,
+    }, &.{});
+
     while (query.next()) |_| {
-        const mov = try query.get(ecs.component.Mov);
-        const plr = try query.get(ecs.component.Plr);
-        const ctr = try query.get(ecs.component.Ctr);
-        const txt = try query.get(ecs.component.Txt);
+        const mov = query.get(ecs.component.Mov) catch unreachable;
+        const plr = query.get(ecs.component.Plr) catch unreachable;
+        const ctr = query.get(ecs.component.Ctr) catch unreachable;
+        const lnk = query.get(ecs.component.Lnk) catch unreachable;
         const state = inputs[plr.id];
+
         mov.velocity.set([_]i16{
             @intCast(state.horizontal() * 3),
             @intCast(state.vertical() * -3),
         });
 
         const anm = try query.get(ecs.component.Anm);
+
         if (state.dpad != input.InputDirection.None) {
             anm.animation = Animation.SmashRun;
             anm.interval = 8;
@@ -137,12 +150,19 @@ fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
             anm.interval = 16;
         }
 
-        if (state.button_b == .Pressed) {
-            txt.string = ready_strings[1];
+        const text = lnk.child orelse continue;
+        const text_tex = try world.inspect(text, ecs.component.Tex);
+
+        if (state.button_a == .Pressed) {
+            text_tex.v = 0;
+            text_tex.subpos = .{ -6, 0 };
+            text_tex.tint = rl.Color.green;
             ctr.count = 1;
         }
-        if (state.button_a == .Pressed) {
-            txt.string = ready_strings[0];
+        if (state.button_b == .Pressed) {
+            text_tex.v = 1;
+            text_tex.subpos = .{ -18, 0 };
+            text_tex.tint = rl.Color.red;
             ctr.count = 0;
         }
     }
@@ -150,11 +170,13 @@ fn inputSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
 
 fn flipSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
     var query = world.query(&.{ ecs.component.Plr, ecs.component.Tex, ecs.component.Mov }, &.{});
+
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
         const tex = try query.get(ecs.component.Tex);
         const mov = try query.get(ecs.component.Mov);
         const state = inputs[plr.id];
+
         switch (state.dpad) {
             .East, .NorthEast, .SouthEast => if (mov.velocity.vector[0] > 0) {
                 tex.flip_horizontal = false;
@@ -171,11 +193,11 @@ fn flipSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
 
 fn containSystem(world: *ecs.world.World) !void {
     var query = world.query(&.{ ecs.component.Plr, ecs.component.Pos, ecs.component.Col }, &.{});
+
     while (query.next()) |_| {
-        const plr = try query.get(ecs.component.Plr);
-        _ = plr;
         const pos = try query.get(ecs.component.Pos);
         const col = try query.get(ecs.component.Col);
+
         if (pos.pos[0] < 16) {
             pos.pos[0] = 16;
         }
@@ -188,5 +210,22 @@ fn containSystem(world: *ecs.world.World) !void {
         if (pos.pos[1] + col.dim[1] > constants.world_height - 16) {
             pos.pos[1] = constants.world_height - col.dim[1] - 16;
         }
+    }
+}
+
+fn textFollowSystem(world: *ecs.world.World) !void {
+    var query = world.query(&.{
+        ecs.component.Plr,
+        ecs.component.Pos,
+        ecs.component.Lnk,
+    }, &.{});
+
+    while (query.next()) |_| {
+        const pos = query.get(ecs.component.Pos) catch unreachable;
+        const lnk = query.get(ecs.component.Lnk) catch unreachable;
+        const text = lnk.child orelse continue;
+        const text_pos = try world.inspect(text, ecs.component.Pos);
+
+        text_pos.pos = pos.pos + [_]i32{ 0, -16 };
     }
 }

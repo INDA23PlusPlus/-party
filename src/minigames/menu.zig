@@ -8,7 +8,7 @@ const AssetManager = @import("../AssetManager.zig");
 
 const Invariables = @import("../Invariables.zig");
 
-pub fn init(sim: *simulation.Simulation, _: input.Timeline) simulation.SimulationError!void {
+pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/borggarden.png"),
@@ -104,6 +104,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
 
             if (vertical != 0) {
                 const switcheroo: u32 = @intFromBool(ctr.count == 0);
+
                 ctr.count = switcheroo;
                 tex.v = switcheroo + 1;
                 pos.pos = .{ 160, @intCast(128 + 32 * ctr.count) };
@@ -111,6 +112,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
                 sim.meta.minigame_id += 1;
             } else if (ctr.count != 0 and horizontal != 0) {
                 const switcheroo: u32 = @intCast(horizontal + 4);
+
                 child_ctr.count = @mod(child_ctr.count + switcheroo, 4);
                 child_tex.v = child_ctr.count;
 

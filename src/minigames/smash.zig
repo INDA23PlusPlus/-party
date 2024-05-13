@@ -1,5 +1,4 @@
 const std = @import("std");
-const root = @import("root");
 const rl = @import("raylib");
 const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
