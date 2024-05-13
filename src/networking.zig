@@ -149,7 +149,7 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
         const input_tick_count = send_until -| send_start;
 
         if (conn_type == .local) {
-            for (send_start .. send_start + input_tick_count) |tick_number| {
+            for (send_start..send_start + input_tick_count) |tick_number| {
                 const inputs = server_data.input_history.buttons.items[tick_number];
                 for (inputs, 0..) |packet, player_index| {
                     // TODO: Reduce the nesting.
@@ -169,7 +169,6 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
         if (conn_type != .remote) {
             continue;
         }
-
 
         // TODO: make 20 a constant
         if (connection.tick_acknowledged + 20 < connection.consistent_until) {
@@ -217,12 +216,12 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
 
 fn pollAllSockets(server_data: *NetServerData) void {
     if (@import("builtin").os.tag == .windows) {
-        var read_fd_set = std.os.windows.ws2_32.fd_set {
+        var read_fd_set = std.os.windows.ws2_32.fd_set{
             .fd_array = undefined,
             .fd_count = 0,
         };
 
-        const timeval = std.os.windows.ws2_32.timeval {
+        const timeval = std.os.windows.ws2_32.timeval{
             .tv_sec = 0,
             .tv_usec = 1000,
         };
@@ -251,14 +250,46 @@ fn pollAllSockets(server_data: *NetServerData) void {
             }
         }
     } else {
-        // TODO: Write code for Linux.
+        const INT_EVENTS = std.posix.POLL.IN | std.posix.POLL.HUP | std.posix.POLL.PRI;
+        var poll_fds: [64]std.posix.pollfd = undefined;
+        for (&poll_fds) |*poll_fd| {
+            poll_fd.fd = -1;
+            poll_fd.revents = 0;
+            poll_fd.events = INT_EVENTS;
+        }
+
+        var fd_count: usize = 0;
+        for (server_data.conns_type, server_data.conns_sockets) |conn_type, conn_socket| {
+            if (conn_type == .remote) {
+                std.debug.assert(fd_count < poll_fds.len);
+                poll_fds[fd_count].fd = conn_socket;
+                fd_count += 1;
+            }
+        }
+
+        const i = std.posix.poll(&poll_fds, 1) catch {
+            std.debug.print("std.posix.poll() returned negative number.\n", .{});
+            return;
+        };
+
+        if (i <= 0) {
+            return;
+        }
+
+        for (poll_fds[0..fd_count]) |poll_fd| {
+            for (server_data.conns_sockets, 0..) |other, conn_index| {
+                if (other == poll_fd.fd and poll_fd.revents & INT_EVENTS != 0) {
+                    server_data.conns_should_read[conn_index] = true;
+                }
+            }
+        }
     }
 }
 
 fn readFromSockets(server_data: *NetServerData) void {
     var read_buffer: [max_net_packet_size]u8 = undefined;
     pollAllSockets(server_data);
-    for(&server_data.conns_list, server_data.conns_sockets, server_data.conns_type, server_data.conns_should_read, 0..) |*connection, fd, conn_type, should_read, conn_index| {
+    for (&server_data.conns_list, server_data.conns_sockets, server_data.conns_type, server_data.conns_should_read, 0..) |*connection, fd, conn_type, should_read, conn_index| {
         if (conn_type != .remote) {
             continue;
         }
@@ -275,17 +306,19 @@ fn readFromSockets(server_data: *NetServerData) void {
             continue;
         }
 
-        //std.debug.print("reading from player {d} length {d}", .{conn_index, length});
-        //debugPacket(read_buffer[0..length]);
+        // std.debug.print("reading from player {d} length {d}", .{ conn_index, length });
+        // debugPacket(read_buffer[0..length]);
 
         parsePacketFromClient(conn_index, server_data, read_buffer[0..length]) catch |e| {
-            std.debug.print("error while parsing packet of player {d}: {any}\n", .{conn_index, e});
+            std.debug.print("error while parsing packet of player {d}: {any}\n", .{ conn_index, e });
         };
     }
 }
 
 fn serverThread(networking_queue: *NetworkingQueue) !void {
-    var server_data = NetServerData{ .input_history = undefined, };
+    var server_data = NetServerData{
+        .input_history = undefined,
+    };
     server_data.conns_type[0] = .local;
 
     server_data.input_history = try InputConsolidation.init(std.heap.page_allocator);
@@ -332,7 +365,6 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !u64
             const button_a = try player_input.readU64();
             const button_b = try player_input.readU64();
             try player_input.readEnd();
-
 
             if (networking_queue.outgoing_data_count >= networking_queue.outgoing_data.len) {
                 continue;
