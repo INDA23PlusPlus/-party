@@ -130,7 +130,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             ecs.component.Ctr{}, // Attack timer, block timer, and hit recovery timer
         });
 
-        sim.meta.minigame_placements[id] = 1; // Everyone's a winner by default
+        sim.meta.minigame_placements[id] = 0; // Everyone's a winner by default
     }
 
     // Crown
