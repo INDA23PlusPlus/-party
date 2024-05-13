@@ -30,3 +30,14 @@ To run as a client, use run-client:
 ```bash
 zig build run-client
 ```
+
+### Usage with nix
+Requirements: nix installed with experimental features flakes and nix-command enabled
+
+To start a shell with all dev, build and runtime dependencies available including the correct version of the zig compiler and zls, use nix develop:
+```bash
+nix develop
+```
+All the commands described above can then be run as normal.
+Only works for linux right now. Package and app outputs will be added later.
+
