@@ -10,6 +10,7 @@ const gamewheel = @import("gamewheel.zig");
 const example = @import("example.zig");
 const scoreboard = @import("scoreboard.zig");
 const preferred = @import("preferred.zig");
+const winscreen = @import("winscreen.zig");
 
 const Minigame = @import("Minigame.zig");
 
@@ -41,6 +42,11 @@ pub const list = [_]Minigame{
         .init = scoreboard.init,
     },
 
+    .{
+        .name = "winscreen",
+        .update = winscreen.update,
+        .init = winscreen.init,
+    },
     .{
         .name = "gamewheel",
         .update = gamewheel.update,

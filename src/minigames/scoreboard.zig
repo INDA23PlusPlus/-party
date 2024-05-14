@@ -23,7 +23,7 @@ const crown = @import("../crown.zig");
 // - Speed up the score animation as it goes on
 // - Allow pressing button to skip score animation
 
-const score_distribution: [constants.max_player_count]u32 = .{ 500, 500, 1, 0, 0, 0, 0, 0 }; // completely arbitrary score values, open to change
+const score_distribution: [constants.max_player_count]u32 = .{ 50, 20, 10, 0, 0, 0, 0, 0 }; // completely arbitrary score values, open to change
 const score_decrease_speed = 1; // how much the score decreases every tick
 const wait_time_ticks = 5 * constants.ticks_per_second; // time before switching minigame
 const score_text_color = 0xFFCC99FF;
@@ -134,7 +134,16 @@ fn tickNextGameTimer(sim: *simulation.Simulation) !void {
             ctr.count -= 1;
             return;
         }
-        sim.meta.minigame_id = constants.minigame_gamewheel;
+        for (sim.meta.global_score) |score| {
+
+            //Future TODO Move value to metadata or constants dpeending on if the player can shose the amount of round/hisgh score
+            if (score >= 500) {
+                sim.meta.minigame_id = 5;
+                break;
+            } else {
+                sim.meta.minigame_id = constants.minigame_gamewheel;
+            }
+        }
     }
 }
 
