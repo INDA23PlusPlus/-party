@@ -9,7 +9,7 @@ const input = @import("./input.zig");
 const Invariables = @import("./Invariables.zig");
 
 start_state: simulation.Simulation = .{},
-round_buffer: [20]simulation.Simulation = [_]simulation.Simulation{.{}} ** 20,
+round_buffer: [128]simulation.Simulation = undefined,
 head_tick_elapsed: u64 = std.math.maxInt(u64),
 
 const Self = @This();
@@ -41,15 +41,13 @@ pub fn rewind(self: *Self, tick: u64) void {
         self.reset();
         return;
     }
-    //std.debug.assert(tick > 0);
-    std.debug.assert(tick < self.head_tick_elapsed);
     if (tick > self.head_tick_elapsed) {
         // We ignore requests to rewind into the future.
         return;
     }
     if (self.head_tick_elapsed - tick >= self.round_buffer.len) {
         self.reset();
-        std.debug.print("tried to rewind too far, resetting", .{});
+        std.debug.print("rewinding too far caused the simulation to reset", .{});
         return;
     }
     self.head_tick_elapsed = tick;

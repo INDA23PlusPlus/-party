@@ -12,7 +12,7 @@ const fixed = @import("math/fixed.zig");
 const SimulationCache = @import("SimulationCache.zig");
 const AssetManager = @import("AssetManager.zig");
 const Controller = @import("Controller.zig");
-const InputConsolidation = @import("InputConsolidation.zig");
+const InputMerger = @import("InputMerger.zig");
 const Invariables = @import("Invariables.zig");
 const NetworkingQueue = @import("NetworkingQueue.zig");
 
@@ -110,7 +110,7 @@ pub fn main() !void {
     simulation_cache.start_state.meta.preferred_minigame_id = launch_options.force_minigame;
     simulation_cache.reset();
 
-    var input_consolidation = try InputConsolidation.init(std.heap.page_allocator);
+    var input_merger = try InputMerger.init(std.heap.page_allocator);
 
     var controllers = Controller.DefaultControllers;
 
@@ -119,13 +119,13 @@ pub fn main() !void {
 
     // Force WASD or IJKL for games that do not support hot-joining.
     if (launch_options.force_wasd or launch_options.force_ijkl) {
-        try input_consolidation.extendTimeline(std.heap.page_allocator, 1);
+        try input_merger.extendTimeline(std.heap.page_allocator, 1);
     }
     if (launch_options.force_wasd) {
-        _ = input_consolidation.forceAutoAssign(1, &controllers, 0);
+        _ = input_merger.forceAutoAssign(1, &controllers, 0);
     }
     if (launch_options.force_ijkl) {
-        _ = input_consolidation.forceAutoAssign(1, &controllers, 1);
+        _ = input_merger.forceAutoAssign(1, &controllers, 1);
     }
 
     // Networking
@@ -165,13 +165,13 @@ pub fn main() !void {
         const tick = simulation_cache.head_tick_elapsed;
 
         // Make sure that the timeline extends far enough for the input polling to work.
-        try input_consolidation.extendTimeline(std.heap.page_allocator, tick + 1);
+        try input_merger.extendTimeline(std.heap.page_allocator, tick + 1);
 
         // TODO: Move to before polling local inputs.
         // Ingest the updates.
         for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_count]) |change| {
             known_server_tick = @max(change.tick, known_server_tick);
-            if (try input_consolidation.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick)) {
+            if (try input_merger.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick)) {
                 std.debug.assert(change.tick != 0);
                 rewind_to_tick = @min(change.tick -| 1, rewind_to_tick);
             }
@@ -180,19 +180,19 @@ pub fn main() !void {
 
         // We want to know how many controllers are active locally in order to know if
         // all of their states can be sent over to the networking thread later on.
-        const controllers_active = input_consolidation.autoAssign(&controllers, tick + 1);
+        const controllers_active = input_merger.autoAssign(&controllers, tick + 1);
 
         if (main_thread_queue.outgoing_data_count + controllers_active <= main_thread_queue.outgoing_data.len) {
             // We can only get local input, if we have the ability to send it. If we can't send it, we
             // mustn't accept local input as that could cause desynchs.
-            try input_consolidation.localUpdate(&controllers, tick + 1);
+            try input_merger.localUpdate(&controllers, tick + 1);
 
             for (controllers) |controller| {
                 if (!controller.isAssigned()) {
                     continue;
                 }
                 const player_index = controller.input_index;
-                const data = input_consolidation.buttons.items[tick][player_index];
+                const data = input_merger.buttons.items[tick][player_index];
 
                 main_thread_queue.outgoing_data[main_thread_queue.outgoing_data_count] = .{
                     .tick = tick,
@@ -239,9 +239,9 @@ pub fn main() !void {
             // All code that controls how objects behave over time in our game
             // should be placed inside of the simulate procedure as the simulate procedure
             // is called in other places. Not doing so will lead to inconsistencies.
-            if (simulation_cache.head_tick_elapsed < input_consolidation.buttons.items.len) {
+            if (simulation_cache.head_tick_elapsed < input_merger.buttons.items.len) {
                 const timeline_to_tick = input.Timeline{
-                    .buttons = input_consolidation.buttons.items[0..simulation_cache.head_tick_elapsed + 1]
+                    .buttons = input_merger.buttons.items[0..simulation_cache.head_tick_elapsed + 1]
                 };
                 try simulation_cache.simulate(timeline_to_tick, invariables);
             }

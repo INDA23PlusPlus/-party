@@ -6,7 +6,7 @@ const ecs = @import("ecs/world.zig");
 const cbor = @import("cbor.zig");
 
 const NetworkingQueue = @import("NetworkingQueue.zig");
-const InputConsolidation = @import("InputConsolidation.zig");
+const InputMerger = @import("InputMerger.zig");
 
 const ConnectedClient = struct {
     consistent_until: u64 = 0,
@@ -22,7 +22,8 @@ const ConnectionType = enum(u8) {
 
 const max_net_packet_size = 32768;
 
-const inputs_per_socket_packet = 32;
+const max_unresponded_ticks = 32;
+const max_inputs_per_socket_packet = 64;
 
 fn debugPacket(packet: []u8) void {
     // Print the CBOR contents.
@@ -40,12 +41,12 @@ fn debugPacket(packet: []u8) void {
 }
 
 const NetServerData = struct {
-    input_history: InputConsolidation,
+    input_merger: InputMerger,
 
     conns_list: [constants.max_connected_count]ConnectedClient = undefined,
     conns_type: [constants.max_connected_count]ConnectionType = [_]ConnectionType{.unused} ** constants.max_connected_count,
     conns_sockets: [constants.max_connected_count]std.posix.socket_t = undefined,
-    conns_incoming_packets: [constants.max_connected_count][inputs_per_socket_packet]NetworkingQueue.Packet = undefined,
+    conns_incoming_packets: [constants.max_connected_count][max_inputs_per_socket_packet]NetworkingQueue.Packet = undefined,
     conns_should_read: [constants.max_connected_count]bool = undefined,
 
     fn reservSlot(self: *NetServerData) ?usize {
@@ -59,7 +60,7 @@ const NetServerData = struct {
     }
 
     fn ingestPlayerInput(self: *NetServerData, change: NetworkingQueue.Packet) !void {
-        if (!try self.input_history.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick)) {
+        if (!try self.input_merger.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick)) {
             // If input was already set, we can just exit early and not resend anything.
             return;
         }
@@ -147,12 +148,12 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
     for (&server_data.conns_list, server_data.conns_type, &server_data.conns_sockets) |*connection, conn_type, fd| {
         // Send the missing inputs. But only N at the time.
         const send_start = connection.consistent_until + 1;
-        const send_until = @min(server_data.input_history.buttons.items.len, send_start + 40);
+        const send_until = @min(server_data.input_merger.buttons.items.len, send_start + max_inputs_per_socket_packet);
         const input_tick_count = send_until -| send_start;
 
         if (conn_type == .local) {
             for (send_start..send_start + input_tick_count) |tick_number| {
-                const inputs = server_data.input_history.buttons.items[tick_number];
+                const inputs = server_data.input_merger.buttons.items[tick_number];
                 for (inputs, 0..) |packet, player_index| {
                     // TODO: Reduce the nesting.
                     if (networking_queue.outgoing_data_count >= networking_queue.outgoing_data.len) {
@@ -172,7 +173,7 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
             continue;
         }
 
-        if (connection.tick_acknowledged + inputs_per_socket_packet < connection.consistent_until) {
+        if (connection.tick_acknowledged + max_unresponded_ticks < connection.consistent_until) {
             // We have sent too much without a response, time to wait for a response.
             continue;
         }
@@ -182,8 +183,8 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
         try cbor.writeArrayHeader(writer, input_tick_count);
         const targeted_tick = connection.consistent_until + input_tick_count;
         for (connection.consistent_until..targeted_tick) |tick_index| {
-            const inputs = server_data.input_history.buttons.items[tick_index];
-            const is_certain = server_data.input_history.is_certain.items[tick_index];
+            const inputs = server_data.input_merger.buttons.items[tick_index];
+            const is_certain = server_data.input_merger.is_certain.items[tick_index];
 
             try cbor.writeArrayHeader(writer, 2);
             try cbor.writeUint(writer, tick_index);
@@ -199,7 +200,7 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
                 try cbor.writeUint(writer, @intFromEnum(input.button_a));
                 try cbor.writeUint(writer, @intFromEnum(input.button_b));
 
-                //std.debug.print("sending: to player X tick {d} from player {d} with dpad {s}\n", .{tick_index, player, @tagName(input.dpad)});
+                //std.debug.print("sending to player X tick {d} from player {d} with dpad {s}\n", .{tick_index, player, @tagName(input.dpad)});
             }
         }
         _ = try std.posix.send(fd, send_buffer[0..fb.pos], 0);
@@ -215,6 +216,7 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
     //}
 }
 
+/// Sets conns_should_read[index] for any socket that has available data.
 fn pollAllSockets(server_data: *NetServerData) void {
     if (@import("builtin").os.tag == .windows) {
         var read_fd_set = std.os.windows.ws2_32.fd_set{
@@ -307,8 +309,8 @@ fn readFromSockets(server_data: *NetServerData) void {
             continue;
         }
 
-        // std.debug.print("reading from player {d} length {d}", .{ conn_index, length });
-        // debugPacket(read_buffer[0..length]);
+        //std.debug.print("reading from player {d} length {d}", .{ conn_index, length });
+        //debugPacket(read_buffer[0..length]);
 
         parsePacketFromClient(conn_index, server_data, read_buffer[0..length]) catch |e| {
             std.debug.print("error while parsing packet of player {d}: {any}\n", .{ conn_index, e });
@@ -318,12 +320,11 @@ fn readFromSockets(server_data: *NetServerData) void {
 
 fn serverThread(networking_queue: *NetworkingQueue) !void {
     var server_data = NetServerData{
-        .input_history = undefined,
+        .input_merger = try InputMerger.init(std.heap.page_allocator),
     };
-    server_data.conns_type[0] = .local;
-
-    server_data.input_history = try InputConsolidation.init(std.heap.page_allocator);
     //defer server_data.input_history.deinit(std.heap.page_allocator);
+
+    server_data.conns_type[0] = .local;
 
     const address = try std.net.Address.parseIp("0.0.0.0", 8080);
     var listening = try address.listen(.{ .force_nonblocking = true });
@@ -337,7 +338,7 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
 
         // TODO: Take clock timestamp
         try serverThreadQueueTransfer(&server_data, networking_queue);
-        std.time.sleep(std.time.ns_per_ms * 20);
+        std.time.sleep(std.time.ns_per_ms * 19);
         // TODO: Take clock timestamp
         // TODO: Compare these then sleep a bit to lock the ticks per second.
     }
@@ -411,8 +412,6 @@ fn clientThread(networking_queue: *NetworkingQueue) !void {
         const incoming_packet = incoming_packet_buf[0..incoming_packet_len];
 
         //debugPacket(incoming_packet);
-
-        // TODO: Parse packets.
 
         networking_queue.rw_lock.lock();
 

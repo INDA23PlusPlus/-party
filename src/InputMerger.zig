@@ -16,7 +16,7 @@ rw_lock: std.Thread.RwLock = .{},
 buttons: InputStateArrayList,
 is_certain: PlayerBitSetArrayList,
 
-// TODO: Move this logic out of InputConsolidation.zig
+// TODO: Move this logic out of InputMerger.zig
 newest_remote_frame: u64 = 0,
 
 pub fn init(allocator: std.mem.Allocator) !Self {
