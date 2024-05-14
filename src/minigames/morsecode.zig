@@ -56,7 +56,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
     const game_string = set_string_info(&sim.meta);
     const string_info = try sim.world.spawnWith(.{
-        ecs.component.Txt{ .string = game_string },
+        ecs.component.TextDeprecated{ .string = game_string },
     });
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{ .pos = [2]i32{ 10, 10 } },
@@ -69,7 +69,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
         if (inp.is_connected()) {
             _ = try sim.world.spawnWith(.{
                 // cats
-                ecs.component.Txt{
+                ecs.component.TextDeprecated{
                     .string = player_strings[id],
                     .font_size = 10,
                     .color = 0xff0066ff,
@@ -105,7 +105,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{ .pos = [2]i32{ 245, 55 } },
-        ecs.component.Txt{
+        ecs.component.TextDeprecated{
             .string = game_string,
             // .font_size = 10,
             .color = 0x666666FF,
@@ -194,7 +194,7 @@ fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
 
         var current_letter = world.inspect(lnk.child.?, ecs.component.Ctr) catch unreachable;
         const child_lnk = world.inspect(lnk.child.?, ecs.component.Lnk) catch unreachable;
-        const game_string_comp = world.inspect(child_lnk.child.?, ecs.component.Txt) catch unreachable;
+        const game_string_comp = world.inspect(child_lnk.child.?, ecs.component.TextDeprecated) catch unreachable;
         const game_string = game_string_comp.string;
 
         if (ctr.count == 0) continue;

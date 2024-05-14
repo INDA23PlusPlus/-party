@@ -51,12 +51,12 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
         rl.drawTexturePro(tex, src, dst, rl.Vector2.init(0, 0), rotation, tex_component.tint);
     }
 
-    var text_query = world.query(&.{ ecs.component.Pos, ecs.component.Txt }, &.{});
+    var text_query = world.query(&.{ ecs.component.Pos, ecs.component.TextDeprecated }, &.{});
 
     // Draw text
     while (text_query.next()) |_| {
         const pos_component = text_query.get(ecs.component.Pos) catch unreachable;
-        const text_c = text_query.get(ecs.component.Txt) catch unreachable;
+        const text_c = text_query.get(ecs.component.TextDeprecated) catch unreachable;
 
         if (text_c.draw == false) continue; // Ugly, can be fixed with dynamic strings for text??
 

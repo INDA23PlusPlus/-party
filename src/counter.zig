@@ -21,6 +21,7 @@ pub fn spawnCounter(world: *ecs.world.World, position: @Vector(2, i32), size: u8
         ecs.component.Ctr{},
         ecs.component.Lnk{},
         ecs.component.Src{},
+        ecs.component.Str{},
     });
 }
 
@@ -29,6 +30,10 @@ pub fn increment(world: *ecs.world.World, entity: ecs.entity.Entity) !bool {
     const tex = try world.inspect(entity, ecs.component.Tex);
     const ctr = try world.inspect(entity, ecs.component.Ctr);
     const lnk = try world.inspect(entity, ecs.component.Lnk);
+
+    if (world.checkSignature(entity, &.{}, &.{ecs.component.Str})) {
+        return ecs.world.WorldError.InvalidInspection;
+    }
 
     ctr.count += 1;
     tex.u += 1;
@@ -53,11 +58,55 @@ pub fn increment(world: *ecs.world.World, entity: ecs.entity.Entity) !bool {
                 },
                 ecs.component.Ctr{ .count = 1 },
                 ecs.component.Lnk{},
+                ecs.component.Str{},
             });
 
             pos.pos += .{ 6 * tex.size, 0 };
-
             return true;
+        }
+    }
+
+    return false;
+}
+
+pub fn decrement(world: *ecs.world.World, entity: ecs.entity.Entity) !bool {
+    const pos = try world.inspect(entity, ecs.component.Pos);
+    const tex = try world.inspect(entity, ecs.component.Tex);
+    const ctr = try world.inspect(entity, ecs.component.Ctr);
+    const lnk = try world.inspect(entity, ecs.component.Lnk);
+
+    if (world.checkSignature(entity, &.{}, &.{ecs.component.Str})) {
+        return ecs.world.WorldError.InvalidInspection;
+    }
+
+    if (lnk.child) |child| {
+        if (ctr.count == 0) {
+            ctr.count = 9;
+            tex.u = encode('9');
+
+            if (try decrement(world, child)) {
+                if (!world.isAlive(child)) {
+                    lnk.child = null;
+                }
+                pos.pos -= .{ 6 * tex.size, 0 };
+                return true;
+            }
+        } else {
+            ctr.count -= 1;
+            tex.u -= 1;
+        }
+    } else {
+        if (ctr.count <= 1) {
+            if (world.checkSignature(entity, &.{}, &.{ecs.component.Src})) {
+                world.kill(entity);
+                return true;
+            } else {
+                ctr.count = 0;
+                tex.u = encode('0');
+            }
+        } else {
+            ctr.count -= 1;
+            tex.u -= 1;
         }
     }
 

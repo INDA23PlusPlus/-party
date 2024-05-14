@@ -41,7 +41,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             const score_counter = try sim.world.spawnWith(.{
                 ecs.component.Pos{ .pos = .{ constants.asset_resolution * 4, 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(id)) } },
                 ecs.component.Ctr{ .count = score, .id = @intCast(id) },
-                ecs.component.Txt{ .color = score_text_color, .string = "???", .font_size = 18, .subpos = .{ 64, 6 } },
+                ecs.component.TextDeprecated{ .color = score_text_color, .string = "???", .font_size = 18, .subpos = .{ 64, 6 } },
             });
             _ = try sim.world.spawnWith(.{
                 ecs.component.Plr{ .id = @intCast(id) },
@@ -85,7 +85,7 @@ fn depleteScores(sim: *simulation.Simulation) !void {
         const lnk = query.get(ecs.component.Lnk) catch unreachable;
         const score_counter = lnk.child.?; // should not be null
         const ctr = sim.world.inspect(score_counter, ecs.component.Ctr) catch unreachable;
-        const txt = sim.world.inspect(score_counter, ecs.component.Txt) catch unreachable;
+        const txt = sim.world.inspect(score_counter, ecs.component.TextDeprecated) catch unreachable;
         const id = plr.id;
         const delta = @min(score_decrease_speed, ctr.count);
         ctr.count -= delta;
@@ -103,7 +103,7 @@ fn instantDepleteScore(sim: *simulation.Simulation, inputs: input.Timeline) !voi
         const score_counter = lnk.child.?; // should not be null
 
         const ctr = sim.world.inspect(score_counter, ecs.component.Ctr) catch unreachable;
-        const txt = sim.world.inspect(score_counter, ecs.component.Txt) catch unreachable;
+        const txt = sim.world.inspect(score_counter, ecs.component.TextDeprecated) catch unreachable;
 
         const id = plr.id;
 
@@ -118,7 +118,7 @@ fn instantDepleteScore(sim: *simulation.Simulation, inputs: input.Timeline) !voi
 }
 
 fn checkScoresDepleted(sim: *simulation.Simulation) !bool {
-    var query = sim.world.query(&.{ ecs.component.Ctr, ecs.component.Txt }, &.{});
+    var query = sim.world.query(&.{ ecs.component.Ctr, ecs.component.TextDeprecated }, &.{});
     while (query.next()) |_| {
         const ctr = query.get(ecs.component.Ctr) catch unreachable;
         if (ctr.count > 0) return false;
@@ -127,7 +127,7 @@ fn checkScoresDepleted(sim: *simulation.Simulation) !bool {
 }
 
 fn tickNextGameTimer(sim: *simulation.Simulation) !void {
-    var query = sim.world.query(&.{ecs.component.Ctr}, &.{ecs.component.Txt});
+    var query = sim.world.query(&.{ecs.component.Ctr}, &.{ecs.component.TextDeprecated});
     while (query.next()) |_| {
         const ctr = query.get(ecs.component.Ctr) catch unreachable;
         if (ctr.count > 0) {
