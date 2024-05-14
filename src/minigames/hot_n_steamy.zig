@@ -57,19 +57,31 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     const rand = sim.meta.minigame_prng.random();
     for (timeline.latest(), 0..) |inp, id| {
         if (inp.is_connected()) {
-            std.debug.print("connexted\n", .{});
             try spawnPlayer(&sim.world, rand, @intCast(id));
         }
     }
-    _ = try sim.world.spawnWith(.{ecs.component.Ctr{ .count = 0 }});
     try crown.init(sim, .{ 0, -10 });
 }
+
 pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invariables) !void {
     sim.meta.minigame_timer += 1;
 
-    const rand = sim.meta.minigame_prng.random();
+    const alive = countAlivePlayers(&sim.world);
+
+    if (alive <= 1) {
+        var query = sim.world.query(&.{ ecs.component.Plr, ecs.component.Ctr }, &.{});
+        while (query.next()) |_| {
+            const plr = try query.get(ecs.component.Plr);
+            const ctr = try query.get(ecs.component.Ctr);
+            sim.meta.minigame_placements[plr.id] = ctr.count;
+        }
+        sim.meta.minigame_id = constants.minigame_scoreboard;
+        return;
+    }
 
     try jetpackSystem(&sim.world, inputs.latest());
+
+    const rand = sim.meta.minigame_prng.random();
 
     var collisions = collision.CollisionQueue.init(invar.arena) catch @panic("could not initialize collision queue");
 
@@ -81,19 +93,28 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
 
     try spawnSystem(&sim.world, rand, sim.meta.minigame_timer);
 
-    try deathSystem(sim, &collisions);
+    try deathSystem(sim, &collisions, alive);
 
     try scrollSystem(&sim.world);
 
+    try animationSystem(&sim.world, alive);
     animator.update(&sim.world);
+
     try crown.update(sim);
-    var query = sim.world.query(&.{ecs.component.Ctr}, &.{});
+}
+
+fn animationSystem(world: *ecs.world.World, alive: u64) !void {
+    _ = world;
+    _ = alive;
+}
+
+fn countAlivePlayers(world: *ecs.world.World) u64 {
+    var count: u64 = 0;
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Pos }, &.{ecs.component.Ctr});
     while (query.next()) |_| {
-        const ctr = try query.get(ecs.component.Ctr);
-        if (ctr.count == constants.max_player_count - 1) {
-            sim.meta.minigame_id = constants.minigame_scoreboard;
-        }
+        count += 1;
     }
+    return count;
 }
 
 /// Scroll background
@@ -154,25 +175,24 @@ fn jetpackSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void 
     }
 }
 
-fn deathSystem(sim: *simulation.Simulation, _: *collision.CollisionQueue) !void {
+fn deathSystem(sim: *simulation.Simulation, _: *collision.CollisionQueue, alive: u64) !void {
     var query = sim.world.query(&.{ ecs.component.Pos, ecs.component.Col }, &.{});
     while (query.next()) |entity| {
         const col = try query.get(ecs.component.Col);
         const pos = try query.get(ecs.component.Pos);
-
         const right = pos.pos[0] + col.dim[0];
         if (right < 0) {
             if (sim.world.checkSignature(entity, &.{ecs.component.Plr}, &.{})) {
                 const plr = try sim.world.inspect(entity, ecs.component.Plr);
-                var query_ctr = sim.world.query(&.{ecs.component.Ctr}, &.{});
-                while (query_ctr.next()) |_| {
-                    var ctr = try query_ctr.get(ecs.component.Ctr);
-                    sim.meta.minigame_placements[plr.id] = constants.max_player_count - 1 - @as(u32, @intCast(ctr.count));
-                    ctr.count += 1;
-                }
+                const id = plr.id;
+                const place = @as(u32, @intCast(alive - 1));
+                _ = try sim.world.spawnWith(.{
+                    ecs.component.Plr{ .id = id },
+                    ecs.component.Ctr{ .count = place },
+                });
             }
             sim.world.kill(entity);
-            std.debug.print("entity {} died\n", .{entity.identifier});
+            // std.debug.print("entity {} died\n", .{entity.identifier});
         }
     }
 }
