@@ -16,10 +16,6 @@ const Vec2 = ecs.component.Vec2;
 const F32 = ecs.component.F32;
 const crown = @import("../crown.zig");
 
-//TODO Remove this and change som RNG comes from ecs of metadata
-var prng = std.rand.DefaultPrng.init(555);
-const rand = prng.random();
-
 const obstacle_height_base = 7;
 const obstacle_height_delta = 6;
 const player_gravity = Vec2.init(0, F32.init(1, 10));
@@ -58,10 +54,11 @@ fn spawnBackground(world: *ecs.world.World) !void {
 
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     _ = try spawnBackground(&sim.world);
+    const rand = sim.meta.minigame_prng.random();
     for (timeline.latest(), 0..) |inp, id| {
         if (inp.is_connected()) {
             std.debug.print("connexted\n", .{});
-            try spawnPlayer(&sim.world, @intCast(id));
+            try spawnPlayer(&sim.world, rand, @intCast(id));
         }
     }
     _ = try sim.world.spawnWith(.{ecs.component.Ctr{ .count = 0 }});
@@ -69,6 +66,8 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 }
 pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invariables) !void {
     sim.meta.minigame_timer += 1;
+
+    const rand = sim.meta.minigame_prng.random();
 
     try jetpackSystem(&sim.world, inputs.latest());
 
@@ -80,7 +79,7 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
 
     try pushSystem(&sim.world, &collisions);
 
-    try spawnSystem(&sim.world, sim.meta.minigame_timer);
+    try spawnSystem(&sim.world, rand, sim.meta.minigame_timer);
 
     try deathSystem(sim, &collisions);
 
@@ -178,13 +177,13 @@ fn deathSystem(sim: *simulation.Simulation, _: *collision.CollisionQueue) !void 
     }
 }
 
-fn spawnSystem(world: *ecs.world.World, ticks: u64) !void {
+fn spawnSystem(world: *ecs.world.World, rand: std.Random, ticks: u64) !void {
     if (ticks % @max(20, (80 -| (ticks / 160))) == 0) {
-        spawnRandomObstacle(world);
+        spawnRandomObstacle(world, rand);
     }
 
     if (ticks % @max(10, (60 -| (ticks / 120))) == 0) {
-        spawnHorizontalObstacle(world);
+        spawnHorizontalObstacle(world, rand);
     }
 }
 
@@ -227,7 +226,7 @@ fn spawnVerticalObstacleBoth(world: *ecs.world.World, delta: i32) void {
     spawnVerticalObstacleLower(world, @intCast(@divTrunc(constants.world_height_tiles - delta, 2)));
 }
 
-pub fn spawnRandomObstacle(world: *ecs.world.World) void {
+pub fn spawnRandomObstacle(world: *ecs.world.World, rand: std.Random) void {
     const kind = std.Random.enumValue(rand, ObstacleKind);
     switch (kind) {
         ObstacleKind.ObstacleLower => {
@@ -245,7 +244,7 @@ pub fn spawnRandomObstacle(world: *ecs.world.World) void {
     }
 }
 
-fn spawnHorizontalObstacle(world: *ecs.world.World) void {
+fn spawnHorizontalObstacle(world: *ecs.world.World, rand: std.Random) void {
     _ = world.spawnWith(.{
         ecs.component.Pos{
             .pos = .{
@@ -271,7 +270,7 @@ fn spawnHorizontalObstacle(world: *ecs.world.World) void {
     }) catch unreachable;
 }
 
-fn spawnPlayer(world: *ecs.world.World, id: u32) !void {
+fn spawnPlayer(world: *ecs.world.World, rand: std.Random, id: u32) !void {
     _ = try world.spawnWith(.{
         ecs.component.Plr{ .id = @intCast(id) },
         ecs.component.Pos{ .pos = .{ std.Random.intRangeAtMost(rand, i32, 64, 112), @divTrunc(constants.world_height, 2) } },
