@@ -40,7 +40,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             const score = scoreFromPlacement(placement);
             const score_counter = try sim.world.spawnWith(.{
                 ecs.component.Pos{ .pos = .{ constants.asset_resolution * 4, 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(id)) } },
-                ecs.component.Ctr{ .count = score, .id = @intCast(id) },
+                ecs.component.Ctr{ .count = score },
                 ecs.component.TextDeprecated{ .color = score_text_color, .string = "???", .font_size = 18, .subpos = .{ 64, 6 } },
             });
             _ = try sim.world.spawnWith(.{

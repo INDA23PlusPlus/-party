@@ -119,7 +119,6 @@ pub const Anm = struct {
 
 /// Entities with this component can count.
 pub const Ctr = struct {
-    id: u32 = 0,
     count: u32 = 0,
 };
 
