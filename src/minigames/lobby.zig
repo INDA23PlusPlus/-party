@@ -29,18 +29,18 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invariables) !void {
-    var players = sim.world.query(&.{ecs.component.Plr}, &.{});
+    const inputs = timeline.latest();
+    var current_players = sim.world.query(&.{ecs.component.Plr}, &.{});
     var player_changes = [_]PlayerChange{.nothing} ** constants.max_player_count;
     var player_ids: [constants.max_player_count]?ecs.entity.Entity = [_]?ecs.entity.Entity{null} ** constants.max_player_count;
     var player_count: u8 = 0;
+    var collisions = collision.CollisionQueue.init(rt.arena) catch @panic("collision");
 
-    while (players.next()) |entity| {
-        const plr = players.get(ecs.component.Plr) catch unreachable;
+    while (current_players.next()) |entity| {
+        const plr = current_players.get(ecs.component.Plr) catch unreachable;
         player_ids[plr.id] = entity;
         player_count += 1;
     }
-
-    const inputs = timeline.latest();
 
     for (inputs, 0..) |ins, index| {
         if (ins.is_connected() and player_ids[index] == null) {
@@ -50,6 +50,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
 
         if (!ins.is_connected() and player_ids[index] != null) {
             player_changes[index] = .remove;
+            player_count -= 1;
         }
     }
 
@@ -77,7 +78,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
                 },
                 ecs.component.Mov{},
                 ecs.component.Anm{ .animation = Animation.SmashIdle, .interval = 16, .looping = true },
-                ecs.component.Ctr{ .id = @truncate(index), .count = 0 },
+                ecs.component.Ctr{ .count = 0 },
                 ecs.component.Col{ .dim = .{ 16, 8 }, .layer = .{ .base = false } },
                 ecs.component.Lnk{ .child = text },
             });
@@ -88,8 +89,6 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
         }
     }
 
-    var collisions = collision.CollisionQueue.init(rt.arena) catch @panic("collision");
-
     try inputSystem(&sim.world, inputs);
     try flipSystem(&sim.world, inputs);
     movement.update(&sim.world, &collisions, rt.arena) catch @panic("movement");
@@ -99,23 +98,14 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
 
     // Count ready players
     var ready_count: u8 = 0;
-    for (player_ids) |player| {
-        if (player) |p| {
-            const ctr = try sim.world.inspect(p, ecs.component.Ctr);
-            if (ctr.count == 1) ready_count += 1;
-        }
+    var player_querry = sim.world.query(&.{ ecs.component.Plr, ecs.component.Ctr }, &.{});
+    while (player_querry.next()) |player| {
+        const ctr = try sim.world.inspect(player, ecs.component.Ctr);
+        if (ctr.count == 1) ready_count += 1;
     }
 
     if (ready_count == player_count) {
-        // Find the game-wheel minigame and switch to it.
-        // If not found, returns to game 0.
-        sim.meta.minigame_id = 0;
-        for (rt.minigames_list, 0..) |minigame, minigame_id| {
-            if (std.mem.eql(u8, minigame.name, "gamewheel")) {
-                sim.meta.minigame_id = @truncate(minigame_id);
-                break;
-            }
-        }
+        sim.meta.minigame_id = constants.minigame_gamewheel;
     }
 }
 
