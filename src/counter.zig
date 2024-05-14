@@ -3,23 +3,68 @@ const std = @import("std");
 const ecs = @import("ecs/ecs.zig");
 const AssetManager = @import("AssetManager.zig");
 
-pub fn encode(char: u8) u8 {
+pub fn encode(char: u8) u32 {
     if (char < 32) unreachable;
-
     return char - 32;
 }
 
-pub fn spawnCounter(world: *ecs.world.World, position: @Vector(2, i32), size: u8, tint: rl.Color) !ecs.entity.Entity {
+pub fn spawn(
+    world: *ecs.world.World,
+    position: @Vector(2, i32),
+    size: u8,
+    tint: rl.Color,
+    value: u32,
+) !ecs.entity.Entity {
+    if (value <= 9) {
+        return world.spawnWith(.{
+            ecs.component.Pos{ .pos = position },
+            ecs.component.Tex{
+                .texture_hash = AssetManager.pathHash("assets/monogram_bitmap.png"),
+                .size = size,
+                .tint = tint,
+                .u = encode('0') + value,
+            },
+            ecs.component.Ctr{ .count = value },
+            ecs.component.Lnk{},
+            ecs.component.Src{},
+            ecs.component.Str{},
+        });
+    }
+
+    const digits_minus_one: u16 = std.math.log10_int(value);
+    var child: ?ecs.entity.Entity = null;
+    var digit: u16 = 0;
+    var number = value;
+
+    while (digit < digits_minus_one) : (digit += 1) {
+        const pow = std.math.powi(u32, 10, digits_minus_one - digit) catch unreachable;
+        const first_digit = number / pow;
+        number -= first_digit * pow;
+
+        child = try world.spawnWith(.{
+            ecs.component.Pos{ .pos = position + [_]i32{ 6 * size * digit, 0 } },
+            ecs.component.Tex{
+                .texture_hash = AssetManager.pathHash("assets/monogram_bitmap.png"),
+                .size = size,
+                .tint = tint,
+                .u = encode('0') + first_digit,
+            },
+            ecs.component.Ctr{ .count = first_digit },
+            ecs.component.Lnk{ .child = child },
+            ecs.component.Str{},
+        });
+    }
+
     return world.spawnWith(.{
-        ecs.component.Pos{ .pos = position },
+        ecs.component.Pos{ .pos = position + [_]i32{ 6 * size * digits_minus_one, 0 } },
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/monogram_bitmap.png"),
             .size = size,
             .tint = tint,
-            .u = encode('0'),
+            .u = encode('0') + number,
         },
-        ecs.component.Ctr{},
-        ecs.component.Lnk{},
+        ecs.component.Ctr{ .count = number },
+        ecs.component.Lnk{ .child = child },
         ecs.component.Src{},
         ecs.component.Str{},
     });

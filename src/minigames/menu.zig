@@ -77,41 +77,9 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
         ecs.component.Ctr{},
         ecs.component.Lnk{ .child = resolution },
     });
-
-    _ = try @import("../counter.zig").spawnCounter(&sim.world, .{ 100, 100 }, 3, rl.Color.gold);
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) simulation.SimulationError!void {
-    if (rl.isKeyPressed(rl.KeyboardKey.key_p) or rl.isKeyPressedRepeat(rl.KeyboardKey.key_p)) {
-        var query = sim.world.query(&.{
-            ecs.component.Pos,
-            ecs.component.Tex,
-            ecs.component.Ctr,
-            ecs.component.Str,
-            ecs.component.Src,
-            ecs.component.Lnk,
-        }, &.{});
-
-        while (query.next()) |entity| {
-            _ = try @import("../counter.zig").increment(&sim.world, entity);
-        }
-    }
-
-    if (rl.isKeyPressed(rl.KeyboardKey.key_m) or rl.isKeyPressedRepeat(rl.KeyboardKey.key_m)) {
-        var query = sim.world.query(&.{
-            ecs.component.Pos,
-            ecs.component.Tex,
-            ecs.component.Ctr,
-            ecs.component.Str,
-            ecs.component.Src,
-            ecs.component.Lnk,
-        }, &.{});
-
-        while (query.next()) |entity| {
-            _ = try @import("../counter.zig").decrement(&sim.world, entity);
-        }
-    }
-
     for (timeline.latest(), 0..) |inp, player_index| {
         if (!inp.is_connected()) continue;
 
