@@ -175,6 +175,22 @@ fn jetpackSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void 
     }
 }
 
+fn spawnDeathParticles(sim: *simulation.Simulation, pos: @Vector(2, i32)) !void {
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Pos{ .pos = pos },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/smash_attack_smoke.png"),
+            .w = 2,
+            .h = 2,
+        },
+        ecs.component.Anm{
+            .animation = Animation.SmashAttackSmoke,
+            .interval = 8,
+            .looping = false,
+        },
+    });
+}
+
 fn deathSystem(sim: *simulation.Simulation, _: *collision.CollisionQueue, alive: u64) !void {
     var query = sim.world.query(&.{ ecs.component.Pos, ecs.component.Col }, &.{});
     while (query.next()) |entity| {
@@ -183,6 +199,7 @@ fn deathSystem(sim: *simulation.Simulation, _: *collision.CollisionQueue, alive:
         const right = pos.pos[0] + col.dim[0];
         if (right < 0) {
             if (sim.world.checkSignature(entity, &.{ecs.component.Plr}, &.{})) {
+                try spawnDeathParticles(sim, pos.pos);
                 const plr = try sim.world.inspect(entity, ecs.component.Plr);
                 const id = plr.id;
                 const place = @as(u32, @intCast(alive - 1));
