@@ -15,9 +15,8 @@ const full_player_bit_set = PlayerBitSet.initFull();
 rw_lock: std.Thread.RwLock = .{},
 buttons: InputStateArrayList,
 is_certain: PlayerBitSetArrayList,
-//received: PlayerBitSetArrayList,
 
-/// TODO: Currently used to prevent overriding of server submitted inputs by localUpdate(). But we can just use is_certain for that.
+// TODO: Move this logic out of InputConsolidation.zig
 newest_remote_frame: u64 = 0,
 
 pub fn init(allocator: std.mem.Allocator) !Self {
@@ -30,12 +29,10 @@ pub fn init(allocator: std.mem.Allocator) !Self {
     // should be ignored.
     var is_certain = try PlayerBitSetArrayList.initCapacity(allocator, 1024);
     try is_certain.append(allocator, full_player_bit_set);
-    //var received = try PlayerBitSetArrayList.initCapacity(allocator, 1024);
-    //try received.append(allocator, PlayerBitSet.initEmpty());
+
     return .{
         .buttons = buttons,
         .is_certain = is_certain,
-        //.received = received,
     };
 }
 
@@ -70,14 +67,19 @@ pub fn localUpdate(self: *Self, controllers: []Controller, tick: u64) !void {
 
     // Make sure that extendTimeline() is called before.
     std.debug.assert(tick < self.buttons.items.len);
-    self.buttons.items[tick] = Controller.poll(controllers, self.buttons.items[tick]);
-    var is_local = input.IsLocalBitfield.initEmpty();
+    const inputs = Controller.poll(controllers, self.buttons.items[tick]);
+    var is_certain = self.is_certain.items[tick];
     for (controllers) |controller| {
+        const player = controller.input_index;
         if (controller.isAssigned()) {
-            is_local.set(controller.input_index);
+            if (is_certain.isSet(player)) {
+                continue;
+            }
+            self.buttons.items[tick][player] = inputs[player];
+            is_certain.set(player);
         }
     }
-    self.is_certain.items[tick].setUnion(is_local);
+    self.is_certain.items[tick] = is_certain;
 }
 
 /// Returns true if the timeline was changed by this call.

@@ -40,3 +40,4 @@ pub const player_colors: [max_player_count]rl.Color = .{
 // TODO: This is already done in lobby.zig, so it could be used as reference. Feel free to refactor.
 pub const minigame_scoreboard = 4;
 pub const minigame_gamewheel = 5;
+

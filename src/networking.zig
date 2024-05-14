@@ -22,6 +22,8 @@ const ConnectionType = enum(u8) {
 
 const max_net_packet_size = 32768;
 
+const inputs_per_socket_packet = 32;
+
 fn debugPacket(packet: []u8) void {
     // Print the CBOR contents.
     var debug_log_buffer: [1024]u8 = undefined;
@@ -43,7 +45,7 @@ const NetServerData = struct {
     conns_list: [constants.max_connected_count]ConnectedClient = undefined,
     conns_type: [constants.max_connected_count]ConnectionType = [_]ConnectionType{.unused} ** constants.max_connected_count,
     conns_sockets: [constants.max_connected_count]std.posix.socket_t = undefined,
-    conns_incoming_packets: [constants.max_connected_count][20]NetworkingQueue.Packet = undefined,
+    conns_incoming_packets: [constants.max_connected_count][inputs_per_socket_packet]NetworkingQueue.Packet = undefined,
     conns_should_read: [constants.max_connected_count]bool = undefined,
 
     fn reservSlot(self: *NetServerData) ?usize {
@@ -170,8 +172,7 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
             continue;
         }
 
-        // TODO: make 20 a constant
-        if (connection.tick_acknowledged + 20 < connection.consistent_until) {
+        if (connection.tick_acknowledged + inputs_per_socket_packet < connection.consistent_until) {
             // We have sent too much without a response, time to wait for a response.
             continue;
         }
@@ -268,7 +269,7 @@ fn pollAllSockets(server_data: *NetServerData) void {
         }
 
         const i = std.posix.poll(&poll_fds, 1) catch {
-            std.debug.print("std.posix.poll() returned negative number.\n", .{});
+            std.debug.print("std.posix.poll() failed\n", .{});
             return;
         };
 
