@@ -117,7 +117,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                 ecs.component.Plr{ .id = @intCast(id) },
                 ecs.component.Pos{ .pos = .{ button_position[0], button_position[1] } },
                 ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis_testcases.png") },
-                ecs.component.Ctr{ .count = 0, .id = 0 }, // count = bit_index, id = current letter
+                ecs.component.Ctr{ .count = 0 }, // count = bit_index, id = current letter
                 ecs.component.Lnk{ .child = data_entity },
                 ecs.component.Tmr{ .ticks = 0 }, // for keystroke_bitset
             });

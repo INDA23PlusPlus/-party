@@ -16,10 +16,6 @@ const Vec2 = ecs.component.Vec2;
 const F32 = ecs.component.F32;
 const crown = @import("../crown.zig");
 
-//TODO Remove this and change som RNG comes from ecs of metadata
-var prng = std.rand.DefaultPrng.init(555);
-const rand = prng.random();
-
 const obstacle_height_base = 7;
 const obstacle_height_delta = 6;
 const player_gravity = Vec2.init(0, F32.init(1, 10));
@@ -58,19 +54,34 @@ fn spawnBackground(world: *ecs.world.World) !void {
 
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     _ = try spawnBackground(&sim.world);
+    const rand = sim.meta.minigame_prng.random();
     for (timeline.latest(), 0..) |inp, id| {
         if (inp.is_connected()) {
-            std.debug.print("connexted\n", .{});
-            try spawnPlayer(&sim.world, @intCast(id));
+            try spawnPlayer(&sim.world, rand, @intCast(id));
         }
     }
-    _ = try sim.world.spawnWith(.{ecs.component.Ctr{ .count = 0 }});
-    try crown.init(sim, .{ 0, -10 });
+    try crown.init(sim, .{ 0, -16 });
 }
+
 pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invariables) !void {
     sim.meta.minigame_timer += 1;
 
+    const alive = countAlivePlayers(&sim.world);
+
+    if (alive <= 1) {
+        var query = sim.world.query(&.{ ecs.component.Plr, ecs.component.Ctr }, &.{});
+        while (query.next()) |_| {
+            const plr = try query.get(ecs.component.Plr);
+            const ctr = try query.get(ecs.component.Ctr);
+            sim.meta.minigame_placements[plr.id] = ctr.count;
+        }
+        sim.meta.minigame_id = constants.minigame_scoreboard;
+        return;
+    }
+
     try jetpackSystem(&sim.world, inputs.latest());
+
+    const rand = sim.meta.minigame_prng.random();
 
     var collisions = collision.CollisionQueue.init(invar.arena) catch @panic("could not initialize collision queue");
 
@@ -80,21 +91,30 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
 
     try pushSystem(&sim.world, &collisions);
 
-    try spawnSystem(&sim.world, sim.meta.minigame_timer);
+    try spawnSystem(&sim.world, rand, sim.meta.minigame_timer);
 
-    try deathSystem(sim, &collisions);
+    try deathSystem(sim, &collisions, alive);
 
     try scrollSystem(&sim.world);
 
+    try animationSystem(&sim.world, alive);
     animator.update(&sim.world);
+
     try crown.update(sim);
-    var query = sim.world.query(&.{ecs.component.Ctr}, &.{});
+}
+
+fn animationSystem(world: *ecs.world.World, alive: u64) !void {
+    _ = world;
+    _ = alive;
+}
+
+fn countAlivePlayers(world: *ecs.world.World) u64 {
+    var count: u64 = 0;
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Pos }, &.{ecs.component.Ctr});
     while (query.next()) |_| {
-        const ctr = try query.get(ecs.component.Ctr);
-        if (ctr.count == constants.max_player_count - 1) {
-            sim.meta.minigame_id = constants.minigame_scoreboard;
-        }
+        count += 1;
     }
+    return count;
 }
 
 /// Scroll background
@@ -155,36 +175,52 @@ fn jetpackSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void 
     }
 }
 
-fn deathSystem(sim: *simulation.Simulation, _: *collision.CollisionQueue) !void {
+fn spawnDeathParticles(sim: *simulation.Simulation, pos: @Vector(2, i32)) !void {
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Pos{ .pos = pos },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/smash_attack_smoke.png"),
+            .w = 2,
+            .h = 2,
+        },
+        ecs.component.Anm{
+            .animation = Animation.SmashAttackSmoke,
+            .interval = 8,
+            .looping = false,
+        },
+    });
+}
+
+fn deathSystem(sim: *simulation.Simulation, _: *collision.CollisionQueue, alive: u64) !void {
     var query = sim.world.query(&.{ ecs.component.Pos, ecs.component.Col }, &.{});
     while (query.next()) |entity| {
         const col = try query.get(ecs.component.Col);
         const pos = try query.get(ecs.component.Pos);
-
         const right = pos.pos[0] + col.dim[0];
         if (right < 0) {
             if (sim.world.checkSignature(entity, &.{ecs.component.Plr}, &.{})) {
+                try spawnDeathParticles(sim, pos.pos);
                 const plr = try sim.world.inspect(entity, ecs.component.Plr);
-                var query_ctr = sim.world.query(&.{ecs.component.Ctr}, &.{});
-                while (query_ctr.next()) |_| {
-                    var ctr = try query_ctr.get(ecs.component.Ctr);
-                    sim.meta.minigame_placements[plr.id] = constants.max_player_count - 1 - @as(u32, @intCast(ctr.count));
-                    ctr.count += 1;
-                }
+                const id = plr.id;
+                const place = @as(u32, @intCast(alive - 1));
+                _ = try sim.world.spawnWith(.{
+                    ecs.component.Plr{ .id = id },
+                    ecs.component.Ctr{ .count = place },
+                });
             }
             sim.world.kill(entity);
-            std.debug.print("entity {} died\n", .{entity.identifier});
+            // std.debug.print("entity {} died\n", .{entity.identifier});
         }
     }
 }
 
-fn spawnSystem(world: *ecs.world.World, ticks: u64) !void {
+fn spawnSystem(world: *ecs.world.World, rand: std.Random, ticks: u64) !void {
     if (ticks % @max(20, (80 -| (ticks / 160))) == 0) {
-        spawnRandomObstacle(world);
+        spawnRandomObstacle(world, rand);
     }
 
     if (ticks % @max(10, (60 -| (ticks / 120))) == 0) {
-        spawnHorizontalObstacle(world);
+        spawnHorizontalObstacle(world, rand);
     }
 }
 
@@ -227,7 +263,7 @@ fn spawnVerticalObstacleBoth(world: *ecs.world.World, delta: i32) void {
     spawnVerticalObstacleLower(world, @intCast(@divTrunc(constants.world_height_tiles - delta, 2)));
 }
 
-pub fn spawnRandomObstacle(world: *ecs.world.World) void {
+pub fn spawnRandomObstacle(world: *ecs.world.World, rand: std.Random) void {
     const kind = std.Random.enumValue(rand, ObstacleKind);
     switch (kind) {
         ObstacleKind.ObstacleLower => {
@@ -245,7 +281,7 @@ pub fn spawnRandomObstacle(world: *ecs.world.World) void {
     }
 }
 
-fn spawnHorizontalObstacle(world: *ecs.world.World) void {
+fn spawnHorizontalObstacle(world: *ecs.world.World, rand: std.Random) void {
     _ = world.spawnWith(.{
         ecs.component.Pos{
             .pos = .{
@@ -271,7 +307,7 @@ fn spawnHorizontalObstacle(world: *ecs.world.World) void {
     }) catch unreachable;
 }
 
-fn spawnPlayer(world: *ecs.world.World, id: u32) !void {
+fn spawnPlayer(world: *ecs.world.World, rand: std.Random, id: u32) !void {
     _ = try world.spawnWith(.{
         ecs.component.Plr{ .id = @intCast(id) },
         ecs.component.Pos{ .pos = .{ std.Random.intRangeAtMost(rand, i32, 64, 112), @divTrunc(constants.world_height, 2) } },

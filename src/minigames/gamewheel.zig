@@ -22,6 +22,7 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/gamewheel.png"),
+            .v = 1,
             .w = 6,
             .h = 6,
         },
@@ -44,32 +45,22 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
 pub fn update(sim: *simulation.Simulation, _: input.Timeline, rt: Invariables) !void {
     const minigames: u32 = @intCast(rt.minigames_list[sim.meta.minigame_id + 1 ..].len);
 
-    if (sim.meta.minigame_timer < 15 and sim.meta.minigame_timer % sim.meta.minigame_counter == 0) {
-        sim.meta.minigame_timer = 0;
-        sim.meta.minigame_counter += 1;
+    var query = sim.world.query(&.{
+        ecs.component.Pos,
+        ecs.component.Ctr,
+    }, &.{});
 
-        std.debug.print("{} {}\n", .{ sim.meta.minigame_timer, sim.meta.minigame_counter });
+    while (query.next()) |_| {
+        const pos = query.get(ecs.component.Pos) catch unreachable;
+        const ctr = query.get(ecs.component.Ctr) catch unreachable;
 
-        var query = sim.world.query(&.{
-            ecs.component.Pos,
-            ecs.component.Ctr,
-        }, &.{});
-
-        while (query.next()) |_| {
-            const pos = query.get(ecs.component.Pos) catch unreachable;
-            const ctr = query.get(ecs.component.Ctr) catch unreachable;
+        if (sim.meta.minigame_timer < 15 and sim.meta.minigame_timer % sim.meta.minigame_counter == 0) {
+            sim.meta.minigame_timer = 0;
+            sim.meta.minigame_counter += 1;
 
             ctr.count = (ctr.count + 1) % minigames;
             pos.pos = [_]i32{ 192, 96 + @as(i32, @intCast(16 * ctr.count)) };
-        }
-    } else if (sim.meta.minigame_timer == 20) {
-        var query = sim.world.query(&.{
-            ecs.component.Ctr,
-        }, &.{});
-
-        while (query.next()) |_| {
-            const ctr = query.get(ecs.component.Ctr) catch unreachable;
-
+        } else if (sim.meta.minigame_timer == 75) {
             sim.meta.minigame_id = ctr.count + sim.meta.minigame_id + 1;
         }
     }

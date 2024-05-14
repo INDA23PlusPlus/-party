@@ -8,8 +8,9 @@ const input = @import("./input.zig");
 
 const Invariables = @import("./Invariables.zig");
 
-round_buffer: [20]simulation.Simulation = [_]simulation.Simulation{.{}} ** 20,
-head_tick_elapsed: u64 = 0,
+start_state: simulation.Simulation = .{},
+round_buffer: [128]simulation.Simulation = undefined,
+head_tick_elapsed: u64 = std.math.maxInt(u64),
 
 const Self = @This();
 
@@ -17,7 +18,7 @@ pub inline fn latest(self: *Self) *simulation.Simulation {
     return &self.round_buffer[self.head_tick_elapsed % self.round_buffer.len];
 }
 
-pub inline fn skip_tick(self: *Self) *simulation.Simulation {
+inline fn skip_tick(self: *Self) *simulation.Simulation {
     const from = self.latest();
     self.head_tick_elapsed += 1;
     const to = self.latest();
@@ -30,11 +31,25 @@ pub fn simulate(self: *Self, input_state: input.Timeline, rt: Invariables) !void
     try simulation.simulate(to, input_state, rt);
 }
 
+pub fn reset(self: *Self) void {
+    self.head_tick_elapsed = 0;
+    self.round_buffer[0] = self.start_state;
+}
+
 pub fn rewind(self: *Self, tick: u64) void {
-    std.debug.assert(tick > 0);
-    std.debug.assert(tick < self.head_tick_elapsed);
+    if (tick == 0) {
+        self.reset();
+        return;
+    }
+    if (tick > self.head_tick_elapsed) {
+        // We ignore requests to rewind into the future.
+        return;
+    }
     if (self.head_tick_elapsed - tick >= self.round_buffer.len) {
-        std.debug.panic("tried to rewind too far", .{});
+        self.reset();
+        std.debug.print("rewinding too far caused the simulation to reset", .{});
+        return;
     }
     self.head_tick_elapsed = tick;
+    std.debug.assert(self.latest().meta.ticks_elapsed == tick);
 }

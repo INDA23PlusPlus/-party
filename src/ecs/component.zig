@@ -24,7 +24,7 @@ pub const components: []const type = &.{
     Col,
     Dir,
     Tex,
-    Txt,
+    TextDeprecated,
     Anm,
     Lnk,
     Ctr,
@@ -38,8 +38,8 @@ pub const components: []const type = &.{
     Blk,
     Kng,
     Src,
-    Dst,
     Txx,
+    Str,
 };
 
 /// Entities with this component are positionable.
@@ -95,8 +95,8 @@ pub const Txx = struct {
 };
 
 /// Entities with this component have associated text.
-pub const Txt = struct {
-    string: [:0]const u8 = "",
+pub const TextDeprecated = struct {
+    string: [:0]const u8 = "", // TODO: use hash instead of slice
     color: u32 = 0xFFFFFFFF,
     font_size: u8 = 24,
     subpos: @Vector(2, i32) = .{ 0, 0 },
@@ -128,7 +128,6 @@ pub const Anm = struct {
 
 /// Entities with this component can count.
 pub const Ctr = struct {
-    id: u32 = 0,
     count: u32 = 0,
 };
 
@@ -162,5 +161,5 @@ pub const Kng = struct {};
 /// Entities with this component act as the source of something.
 pub const Src = struct {};
 
-/// Entities with this component act as the destination of something.
-pub const Dst = struct {};
+/// Entities with this component act as strings.
+pub const Str = struct {};

@@ -7,10 +7,10 @@ const hot_n_steamy = @import("hot_n_steamy.zig");
 const kattis = @import("kattis.zig");
 const lobby = @import("lobby.zig");
 const gamewheel = @import("gamewheel.zig");
-const shuffle = @import("shuffle.zig");
 const example = @import("example.zig");
 const scoreboard = @import("scoreboard.zig");
 const preferred = @import("preferred.zig");
+const winscreen = @import("winscreen.zig");
 
 const Minigame = @import("Minigame.zig");
 
@@ -43,17 +43,17 @@ pub const list = [_]Minigame{
     },
 
     .{
+        .name = "winscreen",
+        .update = winscreen.update,
+        .init = winscreen.init,
+    },
+    .{
         .name = "gamewheel",
         .update = gamewheel.update,
         .init = gamewheel.init,
     },
     // All minigames that can be picked by the spinning wheel should
     // come after the "gamewheel" minigame.
-    .{
-        .name = "shuffle", // TODO: Move?
-        .update = shuffle.update,
-        .init = shuffle.init,
-    },
     .{
         .name = "morsecode",
         .update = morsecode.update,

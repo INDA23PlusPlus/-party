@@ -12,7 +12,6 @@ pub fn build(b: *std.Build) !void {
     const raylib_math = raylib_dep.module("raylib-math"); // raymath module
     const raylib_artifact = raylib_dep.artifact("raylib"); // raylib C library
 
-
     // const text_tool = b.addExecutable(.{
     //     .name = "text_tool",
     //     .root_source_file = .{ .path = "src/text_tool.zig" },

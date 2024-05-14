@@ -91,7 +91,9 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
             ecs.component.Tex,
             ecs.component.Ctr,
             ecs.component.Lnk,
-        }, &.{});
+        }, &.{
+            ecs.component.Str,
+        });
 
         while (query.next()) |_| {
             const pos = query.get(ecs.component.Pos) catch unreachable;
