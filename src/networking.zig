@@ -78,15 +78,18 @@ fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packe
     var scanner = cbor.Scanner{};
     var ctx = scanner.begin(packet);
     var header = try ctx.readArray();
+    std.debug.assert(header.items == 2);
     client.tick_acknowledged = try header.readU64();
     var packets = try header.readArray();
     for (0..packets.items) |_| {
         var packet_ctx = try packets.readArray();
+        std.debug.assert(packet_ctx.items == 5);
         const frame_tick_index = try packet_ctx.readU64();
+        const player_index = try packet_ctx.readU64();
         const dpad = try packet_ctx.readU64();
         const button_a = try packet_ctx.readU64();
         const button_b = try packet_ctx.readU64();
-        try packets.readEnd();
+        try packet_ctx.readEnd();
 
         if (client.packets_available >= server_data.conns_incoming_packets.len) {
             continue;
@@ -99,7 +102,7 @@ fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packe
                 .button_a = @enumFromInt(button_a),
                 .button_b = @enumFromInt(button_b),
             },
-            .player = @truncate(client_index),
+            .player = @truncate(player_index),
         };
 
         client.packets_available += 1;

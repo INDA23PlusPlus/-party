@@ -18,7 +18,6 @@ const NetworkingQueue = @import("NetworkingQueue.zig");
 
 const minigames_list = @import("minigames/list.zig").list;
 
-
 /// How many resimulation steps can be performed each graphical frame.
 /// This is used for catching up to the server elapsed_tick.
 pub const max_simulations_per_frame = 512;
@@ -226,6 +225,12 @@ pub fn main() !void {
             simulation_cache.rewind(0);
         }
 
+        if (rl.isKeyPressed(rl.KeyboardKey.key_p)) {
+            const file = std.io.getStdErr();
+            const writer = file.writer();
+            try input_merger.dumpInputs(writer);
+        }
+
         //if (simulation_cache.head_tick_elapsed == 300 + 1) {
         //    const file = std.io.getStdErr();
         //    const writer = file.writer();
@@ -235,14 +240,12 @@ pub fn main() !void {
 
         // benchmarker.start();
 
-        for(0..max_simulations_per_frame) |_| {
+        for (0..max_simulations_per_frame) |_| {
             // All code that controls how objects behave over time in our game
             // should be placed inside of the simulate procedure as the simulate procedure
             // is called in other places. Not doing so will lead to inconsistencies.
             if (simulation_cache.head_tick_elapsed < input_merger.buttons.items.len) {
-                const timeline_to_tick = input.Timeline{
-                    .buttons = input_merger.buttons.items[0..simulation_cache.head_tick_elapsed + 1]
-                };
+                const timeline_to_tick = input.Timeline{ .buttons = input_merger.buttons.items[0 .. simulation_cache.head_tick_elapsed + 1] };
                 try simulation_cache.simulate(timeline_to_tick, invariables);
             }
             _ = static_arena.reset(.retain_capacity);
