@@ -22,6 +22,7 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/gamewheel.png"),
+            .v = 1,
             .w = 6,
             .h = 6,
         },
