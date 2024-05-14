@@ -153,17 +153,18 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
         const send_start = connection.consistent_until + 1;
         const send_until = @min(server_data.input_merger.buttons.items.len, send_start + max_inputs_per_socket_packet);
         const input_tick_count = send_until -| send_start;
+        const targeted_tick = connection.consistent_until + input_tick_count;
 
         if (conn_type == .local) {
-            for (send_start..send_start + input_tick_count) |tick_number| {
-                const inputs = server_data.input_merger.buttons.items[tick_number];
+            for (connection.consistent_until..targeted_tick) |tick_index| {
+                const inputs = server_data.input_merger.buttons.items[tick_index];
                 for (inputs, 0..) |packet, player_index| {
                     // TODO: Reduce the nesting.
                     if (networking_queue.outgoing_data_count >= networking_queue.outgoing_data.len) {
                         continue;
                     }
                     networking_queue.outgoing_data[networking_queue.outgoing_data_count] = .{
-                        .tick = tick_number,
+                        .tick = tick_index,
                         .player = @truncate(player_index),
                         .data = packet,
                     };
@@ -184,7 +185,6 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
         var fb = std.io.fixedBufferStream(&send_buffer);
         const writer = fb.writer();
         try cbor.writeArrayHeader(writer, input_tick_count);
-        const targeted_tick = connection.consistent_until + input_tick_count;
         for (connection.consistent_until..targeted_tick) |tick_index| {
             const inputs = server_data.input_merger.buttons.items[tick_index];
             const is_certain = server_data.input_merger.is_certain.items[tick_index];
