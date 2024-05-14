@@ -36,10 +36,6 @@ fn findMinigameID(preferred_minigame: []const u8) u32 {
     std.debug.panic("unknown minigame: {s}", .{preferred_minigame});
 }
 
-// Settings
-// TODO: move to settings file
-const BC_COLOR = rl.Color.white;
-
 const StartNetRole = enum {
     client,
     server,
@@ -53,6 +49,7 @@ const LaunchOptions = struct {
     force_wasd: bool = false,
     force_ijkl: bool = false,
     force_minigame: u32 = 1,
+    hostname: []const u8 = "127.0.0.1",
     fn parse() !LaunchOptions {
         var result = LaunchOptions{};
         var mem: [1024]u8 = undefined;
@@ -78,6 +75,8 @@ const LaunchOptions = struct {
             } else if (std.mem.eql(u8, arg, "--minigame")) {
                 result.force_minigame = findMinigameID(args.next() orelse "");
                 std.debug.print("will launch minigame {d}\n", .{result.force_minigame});
+            } else if (std.mem.eql(u8, arg, "--hostname")) {
+                result.hostname = args.next() orelse "";
             } else {
                 std.debug.print("unknown argument: {s}\n", .{arg});
                 return error.UnknownArg;
@@ -130,7 +129,10 @@ pub fn main() !void {
     // Networking
     if (launch_options.start_as_role == .client) {
         std.debug.print("starting client thread\n", .{});
-        try networking.startClient(&net_thread_queue);
+        if (std.mem.eql(u8, launch_options.hostname, "")) {
+            @panic("missing hostname parameter");
+        }
+        try networking.startClient(&net_thread_queue, launch_options.hostname);
     } else if (launch_options.start_as_role == .server) {
         std.debug.print("starting server thread\n", .{});
         try networking.startServer(&net_thread_queue);
@@ -265,7 +267,7 @@ pub fn main() !void {
         // Begin rendering.
         window.update();
         rl.beginDrawing();
-        rl.clearBackground(BC_COLOR);
+        rl.clearBackground(rl.Color.white);
         render.update(&simulation_cache.latest().world, &assets, &window);
 
         // Stop rendering.

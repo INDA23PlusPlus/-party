@@ -396,13 +396,13 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !u64
     return newest_input_tick;
 }
 
-fn clientThread(networking_queue: *NetworkingQueue) !void {
+fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void {
     // We need the GPA because tcpConnectToHost needs to store the DNS lookups somewhere.
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
 
-    const stream = try std.net.tcpConnectToHost(alloc, "127.0.0.1", 8080);
+    const stream = try std.net.tcpConnectToHost(alloc, hostname, 8080);
 
     // TODO: Use non-blocking reads such that input is always send even if other inputs are still in air.
     std.debug.print("connection established\n", .{});
@@ -444,6 +444,6 @@ fn clientThread(networking_queue: *NetworkingQueue) !void {
     }
 }
 
-pub fn startClient(networking_queue: *NetworkingQueue) !void {
-    _ = try std.Thread.spawn(.{}, clientThread, .{networking_queue});
+pub fn startClient(networking_queue: *NetworkingQueue, hostname: []const u8) !void {
+    _ = try std.Thread.spawn(.{}, clientThread, .{ networking_queue, hostname });
 }
