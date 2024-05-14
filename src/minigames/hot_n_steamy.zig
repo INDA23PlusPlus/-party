@@ -60,7 +60,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             try spawnPlayer(&sim.world, rand, @intCast(id));
         }
     }
-    try crown.init(sim, .{ 0, -10 });
+    try crown.init(sim, .{ 0, -16 });
 }
 
 pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invariables) !void {
