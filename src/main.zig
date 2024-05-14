@@ -227,7 +227,7 @@ pub fn main() !void {
         // is called in other places. Not doing so will lead to inconsistencies.
         // benchmarker.start();
         try simulation_cache.simulate(current_input_timeline, invariables);
-        _ = static_arena.reset(.retain_capacity);
+        _ = frame_arena.reset(.retain_capacity);
         // benchmarker.stop();
         // if (benchmarker.laps % 360 == 0) {
         //     try benchmarker.write();

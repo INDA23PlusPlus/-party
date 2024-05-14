@@ -8,13 +8,18 @@ const win = @import("window.zig");
 pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) void {
     var query = world.query(&.{ ecs.component.Pos, ecs.component.Tex }, &.{});
 
+    const scaling: @Vector(2, f32) = .{
+        @as(f32, @floatFromInt(window.width)) / constants.world_width,
+        @as(f32, @floatFromInt(window.height)) / constants.world_height,
+    };
+
     while (query.next()) |_| {
         const pos_component = query.get(ecs.component.Pos) catch unreachable;
         const tex_component = query.get(ecs.component.Tex) catch unreachable;
 
-        const tex = am.hashmap.get(tex_component.texture_hash) orelse am.hashmap.get(AssetManager.pathHash("assets/default.png")) orelse unreachable;
+        const tex = am.texture_map.get(tex_component.texture_hash) orelse am.texture_map.get(AssetManager.default_hash) orelse unreachable;
 
-        // Src
+        // Srcl
 
         const src_x: f32 = @floatFromInt(tex_component.u * constants.asset_resolution);
         const src_y: f32 = @floatFromInt(tex_component.v * constants.asset_resolution);
@@ -27,11 +32,6 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
         const src = rl.Rectangle{ .x = src_x, .y = src_y, .width = flip_horizontal * src_w, .height = flip_vertical * src_h };
 
         // Dst
-
-        const scaling: @Vector(2, f32) = .{
-            @as(f32, @floatFromInt(window.width)) / constants.world_width,
-            @as(f32, @floatFromInt(window.height)) / constants.world_height,
-        };
 
         const size: f32 = @floatFromInt(tex_component.size);
 
@@ -58,8 +58,6 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
         const pos_component = text_query.get(ecs.component.Pos) catch unreachable;
         const text_c = text_query.get(ecs.component.Txt) catch unreachable;
 
-        if (text_c.draw == false) continue; // Ugly, can be fixed with dynamic strings for text??
-
         const color = rl.Color.fromInt(text_c.color);
         const pos = pos_component.pos + text_c.subpos;
         const pos_x = pos[0];
@@ -75,6 +73,23 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
         const dst_y = @divFloor(pos_y * window.height, constants.world_height) - text_height_half;
 
         rl.drawText(text_c.string, dst_x, dst_y, @intFromFloat(font_size_scaled), color);
+    }
+
+    var new_text_query = world.query(&.{ ecs.component.Pos, ecs.component.Txx }, &.{});
+
+    // Draw text using the AssetManager instead of a slice also uses the correct scaling and font to look like the new standard
+    while (new_text_query.next()) |_| {
+        const pos_component = new_text_query.get(ecs.component.Pos) catch unreachable;
+        const text_c = new_text_query.get(ecs.component.Txx) catch unreachable;
+
+        const color = rl.Color.fromInt(text_c.color);
+        const pos = @as(@Vector(2, f32), @floatFromInt(pos_component.pos + text_c.subpos)) * scaling;
+
+        const font_size_scaled = @as(f32, @floatFromInt(text_c.font_size)) * scaling[0];
+
+        const string = am.text_map.get(text_c.hash) orelse am.text_map.get(AssetManager.default_string_hash) orelse unreachable;
+
+        rl.drawTextEx(am.font, string, rl.Vector2.init(pos[0], pos[1]), font_size_scaled, 1, color);
     }
 
     var debug_position_query = world.query(&.{

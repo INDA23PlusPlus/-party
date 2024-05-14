@@ -32,6 +32,25 @@ const game_strings = [_][:0]const u8{
     "ERIK",
 };
 
+const game_strings_hash = blk: {
+    var res: [game_strings.len]u64 = undefined;
+    for (game_strings, 0..) |game_string, i| {
+        res[i] = AssetManager.pathHash(game_string);
+    }
+
+    break :blk res;
+};
+
+fn game_string_from_hash(hash: u64) [:0]const u8 {
+    for (game_strings, 0..) |game_string, i| {
+        if (game_strings_hash[i] == hash) {
+            return game_string;
+        }
+    }
+
+    unreachable;
+}
+
 fn set_string_info(meta: *simulation.Metadata) [:0]const u8 {
     //var rand_impl = std.rand.DefaultPrng.init(@as(u64, @bitCast(std.time.milliTimestamp())));
     var prng = meta.minigame_prng;
@@ -56,7 +75,9 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
     const game_string = set_string_info(&sim.meta);
     const string_info = try sim.world.spawnWith(.{
-        ecs.component.Txt{ .string = game_string },
+        ecs.component.Txx{
+            .hash = AssetManager.pathHash(game_string),
+        },
     });
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{ .pos = [2]i32{ 10, 10 } },
@@ -69,11 +90,11 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
         if (inp.is_connected()) {
             _ = try sim.world.spawnWith(.{
                 // cats
-                ecs.component.Txt{
-                    .string = player_strings[id],
+                ecs.component.Txx{
+                    .hash = AssetManager.pathHash(player_strings[id]),
                     .font_size = 10,
                     .color = 0xff0066ff,
-                    .subpos = .{ 10, 20 },
+                    .subpos = .{ -10, 16 },
                 },
                 ecs.component.Pos{ .pos = assigned_pos(id) },
                 ecs.component.Tex{
@@ -105,10 +126,11 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{ .pos = [2]i32{ 245, 55 } },
-        ecs.component.Txt{
-            .string = game_string,
+        ecs.component.Txx{
+            .hash = AssetManager.pathHash(game_string),
             // .font_size = 10,
             .color = 0x666666FF,
+            .font_size = 20,
         },
     });
 
@@ -194,8 +216,8 @@ fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
 
         var current_letter = world.inspect(lnk.child.?, ecs.component.Ctr) catch unreachable;
         const child_lnk = world.inspect(lnk.child.?, ecs.component.Lnk) catch unreachable;
-        const game_string_comp = world.inspect(child_lnk.child.?, ecs.component.Txt) catch unreachable;
-        const game_string = game_string_comp.string;
+        const game_string_comp = world.inspect(child_lnk.child.?, ecs.component.Txx) catch unreachable;
+        const game_string = game_string_from_hash(game_string_comp.hash);
 
         if (ctr.count == 0) continue;
 

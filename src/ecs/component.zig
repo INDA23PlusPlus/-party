@@ -39,6 +39,7 @@ pub const components: []const type = &.{
     Kng,
     Src,
     Dst,
+    Txx,
 };
 
 /// Entities with this component are positionable.
@@ -85,9 +86,17 @@ pub const Plr = struct {
     id: u32 = 0, // Use this value to find the correct player input.
 };
 
+/// Entities with this component render text using a asset hash just like Tex components. All strings must be added to the list in AssetManager at comptime
+pub const Txx = struct {
+    hash: u64 = AssetManager.default_string_hash,
+    color: u32 = 0xFFFFFFFF,
+    font_size: u8 = 10,
+    subpos: @Vector(2, i32) = .{ 0, 0 },
+};
+
 /// Entities with this component have associated text.
 pub const Txt = struct {
-    string: [:0]const u8 = "", // TODO: use hash instead of slice
+    string: [:0]const u8 = "",
     color: u32 = 0xFFFFFFFF,
     font_size: u8 = 24,
     subpos: @Vector(2, i32) = .{ 0, 0 },
