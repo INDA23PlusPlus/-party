@@ -104,7 +104,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
         if (ctr.count == 1) ready_count += 1;
     }
 
-    if (ready_count == player_count) {
+    if (ready_count == player_count and player_count > 0) {
         sim.meta.minigame_id = constants.minigame_gamewheel;
     }
 }
