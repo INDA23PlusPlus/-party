@@ -25,6 +25,7 @@ pub const Animation = enum {
     SmashAttackSmoke,
     SmashDeath,
     SmashSun,
+    Gamewheel,
     Crown,
     CatPortrait,
     CatPortraitDie,
@@ -53,6 +54,7 @@ pub fn data(animation: Animation) []const Frame {
         .SmashAttackSmoke => &frames_smash_attack_smoke,
         .SmashDeath => &frames_smash_death,
         .SmashSun => &frames_smash_sun,
+        .Gamewheel => &frames_gamewheel,
         .Crown => &frames_crown,
         .CatPortrait => &frames_portrait,
         .CatPortraitDie => &frames_portrait_die,
@@ -186,6 +188,13 @@ const frames_smash_sun: [4]Frame = .{
     Frame.init(4, 0),
     Frame.init(8, 0),
     Frame.init(12, 0),
+};
+
+const frames_gamewheel: [4]Frame = .{
+    Frame.init(0, 0),
+    Frame.init(16, 0),
+    Frame.init(32, 0),
+    Frame.init(48, 0),
 };
 
 const frames_crown: [18]Frame = .{

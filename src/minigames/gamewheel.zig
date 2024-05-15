@@ -4,6 +4,7 @@ const simulation = @import("../simulation.zig");
 const render = @import("../render.zig");
 const input = @import("../input.zig");
 const constants = @import("../constants.zig");
+const animator = @import("../animation/animator.zig");
 
 const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
@@ -13,8 +14,13 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/roulette.png"),
-            .w = constants.world_width_tiles,
-            .h = constants.world_height_tiles,
+            .w = 16,
+            .h = 16,
+            .size = 2,
+        },
+        ecs.component.Anm{
+            .animation = .Gamewheel,
+            .interval = 3,
         },
         ecs.component.Pos{},
     });
@@ -64,6 +70,8 @@ pub fn update(sim: *simulation.Simulation, _: input.Timeline, rt: Invariables) !
             sim.meta.minigame_id = ctr.count + sim.meta.minigame_id + 1;
         }
     }
+
+    animator.update(&sim.world);
 
     sim.meta.minigame_timer += 1;
 }

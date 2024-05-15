@@ -179,7 +179,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
     airborneSystem(&sim.world); // 70 laps/ms
     forceSystem(&sim.world, inputs); // 120 laps/ms
 
-    try deathSystem(sim); // 200 laps/ms
+    try deathSystem(sim, inputs); // 200 laps/ms
 
     animationSystem(&sim.world, inputs); // 150 laps/ms
     animator.update(&sim.world); // 160 laps/ms
@@ -551,7 +551,7 @@ fn hitSystem(world: *ecs.world.World) void {
     }
 }
 
-fn deathSystem(sim: *simulation.Simulation) !void {
+fn deathSystem(sim: *simulation.Simulation, inputs: *input.AllPlayerButtons) !void {
     var query = sim.world.query(&.{
         ecs.component.Plr,
         ecs.component.Pos,
@@ -566,6 +566,7 @@ fn deathSystem(sim: *simulation.Simulation) !void {
     var dead_players: u32 = 0;
 
     while (query.next()) |entity| {
+        const plr = query.get(ecs.component.Pos) catch unreachable;
         const pos = query.get(ecs.component.Pos) catch unreachable;
 
         const x = pos.pos[0];
@@ -588,6 +589,32 @@ fn deathSystem(sim: *simulation.Simulation) !void {
                 },
                 ecs.component.Anm{ .animation = .SmashDeath, .interval = 4 },
                 ecs.component.Tmr{},
+            });
+
+            sim.world.demote(entity, &.{
+                ecs.component.Pos,
+                ecs.component.Mov,
+                ecs.component.Col,
+                ecs.component.Tex,
+                ecs.component.Anm,
+                ecs.component.Ctr,
+                ecs.component.Tmr,
+            });
+        } else if (inputs[plr.id].dpad == .Disconnected) {
+            dead_players += 1;
+            sim.meta.minigame_counter -= 1;
+
+            // Poof
+            _ = try sim.world.spawnWith(.{
+                ecs.component.Pos{ .pos = pos.pos + [_]i32{ -5, -5 } },
+                ecs.component.Tex{
+                    .subpos = [_]i32{ -8, -8 },
+                    .texture_hash = AssetManager.pathHash("assets/smash_attack_smoke.png"),
+                    .w = 2,
+                    .h = 2,
+                    .tint = rl.Color.init(100, 100, 100, 100),
+                },
+                ecs.component.Anm{ .interval = 8, .animation = .SmashAttackSmoke },
             });
 
             sim.world.demote(entity, &.{
