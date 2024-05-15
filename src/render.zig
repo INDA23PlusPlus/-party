@@ -19,7 +19,7 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
 
         const tex = am.texture_map.get(tex_component.texture_hash) orelse am.texture_map.get(AssetManager.default_hash) orelse unreachable;
 
-        // Srcl
+        // Src
 
         const src_x: f32 = @floatFromInt(tex_component.u * constants.asset_resolution);
         const src_y: f32 = @floatFromInt(tex_component.v * constants.asset_resolution);
@@ -91,6 +91,8 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
 
         rl.drawTextEx(am.font, string, rl.Vector2.init(pos[0], pos[1]), font_size_scaled, 1, color);
     }
+
+    if (@import("builtin") != .Debug) return;
 
     var debug_position_query = world.query(&.{
         ecs.component.Pos,
