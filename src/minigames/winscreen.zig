@@ -76,6 +76,7 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, _: Invariable
         sim.meta.minigame_timer += 1;
     }
     try crown.update(sim);
+    animator.update(&sim.world);
 }
 
 fn placePlayer(sim: *simulation.Simulation, sorted_players: [8][2]u32) !void {
@@ -142,6 +143,10 @@ fn moveToLobby(sim: *simulation.Simulation, inputs: input.Timeline) !void {
         const id = plr.id;
         const state = latest[id];
         if (state.button_b == .Pressed) {
+            for (&sim.meta.global_score) |*score| {
+                score.* = 0;
+            }
+
             sim.meta.minigame_id = 2;
         }
     }

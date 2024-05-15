@@ -69,6 +69,8 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             },
             ecs.component.Dir{ .facing = .East },
         });
+
+        sim.meta.minigame_placements[id] = 0; // Everyone's a winner by default
     }
 }
 
