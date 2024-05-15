@@ -326,7 +326,7 @@ fn spawnPlayer(world: *ecs.world.World, rand: std.Random, id: u32) !void {
             .texture_hash = AssetManager.pathHash("assets/smash_cat.png"),
             .tint = constants.player_colors[id],
         },
-        ecs.component.Anm{ .animation = Animation.SmashRun, .interval = 8, .looping = true },
+        ecs.component.Anm{ .animation = Animation.HnsFly, .interval = 10, .looping = true },
         // ecs.component.Dbg{},
     });
 }
