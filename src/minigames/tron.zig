@@ -217,6 +217,22 @@ fn animationSystem(sim: *simulation.Simulation) void {
 fn trailSystem(sim: *simulation.Simulation) !void {
     if (sim.meta.ticks_elapsed % sim.meta.minigame_timer != 0) return;
 
+    var despawn_query = sim.world.query(&.{
+        ecs.component.Ctr,
+        ecs.component.Tex,
+    }, &.{});
+
+    while (despawn_query.next()) |entity| {
+        const ctr = despawn_query.get(ecs.component.Ctr) catch unreachable;
+        const tex = despawn_query.get(ecs.component.Tex) catch unreachable;
+
+        if (ctr.count == 0) sim.world.kill(entity) else ctr.count -= 1;
+
+        const alpha: u8 = @intCast((255 * ctr.count) / (18 - sim.meta.minigame_counter));
+
+        tex.tint.a = alpha;
+    }
+
     var spawn_query = sim.world.query(&.{
         ecs.component.Plr,
         ecs.component.Pos,
@@ -228,7 +244,7 @@ fn trailSystem(sim: *simulation.Simulation) !void {
         _ = try sim.world.spawnWith(.{
             ecs.component.Pos{ .pos = pos.pos },
             ecs.component.Col{ .dim = [_]i32{ 16, 16 } },
-            ecs.component.Ctr{},
+            ecs.component.Ctr{ .count = 18 - sim.meta.minigame_counter },
             ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/tron_skull.png") },
             ecs.component.Anm{
                 .animation = .TronSkull,
@@ -237,20 +253,6 @@ fn trailSystem(sim: *simulation.Simulation) !void {
                 .subframe = @intCast((sim.meta.ticks_elapsed % 32)), // sync animations
             },
         });
-    }
-
-    var despawn_query = sim.world.query(&.{
-        ecs.component.Ctr,
-        ecs.component.Tex,
-    }, &.{});
-
-    while (despawn_query.next()) |entity| {
-        const ctr = despawn_query.get(ecs.component.Ctr) catch unreachable;
-        const Tex = despawn_query.get(ecs.component.Tex) catch unreachable;
-
-        if (ctr.count > 10) sim.world.kill(entity) else ctr.count += 1;
-
-        Tex.tint.a -= 15;
     }
 }
 
@@ -305,14 +307,9 @@ fn deathSystem(sim: *simulation.Simulation) void {
     });
 
     while (dead_player_query.next()) |player| {
-        p += 1;
-        std.debug.print("{}\n", .{p});
         const plr = dead_player_query.get(ecs.component.Plr) catch unreachable;
 
         sim.meta.minigame_placements[plr.id] = sim.meta.minigame_counter + dead_players - 1;
         sim.world.kill(player);
     }
-    p = 0;
 }
-
-var p: usize = 0;

@@ -166,3 +166,23 @@ pub fn decrement(world: *ecs.world.World, entity: ecs.entity.Entity) !bool {
 
     return false;
 }
+
+/// Moves a counter by some vector.
+pub fn move(world: *ecs.world.World, entity: ecs.entity.Entity, velocity: @Vector(2, i32)) !void {
+    const pos = try world.inspect(entity, ecs.component.Pos);
+    const lnk = try world.inspect(entity, ecs.component.Lnk);
+
+    if (world.checkSignature(entity, &.{}, &.{
+        ecs.component.Ctr,
+        ecs.component.Tex,
+        ecs.component.Str,
+    })) {
+        return ecs.world.WorldError.InvalidInspection;
+    }
+
+    pos.pos += velocity;
+
+    if (lnk.child) |child| {
+        try move(world, child, velocity);
+    }
+}
