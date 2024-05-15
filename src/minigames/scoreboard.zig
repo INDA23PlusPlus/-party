@@ -80,6 +80,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 pub fn update(sim: *simulation.Simulation, _: input.Timeline, _: Invariables) !void {
     if (try depleteSystem(sim)) {
         try transitionSystem(sim);
+        // Sort here
     }
 
     try crown.update(sim);
