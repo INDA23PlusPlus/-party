@@ -71,11 +71,6 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     }
 
     try crown.init(sim, .{ 16, -10 });
-
-    // timer responsible for changing minigame
-    _ = try sim.world.spawnWith(.{
-        ecs.component.Tmr{ .ticks = wait_time_ticks },
-    });
 }
 
 pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invariables) !void {
@@ -85,7 +80,7 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
     const scores_depleted = checkScoresDepleted(sim);
     if (scores_depleted) {
         // try updatePos(sim);
-        try timerSystem(sim);
+        try transitionSystem(sim);
     } else {
         try depleteSystem(sim);
         // try skipSystem(sim, inputs);
@@ -140,23 +135,19 @@ fn checkScoresDepleted(sim: *simulation.Simulation) bool {
     return true;
 }
 
-fn timerSystem(sim: *simulation.Simulation) !void {
-    var query = sim.world.query(&.{ecs.component.Tmr}, &.{});
-    while (query.next()) |_| {
-        const tmr = query.get(ecs.component.Tmr) catch unreachable;
-        if (tmr.ticks > 0) {
-            tmr.ticks -= 1;
+fn transitionSystem(sim: *simulation.Simulation) !void {
+    sim.meta.minigame_timer += 1;
+
+    if (sim.meta.minigame_timer < wait_time_ticks) return;
+
+    for (sim.meta.global_score) |score| {
+        if (score >= 500) {
+            sim.meta.minigame_id = constants.minigame_winscreen;
             return;
         }
-        for (sim.meta.global_score) |score| {
-            if (score >= 500) {
-                sim.meta.minigame_id = constants.minigame_winscreen;
-                break;
-            } else {
-                sim.meta.minigame_id = constants.minigame_gamewheel;
-            }
-        }
     }
+
+    sim.meta.minigame_id = constants.minigame_gamewheel;
 }
 
 fn updatePos(sim: *simulation.Simulation) !void {
