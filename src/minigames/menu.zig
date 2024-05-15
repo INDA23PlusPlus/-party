@@ -9,16 +9,30 @@ const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
 
 pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
-    _ = try sim.world.spawnWith(.{
-        ecs.component.Tex{
-            .texture_hash = AssetManager.pathHash("assets/borggarden.png"),
-            .w = constants.world_width_tiles,
-            .h = constants.world_height_tiles,
-        },
-        ecs.component.Pos{
-            .pos = .{ 0, 0 },
-        },
-    });
+    const background_layers = [_][]const u8{
+        "assets/sky_background_0.png",
+        "assets/sky_background_1.png",
+        "assets/sky_background_2.png",
+    };
+
+    const background_scroll = [_]i16{ -1, -2, -3 };
+
+    const n = @min(background_layers.len, background_scroll.len);
+    for (0..n) |i| {
+        for (0..2) |ix| {
+            _ = try sim.world.spawnWith(.{
+                ecs.component.Tex{
+                    .texture_hash = AssetManager.pathHash(background_layers[i]),
+                    .w = constants.world_width_tiles,
+                    .h = constants.world_height_tiles,
+                },
+                ecs.component.Pos{ .pos = .{ @intCast(constants.world_width * ix), 0 } },
+                ecs.component.Mov{
+                    .velocity = ecs.component.Vec2.init(background_scroll[i], 0),
+                },
+            });
+        }
+    }
 
     _ = try sim.world.spawnWith(.{
         ecs.component.Tex{
@@ -126,6 +140,27 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
                     else => unreachable,
                 }
             }
+        }
+    }
+
+    var query = sim.world.query(&.{
+        ecs.component.Pos,
+        ecs.component.Mov,
+    }, &.{});
+
+    while (query.next()) |_| {
+        const pos = try query.get(ecs.component.Pos);
+        const mov = try query.get(ecs.component.Mov);
+
+        mov.subpixel = mov.subpixel.add(mov.velocity);
+
+        const reposition = mov.subpixel.integerParts().toInts();
+
+        pos.pos += reposition;
+        mov.subpixel = mov.subpixel.sub(reposition);
+
+        if (pos.pos[0] + constants.world_width <= 4) {
+            pos.pos[0] = constants.world_width;
         }
     }
 }

@@ -56,6 +56,10 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
 
     for (player_changes, player_ids, 0..) |change, entity, index| {
         if (change == .add) {
+            var random = sim.meta.minigame_prng.random();
+            const x = (constants.world_width / 2) + @as(i32, random.int(i8));
+            const y = (constants.world_height / 2) + @as(i32, random.int(i8));
+
             const text = try sim.world.spawnWith(.{
                 ecs.component.Tex{
                     .texture_hash = AssetManager.pathHash("assets/lobby.png"),
@@ -68,7 +72,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
             });
             player_ids[index] = try sim.world.spawnWith(.{
                 ecs.component.Plr{ .id = @truncate(index) },
-                ecs.component.Pos{ .pos = .{ 256, 144 } },
+                ecs.component.Pos{ .pos = .{ x, y } },
                 ecs.component.Tex{
                     .texture_hash = AssetManager.pathHash("assets/smash_cat.png"),
                     .w = 2,

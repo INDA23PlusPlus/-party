@@ -138,12 +138,6 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invariables) !void {
-    // TEMPORARY
-    if (rl.isKeyPressed(rl.KeyboardKey.key_r)) {
-        sim.world.reset();
-        try init(sim, timeline);
-    }
-
     sim.meta.minigame_timer = @min(60, sim.meta.minigame_timer + @intFromBool(sim.meta.ticks_elapsed % 60 == 0));
 
     try actionSystem(sim, timeline); // 50 laps/ms (2 players)
