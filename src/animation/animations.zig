@@ -28,6 +28,7 @@ pub const Animation = enum {
     Crown,
     CatPortrait,
     CatPortraitDie,
+    ScoreboardBackground,
 };
 
 pub fn data(animation: Animation) []const Frame {
@@ -55,6 +56,7 @@ pub fn data(animation: Animation) []const Frame {
         .Crown => &frames_crown,
         .CatPortrait => &frames_portrait,
         .CatPortraitDie => &frames_portrait_die,
+        .ScoreboardBackground => &frames_scoreboard_background,
     };
 }
 
@@ -219,6 +221,13 @@ const frames_portrait: [6]Frame = .{
 const frames_portrait_die: [2]Frame = .{
     Frame.init(2, 0),
     Frame.init(3, 0),
+};
+
+const frames_scoreboard_background: [4]Frame = .{
+    Frame.init(0 * constants.world_width_tiles, 0),
+    Frame.init(1 * constants.world_width_tiles, 0),
+    Frame.init(2 * constants.world_width_tiles, 0),
+    Frame.init(3 * constants.world_width_tiles, 0),
 };
 
 pub const Frame = struct {

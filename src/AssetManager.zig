@@ -38,6 +38,7 @@ const paths = [_][:0]const u8{
     "assets/lobby.png",
     "assets/gamewheel.png",
     "assets/monogram-bitmap-2.png",
+    "assets/background_animated.png",
 };
 
 pub const default_string = "DEFAULT STRING";
