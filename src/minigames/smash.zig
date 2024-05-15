@@ -551,7 +551,7 @@ fn hitSystem(world: *ecs.world.World) void {
     }
 }
 
-fn deathSystem(sim: *simulation.Simulation, inputs: *input.AllPlayerButtons) !void {
+fn deathSystem(sim: *simulation.Simulation, inputs: *const input.AllPlayerButtons) !void {
     var query = sim.world.query(&.{
         ecs.component.Plr,
         ecs.component.Pos,
@@ -566,7 +566,7 @@ fn deathSystem(sim: *simulation.Simulation, inputs: *input.AllPlayerButtons) !vo
     var dead_players: u32 = 0;
 
     while (query.next()) |entity| {
-        const plr = query.get(ecs.component.Pos) catch unreachable;
+        const plr = query.get(ecs.component.Plr) catch unreachable;
         const pos = query.get(ecs.component.Pos) catch unreachable;
 
         const x = pos.pos[0];

@@ -190,11 +190,13 @@ const frames_smash_sun: [4]Frame = .{
     Frame.init(12, 0),
 };
 
-const frames_gamewheel: [4]Frame = .{
+const frames_gamewheel: [6]Frame = .{
     Frame.init(0, 0),
     Frame.init(16, 0),
     Frame.init(32, 0),
     Frame.init(48, 0),
+    Frame.init(64, 0),
+    Frame.init(80, 0),
 };
 
 const frames_crown: [18]Frame = .{
