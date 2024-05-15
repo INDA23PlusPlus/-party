@@ -73,6 +73,26 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
         sim.meta.minigame_placements[id] = constants.max_player_count - 1;
     }
 
+    // space background
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/morsecode_background.png"),
+            .w = constants.world_width_tiles,
+            .h = constants.world_height_tiles,
+        },
+        ecs.component.Pos{},
+    });
+
+    // morsecode table
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Pos{ .pos = [2]i32{ 246, 108 } },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/morsetable.png"),
+            .w = 18,
+            .h = 12,
+        },
+    });
+
     const game_string = set_string_info(&sim.meta);
     const string_info = try sim.world.spawnWith(.{
         ecs.component.Txx{
@@ -119,23 +139,11 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     }
 
     _ = try sim.world.spawnWith(.{
-        ecs.component.Pos{ .pos = [2]i32{ 245, 55 } },
+        ecs.component.Pos{ .pos = [2]i32{ 230, 30 } },
         ecs.component.Txx{
             .hash = AssetManager.pathHash(game_string),
-            // .font_size = 10,
-            //.color = 0x666666FF,
-            .color = 0x1E64B4FF,
-            .font_size = 20,
-        },
-    });
-
-    // morsecode table
-    _ = try sim.world.spawnWith(.{
-        ecs.component.Pos{ .pos = [2]i32{ 220, 68 } },
-        ecs.component.Tex{
-            .texture_hash = AssetManager.pathHash("assets/morsetable.png"),
-            .w = 16,
-            .h = 11,
+            .color = 0xF4743BFF,
+            .font_size = 45,
         },
     });
 
@@ -144,7 +152,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
-    rl.drawText("Morsecode Minigame", 300, 8, 32, rl.Color.blue);
+    //rl.drawText("Morsecode Minigame", 300, 8, 32, rl.Color.blue);
     try inputSystem(&sim.world, timeline);
     try wordSystem(&sim.world, &sim.meta);
     animator.update(&sim.world);
@@ -181,11 +189,15 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
         var tex = query.get(ecs.component.Tex) catch unreachable;
 
         if (state.is_connected()) {
+            if (state.button_a == .Held or state.button_b == .Held) {
+                tex.u = if (state.button_a == .Held) 1 else 2;
+            } else {
+                tex.u = 0;
+            }
             if (state.button_a == .Pressed or state.button_b == .Pressed) {
                 bit_index.count += if (state.button_b == .Pressed) 1 else 0;
                 keystroke_bitset.ticks |= (@as(u32, 1) << @as(u5, @intCast(bit_index.count)));
                 bit_index.count += 1;
-                tex.u = if (state.button_a == .Pressed) 1 else 2;
             } else if (timeline.horizontal_pressed(plr.id) != 0 and bit_index.count > 0) {
                 // should work as a backspace / undo
                 keystroke_bitset.ticks &= ~(@as(u32, 1) << @as(u5, @intCast(bit_index.count - 1)));
@@ -201,13 +213,14 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
 }
 
 fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
-    var query = world.query(&.{ ecs.component.Plr, ecs.component.Lnk, ecs.component.Ctr, ecs.component.Tmr }, &.{});
-    //var game_string_linked_list = world.query(&.{ecs.component.Src, ecs.component.Ctr, ecs.component.Lnk}, &.{});
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Lnk, ecs.component.Ctr, ecs.component.Tmr, ecs.component.Tex }, &.{});
+
     while (query.next()) |entity| {
         const plr = try query.get(ecs.component.Plr);
         const lnk = query.get(ecs.component.Lnk) catch unreachable;
         var ctr = query.get(ecs.component.Ctr) catch unreachable; // count = bit_index, id = current letter
         var keystrokes_bitset = query.get(ecs.component.Tmr) catch unreachable;
+        var tex = query.get(ecs.component.Tex) catch unreachable;
 
         var current_letter = world.inspect(lnk.child.?, ecs.component.Ctr) catch unreachable;
         const child_lnk = world.inspect(lnk.child.?, ecs.component.Lnk) catch unreachable;
@@ -227,11 +240,9 @@ fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
             if (current_letter.count == game_string.len) {
                 meta.minigame_placements[meta.minigame_counter] = @intCast(plr.id);
                 meta.minigame_counter += 1;
-                std.debug.print("Player finish order: {any}\n", .{meta.minigame_placements});
+                tex.u = 1;
                 world.kill(entity);
-                if (meta.minigame_counter == 7) {
-                    meta.minigame_timer = 0;
-                }
+                std.debug.print("Player finish order: {any}\n", .{meta.minigame_placements});
                 // player has finished
                 // TODO: ignore this players inputs from now on
             }
@@ -240,6 +251,7 @@ fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
         if (ctr.count >= 29) {
             keystrokes_bitset.ticks = 0;
             ctr.count = 0;
+            tex.u = 2;
         }
     }
 }
