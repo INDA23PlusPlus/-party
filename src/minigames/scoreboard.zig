@@ -23,9 +23,9 @@ const crown = @import("../crown.zig");
 // - Speed up the score animation as it goes on
 // - Allow pressing button to skip score animation
 
-const score_distribution: [constants.max_player_count]u32 = .{ 50, 20, 10, 0, 0, 0, 0, 0 }; // completely arbitrary score values, open to change
+const score_distribution: [constants.max_player_count]u32 = .{ 250, 20, 10, 0, 0, 0, 0, 0 }; // completely arbitrary score values, open to change
 const score_decrease_speed = 1; // how much the score decreases every tick
-const wait_time_ticks = 5 * constants.ticks_per_second; // time before switching minigame
+const wait_time_ticks = 3 * constants.ticks_per_second; // time before switching minigame
 const score_text_color = 0xFFCC99FF;
 
 fn scoreFromPlacement(placement: u32) u32 {
@@ -57,7 +57,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             });
         }
     }
-    try crown.init(sim, .{ 0, -5 });
+    try crown.init(sim, .{ 16, -10 });
     // timer responsible for changing minigame
     _ = try sim.world.spawnWith(.{ecs.component.Ctr{ .count = wait_time_ticks }});
 }
