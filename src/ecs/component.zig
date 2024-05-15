@@ -27,7 +27,6 @@ pub const components: []const type = &.{
     TextDeprecated,
     Anm,
     Lnk,
-    Frk,
     Ctr,
     Tmr,
     // Tags
@@ -65,13 +64,6 @@ pub const Col = struct {
 /// Entities with this component may be linked to other entities.
 pub const Lnk = struct {
     child: ?Entity = null,
-};
-
-// [!] I found this necessary because you can only have one Lnk component per entity
-/// Entities with this component may fork into two subentities, like a tree.
-pub const Frk = struct {
-    left: ?Entity = null,
-    right: ?Entity = null,
 };
 
 /// Entities with component can point in a direction.
