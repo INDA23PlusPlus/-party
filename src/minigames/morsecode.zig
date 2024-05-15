@@ -14,7 +14,7 @@ const animator = @import("../animation/animator.zig");
 const morsecode_maxlen = 6;
 
 fn assigned_pos(id: usize) @Vector(2, i32) {
-    const top_left_x = 120;
+    const top_left_x = 110;
     const top_left_y = 160;
     const pos: @Vector(2, i32) = [_]i32{ @intCast(80 * (id % 4) + top_left_x), @intCast(80 * (id / 4) + top_left_y) };
     return pos;
@@ -55,9 +55,9 @@ fn set_string_info(meta: *simulation.Metadata) [:0]const u8 {
     //var rand_impl = std.rand.DefaultPrng.init(@as(u64, @bitCast(std.time.milliTimestamp())));
     var prng = meta.minigame_prng;
     const num = @mod(prng.random().int(u8), game_strings.len);
-    _ = num;
+    //_ = num;
     //std.debug.print("game_string: {any}\n", .{game_strings[0]});
-    return game_strings[0]; // TODO: change 0 to num when polishing
+    return game_strings[num]; // TODO: change 0 to num when polishing
 }
 
 const player_strings: [constants.max_player_count][:0]const u8 = blk: {
@@ -77,12 +77,6 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     const string_info = try sim.world.spawnWith(.{
         ecs.component.Txx{
             .hash = AssetManager.pathHash(game_string),
-        },
-    });
-    _ = try sim.world.spawnWith(.{
-        ecs.component.Pos{ .pos = [2]i32{ 10, 10 } },
-        ecs.component.Tex{
-            .texture_hash = AssetManager.pathHash("assets/BABBA.png"),
         },
     });
 
@@ -129,18 +123,19 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
         ecs.component.Txx{
             .hash = AssetManager.pathHash(game_string),
             // .font_size = 10,
-            .color = 0x666666FF,
+            //.color = 0x666666FF,
+            .color = 0x1E64B4FF,
             .font_size = 20,
         },
     });
 
     // morsecode table
     _ = try sim.world.spawnWith(.{
-        ecs.component.Pos{ .pos = [2]i32{ 300, 55 } },
+        ecs.component.Pos{ .pos = [2]i32{ 220, 68 } },
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/morsetable.png"),
-            .w = 256 / 16,
-            .h = 144 / 8,
+            .w = 16,
+            .h = 11,
         },
     });
 
@@ -208,7 +203,7 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
 fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
     var query = world.query(&.{ ecs.component.Plr, ecs.component.Lnk, ecs.component.Ctr, ecs.component.Tmr }, &.{});
     //var game_string_linked_list = world.query(&.{ecs.component.Src, ecs.component.Ctr, ecs.component.Lnk}, &.{});
-    while (query.next()) |_| {
+    while (query.next()) |entity| {
         const plr = try query.get(ecs.component.Plr);
         const lnk = query.get(ecs.component.Lnk) catch unreachable;
         var ctr = query.get(ecs.component.Ctr) catch unreachable; // count = bit_index, id = current letter
@@ -233,12 +228,16 @@ fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
                 meta.minigame_placements[meta.minigame_counter] = @intCast(plr.id);
                 meta.minigame_counter += 1;
                 std.debug.print("Player finish order: {any}\n", .{meta.minigame_placements});
+                world.kill(entity);
+                if (meta.minigame_counter == 7) {
+                    meta.minigame_timer = 0;
+                }
                 // player has finished
                 // TODO: ignore this players inputs from now on
             }
         }
 
-        if (ctr.count == 31) {
+        if (ctr.count >= 29) {
             keystrokes_bitset.ticks = 0;
             ctr.count = 0;
         }
