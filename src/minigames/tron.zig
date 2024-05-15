@@ -13,6 +13,9 @@ const constants = @import("../constants.zig");
 const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
 
+const left_texture_offset = [_]i32{ -5, -10 };
+const right_texture_offset = [_]i32{ -21, -10 };
+
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     sim.meta.minigame_counter = @intCast(timeline.connectedPlayerCount());
 
@@ -59,11 +62,12 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             ecs.component.Col{ .dim = [_]i32{ 16, 16 } },
             ecs.component.Mov{ .velocity = ecs.component.Vec2.init(1, 0) },
             ecs.component.Tex{
-                .texture_hash = AssetManager.pathHash("assets/kattis.png"),
+                .texture_hash = AssetManager.pathHash("assets/cat_portrait.png"),
                 .tint = constants.player_colors[id],
+                .flip_horizontal = true,
             },
             ecs.component.Anm{
-                .animation = Animation.KattisIdle,
+                .animation = Animation.CatPortrait,
                 .interval = 8,
                 .looping = true,
             },
@@ -160,8 +164,8 @@ fn playerFacingSystem(sim: *simulation.Simulation) void {
         const tex = query.get(ecs.component.Tex) catch unreachable;
         const mov = query.get(ecs.component.Mov) catch unreachable;
 
-        if (mov.velocity.vector[0] < 0) tex.flip_horizontal = true;
-        if (mov.velocity.vector[0] > 0) tex.flip_horizontal = false;
+        if (mov.velocity.vector[0] < 0) tex.flip_horizontal = false;
+        if (mov.velocity.vector[0] > 0) tex.flip_horizontal = true;
     }
 }
 
@@ -280,8 +284,6 @@ fn deathSystem(sim: *simulation.Simulation) void {
                 dead_players += 1;
                 sim.meta.minigame_counter -= 1;
                 sim.world.demote(player, &.{
-                    ecs.component.Pos,
-                    ecs.component.Col,
                     ecs.component.Mov,
                     ecs.component.Tex,
                     ecs.component.Anm,
@@ -296,8 +298,6 @@ fn deathSystem(sim: *simulation.Simulation) void {
     var dead_player_query = sim.world.query(&.{
         ecs.component.Plr,
     }, &.{
-        ecs.component.Pos,
-        ecs.component.Col,
         ecs.component.Mov,
         ecs.component.Tex,
         ecs.component.Anm,
@@ -305,9 +305,14 @@ fn deathSystem(sim: *simulation.Simulation) void {
     });
 
     while (dead_player_query.next()) |player| {
+        p += 1;
+        std.debug.print("{}\n", .{p});
         const plr = dead_player_query.get(ecs.component.Plr) catch unreachable;
 
         sim.meta.minigame_placements[plr.id] = sim.meta.minigame_counter + dead_players - 1;
         sim.world.kill(player);
     }
+    p = 0;
 }
+
+var p: usize = 0;
