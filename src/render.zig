@@ -92,7 +92,7 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
         rl.drawTextEx(am.font, string, rl.Vector2.init(pos[0], pos[1]), font_size_scaled, 1, color);
     }
 
-    if (@import("builtin") != .Debug) return;
+    if (@import("builtin").mode != .Debug) return;
 
     var debug_position_query = world.query(&.{
         ecs.component.Pos,
