@@ -13,44 +13,54 @@ const movement = @import("../physics/movement.zig");
 const collision = @import("../physics/collision.zig");
 const constants = @import("../constants.zig");
 const crown = @import("../crown.zig");
-const text_tooling = @import("../counter.zig");
+const counter = @import("../counter.zig");
 
-const score_text_color = 0xFFCC99FF;
+const font_size = 1;
 
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
-    _ = timeline;
+    // _ = timeline;
     sim.meta.minigame_counter = 8;
     std.debug.print("Press B to go to lobby", .{});
-    for (0..8) |id| {
-        _ = try sim.world.spawnWith(.{
-            ecs.component.Plr{ .id = @intCast(id) },
-            ecs.component.Pos{ .pos = .{ constants.asset_resolution * -4, constants.asset_resolution * -4 } },
-            ecs.component.Tex{
-                .texture_hash = AssetManager.pathHash("assets/smash_cat.png"),
-                .w = 2,
-                .h = 1,
-                .tint = constants.player_colors[id],
-            },
-            ecs.component.Anm{ .animation = Animation.SmashIdle, .interval = 16, .looping = true },
-        });
-    }
-    // for (timeline.latest(), 0..) |inp, id| {
-    //     if (inp.is_connected()) {
-    //         _ = try sim.world.spawnWith(.{
-    //             ecs.component.Plr{ .id = @intCast(id) },
-    //             ecs.component.Pos{ .pos = .{ constants.asset_resolution * -4, constants.asset_resolution * -4 } },
-    //             ecs.component.Tex{
-    //                 .texture_hash = AssetManager.pathHash("assets/smash_cat.png"),
-    //                 .w = 2,
-    //                 .h = 1,
-    //                 .tint = constants.player_colors[id],
-    //             },
-    //             ecs.component.Anm{ .animation = Animation.SmashIdle, .interval = 16, .looping = true },
-    //         });
-    //     }
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Pos{ .pos = .{ 0, 0 } },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/tron_map.png"),
+            .h = constants.world_height_tiles,
+            .w = constants.world_width_tiles,
+            .tint = rl.Color.maroon,
+        },
+    });
+    _ = try spawnPodium(sim);
+    // for (0..8) |id| {
+    //     _ = try sim.world.spawnWith(.{
+    //         ecs.component.Plr{ .id = @intCast(id) },
+    //         ecs.component.Pos{ .pos = .{ constants.asset_resolution * -4, constants.asset_resolution * -4 } },
+    //         ecs.component.Tex{
+    //             .texture_hash = AssetManager.pathHash("assets/smash_cat.png"),
+    //             .w = 2,
+    //             .h = 1,
+    //             .tint = constants.player_colors[id],
+    //         },
+    //         ecs.component.Anm{ .animation = Animation.SmashIdle, .interval = 16, .looping = true },
+    //     });
     // }
+    for (timeline.latest(), 0..) |inp, id| {
+        if (inp.is_connected()) {
+            _ = try sim.world.spawnWith(.{
+                ecs.component.Plr{ .id = @intCast(id) },
+                ecs.component.Pos{ .pos = .{ constants.asset_resolution * -4, constants.asset_resolution * -4 } },
+                ecs.component.Tex{
+                    .texture_hash = AssetManager.pathHash("assets/smash_cat.png"),
+                    .w = 2,
+                    .h = 1,
+                    .tint = constants.player_colors[id],
+                },
+                ecs.component.Anm{ .animation = Animation.SmashIdle, .interval = 16, .looping = true },
+            });
+        }
+    }
 
-    try crown.init(sim, .{ 0, -5 });
+    try crown.init(sim, .{ 16, -10 });
 }
 
 pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, _: Invariables) !void {
@@ -65,6 +75,7 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, _: Invariable
     } else {
         sim.meta.minigame_timer += 1;
     }
+    try crown.update(sim);
 }
 
 fn placePlayer(sim: *simulation.Simulation, sorted_players: [8][2]u32) !void {
@@ -76,15 +87,45 @@ fn placePlayer(sim: *simulation.Simulation, sorted_players: [8][2]u32) !void {
         if (plr.id == player[1]) {
             if (sim.meta.minigame_counter == 1) {
                 pos.pos = .{ constants.world_width / 2 - 16, constants.asset_resolution * 2 };
+                _ = try counter.spawn(
+                    &sim.world,
+                    .{ constants.world_width / 2 + 2, constants.asset_resolution * 3 },
+                    font_size,
+                    constants.player_colors[player[1]],
+                    player[0],
+                );
                 break;
             } else if (sim.meta.minigame_counter == 2) {
-                pos.pos = .{ constants.world_width / 2 - 16 * 3, constants.asset_resolution * 3 };
+                pos.pos = .{ constants.world_width / 2 - 16 * 2, constants.asset_resolution * 3 };
+                _ = try counter.spawn(
+                    &sim.world,
+                    .{ constants.world_width / 2 - 14, constants.asset_resolution * 4 },
+                    font_size,
+                    constants.player_colors[player[1]],
+                    player[0],
+                );
+
                 break;
             } else if (sim.meta.minigame_counter == 3) {
-                pos.pos = .{ constants.world_width / 2 + 16, constants.asset_resolution * 3 + 5 };
+                pos.pos = .{ constants.world_width / 2, constants.asset_resolution * 3 };
+                _ = try counter.spawn(
+                    &sim.world,
+                    .{ constants.world_width / 2 + 18, constants.asset_resolution * 4 },
+                    font_size,
+                    constants.player_colors[player[1]],
+                    player[0],
+                );
+
                 break;
             } else {
                 pos.pos = .{ constants.asset_resolution * 6 + (constants.asset_resolution * 3) * ((@as(i32, @intCast(sim.meta.minigame_counter)) - 3)), constants.asset_resolution * 10 };
+                _ = try counter.spawn(
+                    &sim.world,
+                    .{ constants.asset_resolution * 7 + (constants.asset_resolution * 3) * ((@as(i32, @intCast(sim.meta.minigame_counter)) - 3)), constants.asset_resolution * 11 },
+                    font_size,
+                    constants.player_colors[player[1]],
+                    player[0],
+                );
 
                 break;
             }
@@ -106,6 +147,39 @@ fn moveToLobby(sim: *simulation.Simulation, inputs: input.Timeline) !void {
     }
 }
 
+fn spawnPodium(sim: *simulation.Simulation) !void {
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Pos{
+            .pos = .{ constants.world_width / 2, constants.asset_resolution * 3 },
+        },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/podium_piece.png"),
+            .h = 3,
+            .w = 1,
+        },
+    });
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Pos{
+            .pos = .{ constants.world_width / 2 - 16, constants.asset_resolution * 4 },
+        },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/podium_piece.png"),
+            .h = 2,
+            .w = 1,
+        },
+    });
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Pos{
+            .pos = .{ constants.world_width / 2 + 16, constants.asset_resolution * 4 },
+        },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/podium_piece.png"),
+            .h = 2,
+            .w = 1,
+        },
+    });
+}
+
 fn sortPlayerAterScore(sim: *simulation.Simulation) [8][2]u32 {
     //Sort player afterscore
     //Returns an array of two place arrays where index 0 is the score of the player and index 1 is the player id
@@ -116,24 +190,9 @@ fn sortPlayerAterScore(sim: *simulation.Simulation) [8][2]u32 {
     }
     std.mem.sort([2]u32, &scores_with_id, {}, lessThanFn);
     return scores_with_id;
-    // var query = sim.world.query(&.{ ecs.component.Plr, ecs.component.Pos, ecs.component.Lnk }, &.{});
-    // while (query.next()) |_| {
-    //     const plr = query.get(ecs.component.Plr) catch unreachable;
-    //     const pos = query.get(ecs.component.Pos) catch unreachable;
-    //     const lnk = query.get(ecs.component.Lnk) catch unreachable;
-
-    //     for (scores_with_id, 8..0) |score_with_id, placement| {
-    //         if (plr.id == score_with_id[1]) {
-    //             if (placement == 0) {
-    //                 const ctr_pos = sim.world.inspect(lnk.child.?, ecs.component.Pos) catch unreachable;
-    //                 pos.pos = .{ constants.world_width_tiles / 2, 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(placement)) };
-    //                 ctr_pos.pos = .{ constants.asset_resolution * 4, 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(placement)) };
-    //             }
-    //         }
-    //     }
-    // }
+    // v
 }
 
 fn lessThanFn(_: void, a: [2]u32, b: [2]u32) bool {
-    return a[0] < b[0];
+    return a[0] > b[0];
 }

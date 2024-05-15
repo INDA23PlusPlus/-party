@@ -10,6 +10,7 @@ const paths = [_][:0]const u8{
     "assets/test.png",
     "assets/kattis.png",
     "assets/tron_map.png",
+    "assets/podium_piece.png",
     "assets/smash_background_0.png",
     "assets/smash_background_1.png",
     "assets/smash_background_2.png",
@@ -34,7 +35,7 @@ const paths = [_][:0]const u8{
     "assets/cat_portrait.png",
     "assets/lobby.png",
     "assets/gamewheel.png",
-    "assets/monogram-bitmap-2.png"
+    "assets/monogram-bitmap-2.png",
 };
 
 pub const default_string = "DEFAULT STRING";
