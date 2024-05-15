@@ -16,26 +16,29 @@ const crown = @import("../crown.zig");
 const counter = @import("../counter.zig");
 
 // Scoreboard:
-// Deplete local score and add to global score
-// Change minigame once all scores are depleted
+//  Deplete local score and add to global score
+//  Change minigame once all scores are depleted
 
-// TODO:
-// - Deplete the scores in order
-// - Speed up the score animation as it goes on
-// - Allow pressing button to skip score animation
+const depletion_interval_ticks = 2; // Time between awarding score points
 
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
+
+    // Background
+    _ = try sim.world.spawnWith(.{ ecs.component.Pos{}, ecs.component.Tex{
+        .texture_hash = AssetManager.pathHash("assets/background_animated.png"),
+        .w = constants.world_width_tiles,
+        .h = constants.world_height_tiles,
+        .u = 0,
+        .v = 0,
+    }, ecs.component.Anm{
+        .animation = .ScoreboardBackground,
+        .interval = 16,
+    } });
+
     for (timeline.latest(), 0..) |inp, id| {
         if (inp.dpad == .Disconnected) continue;
 
-        const global_score_counter = try counter.spawn(
-            &sim.world,
-            .{ constants.asset_resolution * 5, 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(id)) },
-            2,
-            rl.Color.blue,
-            sim.meta.global_score[id],
-        );
-
+        const global_score = sim.meta.global_score[id];
         const local_score: u32 = switch (sim.meta.minigame_placements[id]) {
             0 => 20,
             1 => 10,
@@ -43,20 +46,39 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             else => 0,
         };
 
+        const global_score_counter = try counter.spawn(
+            &sim.world,
+            .{ constants.asset_resolution * 5, 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(id)) },
+            2,
+            rl.Color.white,
+            global_score,
+        );
+
         const local_score_counter = try counter.spawn(
             &sim.world,
             .{ constants.asset_resolution * 8, 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(id)) },
             2,
-            rl.Color.green,
+            rl.Color.gold,
             local_score,
         );
+
+        sim.world.promote(global_score_counter, &.{ecs.component.Plr});
+        var glob_score_plr = sim.world.inspect(global_score_counter, ecs.component.Plr) catch unreachable;
+        glob_score_plr.id = @intCast(id);
+
+        sim.world.promote(local_score_counter, &.{ecs.component.Plr});
+        var loc_score_plr = sim.world.inspect(local_score_counter, ecs.component.Plr) catch unreachable;
+        loc_score_plr.id = @intCast(id);
 
         _ = try sim.world.spawnWith(.{
             ecs.component.Plr{ .id = @intCast(id) },
             ecs.component.Ctr{ .count = local_score },
             ecs.component.Lnk{ .child = global_score_counter },
+            ecs.component.Src{},
         });
+
         _ = try sim.world.spawnWith(.{
+            ecs.component.Plr{ .id = @intCast(id) },
             ecs.component.Ctr{ .count = local_score },
             ecs.component.Lnk{ .child = local_score_counter },
         });
@@ -77,56 +99,62 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     try crown.init(sim, .{ 16, -10 });
 }
 
-pub fn update(sim: *simulation.Simulation, _: input.Timeline, _: Invariables) !void {
+pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
+    try skipSystem(sim, timeline);
     if (try depleteSystem(sim)) {
         try transitionSystem(sim);
-        // Sort here
+        // try positionSystem(sim); // disabled until text is positionable
     }
-
     try crown.update(sim);
     animator.update(&sim.world);
 }
 
 /// Returns true if the scores have been depleted.
 fn depleteSystem(sim: *simulation.Simulation) !bool {
+    var depleted = true;
+
+    var local_counter_query = sim.world.query(&.{
+        ecs.component.Plr,
+        ecs.component.Ctr,
+        ecs.component.Lnk,
+    }, &.{
+        ecs.component.Str,
+        ecs.component.Src,
+    });
+
     var global_counter_query = sim.world.query(&.{
         ecs.component.Plr,
         ecs.component.Ctr,
         ecs.component.Lnk,
+        ecs.component.Src,
     }, &.{
         ecs.component.Str,
     });
 
-    while (global_counter_query.next()) |_| {
-        const plr = global_counter_query.get(ecs.component.Plr) catch unreachable;
-        const ctr = global_counter_query.get(ecs.component.Ctr) catch unreachable;
-        const lnk = global_counter_query.get(ecs.component.Lnk) catch unreachable;
+    if (sim.meta.minigame_counter < depletion_interval_ticks) {
+        sim.meta.minigame_counter += 1;
+    } else {
+        sim.meta.minigame_counter = 0;
 
-        if (ctr.count > 0) {
-            sim.meta.global_score[plr.id] += 1;
-            ctr.count -= 1;
-            _ = try counter.increment(&sim.world, lnk.child.?);
+        while (local_counter_query.next()) |_| {
+            const ctr = local_counter_query.get(ecs.component.Ctr) catch unreachable;
+            const lnk = local_counter_query.get(ecs.component.Lnk) catch unreachable;
+            if (ctr.count > 0) {
+                ctr.count -= 1;
+                depleted = ctr.count == 0;
+                _ = try counter.decrement(&sim.world, lnk.child.?);
+            }
         }
-    }
 
-    var local_counter_query = sim.world.query(&.{
-        ecs.component.Ctr,
-        ecs.component.Lnk,
-    }, &.{
-        ecs.component.Plr,
-        ecs.component.Str,
-    });
-
-    var depleted = true;
-
-    while (local_counter_query.next()) |_| {
-        const ctr = local_counter_query.get(ecs.component.Ctr) catch unreachable;
-        const lnk = local_counter_query.get(ecs.component.Lnk) catch unreachable;
-
-        if (ctr.count > 0) {
-            ctr.count -= 1;
-            depleted = ctr.count == 0;
-            _ = try counter.decrement(&sim.world, lnk.child.?);
+        while (global_counter_query.next()) |_| {
+            const plr = global_counter_query.get(ecs.component.Plr) catch unreachable;
+            const ctr = global_counter_query.get(ecs.component.Ctr) catch unreachable;
+            const lnk = global_counter_query.get(ecs.component.Lnk) catch unreachable;
+            if (ctr.count > 0) {
+                ctr.count -= 1;
+                sim.meta.global_score[plr.id] += 1;
+                _ = try counter.increment(&sim.world, lnk.child.?);
+            }
         }
     }
 
@@ -149,46 +177,34 @@ fn transitionSystem(sim: *simulation.Simulation) !void {
     sim.meta.minigame_id = constants.minigame_gamewheel;
 }
 
-// ************************************************** //
-
-/// Instantly skips score animation if the player presses a button
-fn skipSystem(sim: *simulation.Simulation, inputs: input.Timeline) !void {
-    const latest = inputs.latest();
-    var query = sim.world.query(&.{ ecs.component.Plr, ecs.component.Lnk }, &.{});
-    while (query.next()) |_| {
-        const plr = query.get(ecs.component.Plr) catch unreachable;
-        const lnk = query.get(ecs.component.Lnk) catch unreachable;
-        const score_counter = lnk.child.?; // should not be null
-
-        const state = latest[plr.id];
-
-        if (state.button_a == .Pressed or state.button_b == .Pressed) {
-            const ctr = try sim.world.inspect(score_counter, ecs.component.Ctr);
-            sim.meta.global_score[plr.id] += ctr.count;
-            while (try counter.decrement(&sim.world, score_counter)) {}
+/// Instantly skips score animation if any player presses a button
+fn skipSystem(sim: *simulation.Simulation, timeline: input.Timeline) !void {
+    const inputs = timeline.latest();
+    for (inputs) |inp| {
+        if (inp.is_connected() and (inp.button_a == .Pressed or inp.button_b == .Pressed)) {
+            while (!try depleteSystem(sim)) {}
         }
     }
 }
 
-fn updatePos(sim: *simulation.Simulation) !void {
+fn positionSystem(sim: *simulation.Simulation) !void {
     const scores = sim.meta.global_score;
-    var scores_with_id: [8][2]u32 = .{.{ undefined, undefined }} ** constants.max_player_count;
+
+    var scores_and_ids: [constants.max_player_count][2]u32 = .{.{ undefined, undefined }} ** constants.max_player_count;
     for (scores, 0..scores.len) |score, id| {
-        scores_with_id[id] = .{ score, @as(u32, @intCast(id)) };
+        scores_and_ids[id] = .{ score, @as(u32, @intCast(id)) };
     }
-    std.mem.sort([2]u32, &scores_with_id, {}, lessThanFn);
-    var query = sim.world.query(&.{ ecs.component.Plr, ecs.component.Pos, ecs.component.Lnk }, &.{});
+
+    std.mem.sort([2]u32, &scores_and_ids, {}, lessThanFn);
+
+    var query = sim.world.query(&.{ ecs.component.Plr, ecs.component.Pos }, &.{});
     while (query.next()) |_| {
-        //TODO Make the players switch postion
         const plr = query.get(ecs.component.Plr) catch unreachable;
         const pos = query.get(ecs.component.Pos) catch unreachable;
-        const lnk = query.get(ecs.component.Lnk) catch unreachable;
-
-        for (scores_with_id, 0..8) |score_with_id, placement| {
-            if (plr.id == score_with_id[1]) {
-                const ctr_pos = sim.world.inspect(lnk.child.?, ecs.component.Pos) catch unreachable;
-                pos.pos = .{ constants.asset_resolution * 4, 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(placement)) };
-                ctr_pos.pos = .{ constants.asset_resolution * 4, 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(placement)) };
+        for (scores_and_ids, 0..scores_and_ids.len) |pair, i| {
+            const pid = pair[1];
+            if (plr.id == pid) {
+                pos.pos[1] = 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(i));
             }
         }
     }

@@ -62,7 +62,6 @@ const block_dimensions = [_]i32{ 16, 16 };
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     sim.meta.minigame_counter = @intCast(timeline.connectedPlayerCount());
 
-    // Background
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{},
         ecs.component.Tex{
@@ -71,6 +70,31 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             .h = 18,
         },
     });
+
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Pos{
+            .pos = .{ 346, 60 },
+        },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/smash_sun.png"),
+            .w = 4,
+            .h = 4,
+        },
+        ecs.component.Anm{
+            .animation = .SmashSun,
+            .interval = 8,
+        },
+        ecs.component.Mov{
+            .velocity = ecs.component.Vec2.init(
+                0,
+                ecs.component.F32.init(1, 60),
+            ),
+        },
+        ecs.component.Tmr{
+            .ticks = 100,
+        },
+    });
+
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{},
         ecs.component.Tex{
@@ -80,7 +104,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
         },
     });
     _ = try sim.world.spawnWith(.{
-        ecs.component.Pos{},
+        ecs.component.Pos{ .pos = .{ 0, 32 } },
         ecs.component.Tex{
             .texture_hash = AssetManager.pathHash("assets/smash_background_2.png"),
             .w = 32,
@@ -975,7 +999,7 @@ fn particleSystem(world: *ecs.world.World) void {
     while (death_query.next()) |entity| {
         const tmr = death_query.get(ecs.component.Tmr) catch unreachable;
 
-        if (tmr.ticks == 20) {
+        if (tmr.ticks == 20 or tmr.ticks == 70000) {
             world.kill(entity);
         } else {
             tmr.ticks += 1;

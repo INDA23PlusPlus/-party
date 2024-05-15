@@ -91,9 +91,27 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
         ecs.component.Ctr{},
         ecs.component.Lnk{ .child = resolution },
     });
+
+    // _ = try @import("../counter.zig").spawn(&sim.world, .{ 128, 128 }, 3, rl.Color.black, 1942);
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) simulation.SimulationError!void {
+    // var q = sim.world.query(&.{ecs.component.Src}, &.{});
+    // while (q.next()) |entity| {
+    //     if (rl.isKeyPressed(rl.KeyboardKey.key_up)) {
+    //         try @import("../counter.zig").move(&sim.world, entity, .{ 0, -16 });
+    //     }
+    //     if (rl.isKeyPressed(rl.KeyboardKey.key_down)) {
+    //         try @import("../counter.zig").move(&sim.world, entity, .{ 0, 16 });
+    //     }
+    //     if (rl.isKeyPressed(rl.KeyboardKey.key_left)) {
+    //         try @import("../counter.zig").move(&sim.world, entity, .{ -16, 0 });
+    //     }
+    //     if (rl.isKeyPressed(rl.KeyboardKey.key_right)) {
+    //         try @import("../counter.zig").move(&sim.world, entity, .{ 16, 0 });
+    //     }
+    // }
+
     for (timeline.latest(), 0..) |inp, player_index| {
         if (!inp.is_connected()) continue;
 

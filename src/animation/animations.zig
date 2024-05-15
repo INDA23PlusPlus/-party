@@ -24,9 +24,11 @@ pub const Animation = enum {
     SmashJumpSmoke,
     SmashAttackSmoke,
     SmashDeath,
+    SmashSun,
     Crown,
     CatPortrait,
     CatPortraitDie,
+    ScoreboardBackground,
 };
 
 pub fn data(animation: Animation) []const Frame {
@@ -50,9 +52,11 @@ pub fn data(animation: Animation) []const Frame {
         .SmashJumpSmoke => &frames_smash_jump_smoke,
         .SmashAttackSmoke => &frames_smash_attack_smoke,
         .SmashDeath => &frames_smash_death,
+        .SmashSun => &frames_smash_sun,
         .Crown => &frames_crown,
         .CatPortrait => &frames_portrait,
         .CatPortraitDie => &frames_portrait_die,
+        .ScoreboardBackground => &frames_scoreboard_background,
     };
 }
 
@@ -177,6 +181,13 @@ const frames_smash_death: [5]Frame = .{
     Frame.init(8, 0),
 };
 
+const frames_smash_sun: [4]Frame = .{
+    Frame.init(0, 0),
+    Frame.init(4, 0),
+    Frame.init(8, 0),
+    Frame.init(12, 0),
+};
+
 const frames_crown: [18]Frame = .{
     Frame.init(0, 0),
     Frame.init(1, 0),
@@ -210,6 +221,13 @@ const frames_portrait: [6]Frame = .{
 const frames_portrait_die: [2]Frame = .{
     Frame.init(2, 0),
     Frame.init(3, 0),
+};
+
+const frames_scoreboard_background: [4]Frame = .{
+    Frame.init(0 * constants.world_width_tiles, 0),
+    Frame.init(1 * constants.world_width_tiles, 0),
+    Frame.init(2 * constants.world_width_tiles, 0),
+    Frame.init(3 * constants.world_width_tiles, 0),
 };
 
 pub const Frame = struct {

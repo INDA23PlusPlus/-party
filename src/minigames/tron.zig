@@ -13,6 +13,9 @@ const constants = @import("../constants.zig");
 const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
 
+const left_texture_offset = [_]i32{ -5, -10 };
+const right_texture_offset = [_]i32{ -21, -10 };
+
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     sim.meta.minigame_counter = @intCast(timeline.connectedPlayerCount());
 
@@ -59,11 +62,12 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             ecs.component.Col{ .dim = [_]i32{ 16, 16 } },
             ecs.component.Mov{ .velocity = ecs.component.Vec2.init(1, 0) },
             ecs.component.Tex{
-                .texture_hash = AssetManager.pathHash("assets/kattis.png"),
+                .texture_hash = AssetManager.pathHash("assets/cat_portrait.png"),
                 .tint = constants.player_colors[id],
+                .flip_horizontal = true,
             },
             ecs.component.Anm{
-                .animation = Animation.KattisIdle,
+                .animation = Animation.CatPortrait,
                 .interval = 8,
                 .looping = true,
             },
@@ -160,8 +164,8 @@ fn playerFacingSystem(sim: *simulation.Simulation) void {
         const tex = query.get(ecs.component.Tex) catch unreachable;
         const mov = query.get(ecs.component.Mov) catch unreachable;
 
-        if (mov.velocity.vector[0] < 0) tex.flip_horizontal = true;
-        if (mov.velocity.vector[0] > 0) tex.flip_horizontal = false;
+        if (mov.velocity.vector[0] < 0) tex.flip_horizontal = false;
+        if (mov.velocity.vector[0] > 0) tex.flip_horizontal = true;
     }
 }
 
@@ -213,6 +217,22 @@ fn animationSystem(sim: *simulation.Simulation) void {
 fn trailSystem(sim: *simulation.Simulation) !void {
     if (sim.meta.ticks_elapsed % sim.meta.minigame_timer != 0) return;
 
+    var despawn_query = sim.world.query(&.{
+        ecs.component.Ctr,
+        ecs.component.Tex,
+    }, &.{});
+
+    while (despawn_query.next()) |entity| {
+        const ctr = despawn_query.get(ecs.component.Ctr) catch unreachable;
+        const tex = despawn_query.get(ecs.component.Tex) catch unreachable;
+
+        if (ctr.count == 0) sim.world.kill(entity) else ctr.count -= 1;
+
+        const alpha: u8 = @intCast((255 * ctr.count) / (18 - sim.meta.minigame_counter));
+
+        tex.tint.a = alpha;
+    }
+
     var spawn_query = sim.world.query(&.{
         ecs.component.Plr,
         ecs.component.Pos,
@@ -224,7 +244,7 @@ fn trailSystem(sim: *simulation.Simulation) !void {
         _ = try sim.world.spawnWith(.{
             ecs.component.Pos{ .pos = pos.pos },
             ecs.component.Col{ .dim = [_]i32{ 16, 16 } },
-            ecs.component.Ctr{},
+            ecs.component.Ctr{ .count = 18 - sim.meta.minigame_counter },
             ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/tron_skull.png") },
             ecs.component.Anm{
                 .animation = .TronSkull,
@@ -233,20 +253,6 @@ fn trailSystem(sim: *simulation.Simulation) !void {
                 .subframe = @intCast((sim.meta.ticks_elapsed % 32)), // sync animations
             },
         });
-    }
-
-    var despawn_query = sim.world.query(&.{
-        ecs.component.Ctr,
-        ecs.component.Tex,
-    }, &.{});
-
-    while (despawn_query.next()) |entity| {
-        const ctr = despawn_query.get(ecs.component.Ctr) catch unreachable;
-        const Tex = despawn_query.get(ecs.component.Tex) catch unreachable;
-
-        if (ctr.count > 10) sim.world.kill(entity) else ctr.count += 1;
-
-        Tex.tint.a -= 15;
     }
 }
 
@@ -280,8 +286,6 @@ fn deathSystem(sim: *simulation.Simulation) void {
                 dead_players += 1;
                 sim.meta.minigame_counter -= 1;
                 sim.world.demote(player, &.{
-                    ecs.component.Pos,
-                    ecs.component.Col,
                     ecs.component.Mov,
                     ecs.component.Tex,
                     ecs.component.Anm,
@@ -296,8 +300,6 @@ fn deathSystem(sim: *simulation.Simulation) void {
     var dead_player_query = sim.world.query(&.{
         ecs.component.Plr,
     }, &.{
-        ecs.component.Pos,
-        ecs.component.Col,
         ecs.component.Mov,
         ecs.component.Tex,
         ecs.component.Anm,
