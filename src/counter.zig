@@ -8,6 +8,15 @@ pub fn encode(char: u8) u32 {
     return char - 32;
 }
 
+pub const signature = .{
+    ecs.component.Pos,
+    ecs.component.Tex,
+    ecs.component.Ctr,
+    ecs.component.Lnk,
+    ecs.component.Src,
+    ecs.component.Str,
+};
+
 pub fn spawn(
     world: *ecs.world.World,
     position: @Vector(2, i32),
