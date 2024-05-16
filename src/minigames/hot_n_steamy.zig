@@ -15,6 +15,8 @@ const collision = @import("../physics/collision.zig");
 const Vec2 = ecs.component.Vec2;
 const F32 = ecs.component.F32;
 const crown = @import("../crown.zig");
+const AudioManager = @import("../AudioManager.zig");
+const audio = @import("../audio.zig");
 
 const obstacle_height_base = 7;
 const obstacle_height_delta = 6;
@@ -66,6 +68,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invariables) !void {
     sim.meta.minigame_timer += 1;
 
+    audio.update(&sim.world);
     const alive = countAlivePlayers(&sim.world);
 
     if (alive <= 1) {
@@ -80,7 +83,7 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
         return;
     }
 
-    try jetpackSystem(&sim.world, inputs.latest());
+    try jetpackSystem(sim, inputs.latest());
 
     const rand = sim.meta.minigame_prng.random();
 
@@ -97,6 +100,8 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
     try deathSystem(sim, &collisions, alive);
 
     try scrollSystem(&sim.world);
+
+    try particleSystem(&sim.world);
 
     animator.update(&sim.world);
 
@@ -156,16 +161,60 @@ fn pushSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
     }
 }
 
-fn jetpackSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
-    var query = world.query(&.{ ecs.component.Mov, ecs.component.Plr }, &.{});
+fn jetpackSystem(sim: *simulation.Simulation, inputs: input.AllPlayerButtons) !void {
+    var query = sim.world.query(&.{ ecs.component.Mov, ecs.component.Plr, ecs.component.Pos }, &.{});
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
         const mov = try query.get(ecs.component.Mov);
+        const pos = try query.get(ecs.component.Pos);
         const state = inputs[plr.id];
         if (state.is_connected()) {
             if (state.vertical() > 0) {
                 mov.velocity = mov.velocity.add(player_boost);
+                try spawnSmokeParticles(sim, pos.pos);
             }
+        }
+    }
+}
+
+fn spawnSmokeParticles(sim: *simulation.Simulation, pos: @Vector(2, i32)) !void {
+    if (sim.meta.minigame_timer % 3 != 0) return;
+    _ = try sim.world.spawnWith(.{
+        ecs.component.Pos{ .pos = pos },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/smash_jump_smoke.png"),
+            .w = 2,
+            .h = 2,
+            .subpos = .{ -12, 8 },
+            .flip_vertical = true,
+        },
+        ecs.component.Anm{
+            .animation = Animation.SmashAttackSmoke,
+            .interval = 2,
+            .looping = true,
+        },
+        ecs.component.Tmr{ .ticks = 8 }, // lifetime
+        ecs.component.Src{},
+        ecs.component.Snd{ .sound_hash = comptime AudioManager.path_to_key("assets/audio/whoosh.wav") },
+    });
+}
+
+fn particleSystem(
+    world: *ecs.world.World,
+) !void {
+    var query = world.query(&.{
+        ecs.component.Pos,
+        ecs.component.Tex,
+        ecs.component.Anm,
+        ecs.component.Tmr,
+        ecs.component.Src,
+    }, &.{});
+    while (query.next()) |entity| {
+        var tmr = try query.get(ecs.component.Tmr);
+        if (tmr.ticks == 0) {
+            world.kill(entity);
+        } else {
+            tmr.ticks -= 1;
         }
     }
 }
@@ -183,6 +232,7 @@ fn spawnDeathParticles(sim: *simulation.Simulation, pos: @Vector(2, i32)) !void 
             .interval = 8,
             .looping = false,
         },
+        ecs.component.Snd{ .sound_hash = comptime AudioManager.path_to_key("assets/audio/death.wav") },
     });
 }
 

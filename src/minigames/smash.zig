@@ -533,6 +533,9 @@ fn attackSystem(sim: *simulation.Simulation) void {
             };
 
             sim.world.promote(plr, &.{ecs.component.Hit});
+            sim.world.promoteWith(plr, .{ecs.component.Snd{
+                .sound_hash = comptime AudioManager.path_to_key("assets/audio/hit.wav"),
+            }});
             plr_ctr.count = 0;
         }
     }
