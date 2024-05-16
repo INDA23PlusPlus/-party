@@ -100,10 +100,15 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
+    // var query = sim.world.query(&counter.signature, &.{});
+    // while (query.next()) |entity| {
+    //     try counter.move(&sim.world, entity, .{ 0, 1 });
+    // }
+
     try skipSystem(sim, timeline);
     if (try depleteSystem(sim)) {
         try transitionSystem(sim);
-        // try positionSystem(sim); // disabled until text is positionable
+        try positionSystem(sim); // disabled until text is positionable
     }
     try crown.update(sim);
     animator.update(&sim.world);
@@ -198,13 +203,19 @@ fn positionSystem(sim: *simulation.Simulation) !void {
     std.mem.sort([2]u32, &scores_and_ids, {}, lessThanFn);
 
     var query = sim.world.query(&.{ ecs.component.Plr, ecs.component.Pos }, &.{});
-    while (query.next()) |_| {
+    while (query.next()) |entity| {
         const plr = query.get(ecs.component.Plr) catch unreachable;
         const pos = query.get(ecs.component.Pos) catch unreachable;
         for (scores_and_ids, 0..scores_and_ids.len) |pair, i| {
             const pid = pair[1];
             if (plr.id == pid) {
-                pos.pos[1] = 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(i));
+                if (sim.world.checkSignature(entity, &counter.signature, &.{})) {
+                    const target_y = 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(i));
+                    const delta_y = target_y - pos.pos[1];
+                    try counter.move(&sim.world, entity, .{ 0, delta_y });
+                } else {
+                    pos.pos[1] = 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(i));
+                }
             }
         }
     }
