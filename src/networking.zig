@@ -45,8 +45,15 @@ const PacketBuffer = struct {
     index: u32 = 0,
     to_remove: u32 = 0,
 
-    fn toPacket(self: *PacketBuffer, to_add: []const u8) []const u8 {
-        // If someone forgot to call clean().
+    inline fn toPacket(self: *PacketBuffer, to_add: []const u8) []const u8 {
+        // Move old packet out of the way!
+        const old_to_remove = self.to_remove;
+        if (old_to_remove > 0) {
+            std.mem.copyForwards(u8, self.buffer[0..self.index], self.buffer[self.to_remove..self.index]);
+            self.index -= old_to_remove;
+            self.to_remove = 0;
+        }
+
         std.debug.assert(self.to_remove == 0);
 
         if (to_add.len + self.index > self.buffer.len) {
@@ -61,6 +68,7 @@ const PacketBuffer = struct {
 
         if (self.index < 4) {
             // Not even the packet length has arrived... Sigh.
+            //std.debug.print("waiting for length {d}\n", .{self.index});
             return "";
         }
 
@@ -69,23 +77,18 @@ const PacketBuffer = struct {
 
         if (with_header_len > self.index) {
             // Full packet has not arrvied yet.
+            //std.debug.print("waiting for packet {d} {d}\n", .{ with_header_len, self.index });
             return "";
         }
 
-        std.debug.print("reading package of size {d} {d} {d}\n", .{ expected_packet_len, self.index, self.to_remove });
+        //std.debug.print("reading package of size {d} {d} {d}\n", .{ expected_packet_len, self.index, self.to_remove });
 
         self.to_remove = with_header_len;
         return self.buffer[4..with_header_len];
     }
 
     fn clean(self: *PacketBuffer) void {
-        const to_remove = self.to_remove;
-        if (to_remove == 0) {
-            return;
-        }
-        std.mem.copyForwards(u8, self.buffer[0..self.index], self.buffer[self.to_remove..self.index]);
-        self.index -= to_remove;
-        self.to_remove = 0;
+        _ = self;
     }
 };
 
@@ -213,6 +216,7 @@ fn sendUpdatesToLocalClient(networking_queue: *NetworkingQueue, input_merger: *I
 fn sendUpdatesToRemoteClient(fd: std.posix.socket_t, input_merger: *InputMerger, consistent_until: u64, targeted_tick: u64) !u64 {
     var send_buffer: [max_net_packet_size]u8 = undefined;
     const send_amount = targeted_tick - consistent_until;
+    std.debug.print("sending remote updates {} {} {}\n", .{ send_amount, targeted_tick, consistent_until });
 
     var fb = std.io.fixedBufferStream(send_buffer[4..]);
     const writer = fb.writer();
@@ -237,7 +241,8 @@ fn sendUpdatesToRemoteClient(fd: std.posix.socket_t, input_merger: *InputMerger,
         }
     }
 
-    std.debug.print("sending packet of length {d}\n", .{fb.pos});
+    //std.debug.print("sending packet of length {d}\n", .{fb.pos});
+
     // There is an explanation for this line in this file. Just search for writeInt.
     std.mem.writeInt(std.math.ByteAlignedInt(u32), send_buffer[0..4], @truncate(fb.pos), std.builtin.Endian.little);
 
@@ -399,13 +404,22 @@ fn readFromSockets(server_data: *NetServerData) void {
         }
         const packet_part = packet_part_buf[0..packet_part_len];
 
-        const packet = packet_buffer.toPacket(packet_part);
+        var full_packet = packet_buffer.toPacket(packet_part);
 
         //std.debug.print("reading from player {d} length {d}", .{ conn_index, length });
-        //debugPacket(read_buffer[0..length]);
-        parsePacketFromClient(conn_index, server_data, packet) catch |e| {
-            std.debug.print("error while parsing packet of player {d}: {any}\n", .{ conn_index, e });
-        };
+
+        // The reason that we loop here is that the client has a
+        // lower clock rate for sending. If we do not handle everything
+        // that we managed to read immedietly, then we will only read
+        // at the clock rate of the server thread. This means
+        // that eventually reads will be filled with a ton of unread
+        // packets.
+        while (full_packet.len > 0) {
+            parsePacketFromClient(conn_index, server_data, full_packet) catch |e| {
+                std.debug.print("error while parsing packet of player {d}: {any}\n", .{ conn_index, e });
+            };
+            full_packet = packet_buffer.toPacket("");
+        }
 
         packet_buffer.clean();
     }
@@ -521,7 +535,7 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
         const packet_part_len = if (poller.should_read[0]) try stream.read(&packet_part_buf) else 0;
         const packet_part = packet_part_buf[0..packet_part_len];
 
-        const full_packet = packet_buffer.toPacket(packet_part);
+        var full_packet = packet_buffer.toPacket(packet_part);
         //debugPacket(full_packet);
 
         // Reset the poller. We don't care if it was ever set.
@@ -529,12 +543,13 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
 
         networking_queue.rw_lock.lock();
 
-        if (full_packet.len > 0) {
+        // The rational for this loop is the same as for the similiar
+        // looking code found in the server thread.
+        while (full_packet.len > 0) {
             const possibly_newer = try handlePacketFromServer(networking_queue, full_packet);
             newest_input_tick = @max(possibly_newer, newest_input_tick);
+            full_packet = packet_buffer.toPacket("");
         }
-
-        packet_buffer.clean();
 
         var send_buffer: [max_net_packet_size]u8 = undefined;
         var fb = std.io.fixedBufferStream(send_buffer[4..]);
@@ -542,6 +557,7 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
 
         try cbor.writeArrayHeader(writer, 2);
         try cbor.writeUint(writer, newest_input_tick);
+        //std.debug.print("client is sending {}\n", .{networking_queue.incoming_data_count});
         try cbor.writeArrayHeader(writer, networking_queue.incoming_data_count);
         for (networking_queue.incoming_data[0..networking_queue.incoming_data_count]) |packet| {
             try cbor.writeArrayHeader(writer, 5);
@@ -575,35 +591,23 @@ pub fn startClient(networking_queue: *NetworkingQueue, hostname: []const u8) !vo
 test "packet buffer two part" {
     var buffer = PacketBuffer{};
     try std.testing.expectEqualStrings("", buffer.toPacket(""));
-    buffer.clean();
     try std.testing.expectEqualStrings("", buffer.toPacket("\x01\x00\x00\x00"));
-    buffer.clean();
     try std.testing.expectEqualStrings("Q", buffer.toPacket("Q"));
-    buffer.clean();
     try std.testing.expectEqualStrings("", buffer.toPacket(""));
-    buffer.clean();
 }
 
 test "packet buffer directly" {
     var buffer = PacketBuffer{};
     try std.testing.expectEqualStrings("", buffer.toPacket(""));
-    buffer.clean();
     try std.testing.expectEqualStrings("Q", buffer.toPacket("\x01\x00\x00\x00Q"));
-    buffer.clean();
     try std.testing.expectEqualStrings("", buffer.toPacket(""));
-    buffer.clean();
 }
 
 test "packet buffer two in one" {
     var buffer = PacketBuffer{};
     try std.testing.expectEqualStrings("", buffer.toPacket(""));
-    buffer.clean();
     try std.testing.expectEqualStrings("Q", buffer.toPacket("\x01\x00\x00\x00Q\x01\x00\x00\x00W"));
-    buffer.clean();
     try std.testing.expectEqualStrings("W", buffer.toPacket("\x01\x00\x00\x00A\x01\x00\x00\x00B"));
-    buffer.clean();
     try std.testing.expectEqualStrings("A", buffer.toPacket(""));
-    buffer.clean();
     try std.testing.expectEqualStrings("B", buffer.toPacket(""));
-    buffer.clean();
 }
