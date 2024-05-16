@@ -112,10 +112,12 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                 },
                 ecs.component.Pos{ .pos = assigned_pos(id) },
                 ecs.component.Tex{
-                    .texture_hash = AssetManager.pathHash("assets/kattis.png"),
+                    .texture_hash = AssetManager.pathHash("assets/cat_portrait.png"),
                     .tint = constants.player_colors[id],
+                    .w = 1,
+                    .h = 1,
                 },
-                ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
+                ecs.component.Anm{ .animation = Animation.CatPortrait, .interval = 16, .looping = true },
             });
             var button_position: @Vector(2, i32) = assigned_pos(id);
             button_position[1] += @intCast(-17);
@@ -130,7 +132,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             _ = try sim.world.spawnWith(.{
                 ecs.component.Plr{ .id = @intCast(id) },
                 ecs.component.Pos{ .pos = .{ button_position[0], button_position[1] } },
-                ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis_testcases.png") },
+                ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/morse_input.png") },
                 ecs.component.Ctr{ .count = 0 }, // count = bit_index, id = current letter
                 ecs.component.Lnk{ .child = data_entity },
                 ecs.component.Tmr{ .ticks = 0 }, // for keystroke_bitset
