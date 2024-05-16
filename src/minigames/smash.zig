@@ -2,7 +2,7 @@ const std = @import("std");
 const rl = @import("raylib");
 const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
-const render = @import("../render.zig");
+const audio = @import("../audio.zig");
 const movement = @import("../physics/movement.zig");
 const collision = @import("../physics/collision.zig");
 const animator = @import("../animation/animator.zig");
@@ -10,6 +10,7 @@ const constants = @import("../constants.zig");
 const input = @import("../input.zig");
 const Animation = @import("../animation/animations.zig").Animation;
 const AssetManager = @import("../AssetManager.zig");
+const AudioManager = @import("../AudioManager.zig");
 const Invariables = @import("../Invariables.zig");
 
 // TODO: Block particle
@@ -164,6 +165,8 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invariables) !void {
     sim.meta.minigame_timer = @min(60, sim.meta.minigame_timer + @intFromBool(sim.meta.ticks_elapsed % 60 == 0));
 
+    audio.update(&sim.world);
+
     try actionSystem(sim, timeline); // 50 laps/ms (2 players)
 
     blockSystem(sim);
@@ -263,6 +266,7 @@ fn actionSystem(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                 ecs.component.Anm{ .interval = 8, .animation = .SmashAttackSmoke }, // TODO: Block animation
                 ecs.component.Ctr{},
                 ecs.component.Blk{},
+                ecs.component.Snd{ .sound_hash = AudioManager.path_to_key("assets/audio/block.wav") },
             });
 
             continue;

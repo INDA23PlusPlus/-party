@@ -129,7 +129,7 @@ pub fn pollAll(controllers: []Controller, previous: input.AllPlayerButtons) void
         controller.polled_state = switch (nth_controller) {
             0 => pollKeyboard1(previous_buttons),
             1 => pollKeyboard2(previous_buttons),
-            else => pollGamepad(@intCast(nth_controller), previous_buttons),
+            else => pollGamepad(@intCast(nth_controller - 2), previous_buttons),
         };
     }
 }

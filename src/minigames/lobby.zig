@@ -88,6 +88,10 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
             });
         } else if (change == .remove) {
             if (entity) |e| {
+                const lnk = sim.world.inspect(e, ecs.component.Lnk) catch continue;
+                if (lnk.child) |child| {
+                    sim.world.kill(child);
+                }
                 sim.world.kill(e);
             }
         }
