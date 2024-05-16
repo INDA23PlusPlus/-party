@@ -107,7 +107,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                 // cats
                 ecs.component.Txx{
                     .hash = AssetManager.pathHash(player_strings[id]),
-                    .font_size = 10,
+                    .font_size = 1,
                     .color = 0xff0066ff,
                     .subpos = .{ -10, 16 },
                 },
@@ -149,7 +149,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
         ecs.component.Txx{
             .hash = AssetManager.pathHash(game_string),
             .color = 0xF4743BFF,
-            .font_size = 45,
+            .font_size = 2,
         },
     });
 

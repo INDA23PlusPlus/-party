@@ -85,7 +85,7 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
         const color = rl.Color.fromInt(text_c.color);
         const pos = @as(@Vector(2, f32), @floatFromInt(pos_component.pos + text_c.subpos)) * scaling;
 
-        const font_size_scaled = @as(f32, @floatFromInt(text_c.font_size)) * scaling[0];
+        const font_size_scaled = @as(f32, @floatFromInt(text_c.font_size * am.font.baseSize)) * scaling[0];
 
         const string = am.text_map.get(text_c.hash) orelse am.text_map.get(AssetManager.default_string_hash) orelse unreachable;
 

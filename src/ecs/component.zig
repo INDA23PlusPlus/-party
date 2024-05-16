@@ -92,7 +92,7 @@ pub const Plr = struct {
 pub const Txx = struct {
     hash: u64 = AssetManager.default_string_hash,
     color: u32 = 0xFFFFFFFF,
-    font_size: u8 = 10,
+    font_size: u8 = 1,
     subpos: @Vector(2, i32) = .{ 0, 0 },
 };
 

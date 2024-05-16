@@ -39,7 +39,6 @@ const paths = [_][:0]const u8{
     "assets/cat_portrait.png",
     "assets/lobby.png",
     "assets/gamewheel.png",
-    "assets/monogram-bitmap-2.png",
     "assets/background_animated.png",
 };
 
@@ -138,7 +137,7 @@ pub fn init(allocator: std.mem.Allocator) Self {
         text_map.put(key, string) catch unreachable;
     }
 
-    const font = rl.loadFont("assets/monogram.ttf");
+    const font = rl.loadFont("assets/monogram_xna.png");
 
     return Self{
         .font = font,
@@ -146,6 +145,14 @@ pub fn init(allocator: std.mem.Allocator) Self {
         .text_map = text_map,
     };
 }
+
+var fontArray: [250]i32 = blk: {
+    var res: [250]i32 = undefined;
+    for (0..250) |i| {
+        res[i] = i;
+    }
+    break :blk res;
+};
 
 pub fn deinit(self: *Self) void {
     var iter = self.texture_map.valueIterator();
