@@ -193,7 +193,7 @@ pub const World = struct {
     }
 
     /// TODO
-    /// Removes all components and then readds components passed as a struct to an entity.
+    /// Removes all components and then read components passed as a struct to an entity.
     pub fn respawnWith(self: *Self, entity: Entity, Components: anytype) !void {
         _ = self;
         _ = entity;
