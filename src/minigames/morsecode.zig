@@ -87,9 +87,9 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{ .pos = [2]i32{ 246, 108 } },
         ecs.component.Tex{
-            .texture_hash = AssetManager.pathHash("assets/morsetable.png"),
-            .w = 18,
-            .h = 12,
+            .texture_hash = AssetManager.pathHash("assets/morsetable_bitmap.png"),
+            .w = constants.world_width_tiles / 2,
+            .h = constants.world_height_tiles / 2,
         },
     });
 
@@ -115,6 +115,8 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                     //.texture_hash = AssetManager.pathHash("assets/kattis.png"),
                     .texture_hash = AssetManager.pathHash("assets/cat_portrait.png"),
                     .tint = constants.player_colors[id],
+                    .w = 1,
+                    .h = 1,
                 },
                 //ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
                 ecs.component.Anm{ .animation = Animation.CatPortrait, .interval = 20, .looping = true },

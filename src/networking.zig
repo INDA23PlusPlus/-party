@@ -208,7 +208,6 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
         connection.packets_available = 0;
     }
 
-
     // Send the updates to the clients.
     for (&server_data.conns_list, server_data.conns_type, &server_data.conns_sockets) |*connection, conn_type, fd| {
         // Send the missing inputs. But only N at the time.
@@ -231,8 +230,7 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
         }
 
         connection.consistent_until =
-            if (conn_type == .local) sendUpdatesToLocalClient(networking_queue, &server_data.input_merger, connection.consistent_until, send_until)
-            else try sendUpdatesToRemoteClient(fd, &server_data.input_merger, connection.consistent_until, send_until);
+            if (conn_type == .local) sendUpdatesToLocalClient(networking_queue, &server_data.input_merger, connection.consistent_until, send_until) else try sendUpdatesToRemoteClient(fd, &server_data.input_merger, connection.consistent_until, send_until);
     }
 
     networking_queue.rw_lock.unlock();
@@ -335,6 +333,8 @@ fn readFromSockets(server_data: *NetServerData) void {
         const length = std.posix.read(fd, &read_buffer) catch 0;
         if (length == 0) {
             server_data.conns_type[conn_index] = .unused;
+            // TODO: Disconnect player. But don't use conn_index.
+            //server_data.input_merger.remoteUpdate(std.heap.page_allocator, , new_state: input.PlayerInputState, tick: u64)
             std.posix.close(fd);
             continue;
         }
@@ -436,7 +436,7 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
     const alloc = gpa.allocator();
 
     const stream = try std.net.tcpConnectToHost(alloc, hostname, 8080);
-    var poller = PollerForClient { .fd = .{ stream.handle } };
+    var poller = PollerForClient{ .fd = .{stream.handle} };
 
     std.debug.print("connection established\n", .{});
     var newest_input_tick: u64 = 0;

@@ -167,25 +167,35 @@ pub fn autoAssign(self: *Self, controllers: []Controller, tick: u64) usize {
     return count;
 }
 
-pub fn createChecksum(self: *Self) u32 {
+pub fn createChecksum(self: *Self, until: u64) u32 {
     var hasher = std.hash.crc.Crc32.init();
-    for (self.buttons.items) |buttons| {
+    for (0.., self.buttons.items) |tick_index, buttons| {
+        if (tick_index > until) {
+            break;
+        }
         for (buttons) |button| {
             const state: u8 = @intFromEnum(button.dpad);
-            hasher.update(&[_]u8{state});
+            const button_a: u8 = @intFromEnum(button.button_a);
+            const button_b: u8 = @intFromEnum(button.button_b);
+            hasher.update(&[_]u8{ state, button_a, button_b });
         }
     }
     return hasher.final();
 }
 
-pub fn dumpInputs(self: *Self, writer: anytype) !void {
-    const checksum = self.createChecksum();
-    try writer.print("input frames: {d}\n", .{self.buttons.items.len});
-    for (self.buttons.items, self.is_certain.items, 0..) |inputs, is_certain, frame_index| {
-        try writer.print("{d:0>4}: ", .{frame_index});
+pub fn dumpInputs(self: *Self, until: u64, writer: anytype) !void {
+    const checksum = self.createChecksum(until);
+    try writer.print("input frames: {d}\n", .{@min(self.buttons.items.len, until)});
+    for (0.., self.buttons.items, self.is_certain.items) |tick_index, inputs, is_certain| {
+        if (tick_index > until) {
+            break;
+        }
+        try writer.print("{d:0>4}: ", .{tick_index});
         for (inputs, 0..) |inp, i| {
             const on = if (is_certain.isSet(i)) "+" else "?";
-            try writer.print("{s}({s}) ", .{ inp.dpad.shortDebugName(), on });
+            const a: u8 = @intFromEnum(inp.button_a);
+            const b: u8 = @intFromEnum(inp.button_a);
+            try writer.print("{s}{d}{d}({s}) ", .{ inp.dpad.shortDebugName(), a, b, on });
         }
         try writer.print("\n", .{});
     }
