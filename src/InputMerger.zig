@@ -67,7 +67,6 @@ pub fn localUpdate(self: *Self, controllers: []Controller, tick: u64) !void {
 
     // Make sure that extendTimeline() is called before.
     std.debug.assert(tick < self.buttons.items.len);
-    const inputs = Controller.poll(controllers, self.buttons.items[tick]);
     var is_certain = self.is_certain.items[tick];
     for (controllers) |controller| {
         const player = controller.input_index;
@@ -75,7 +74,7 @@ pub fn localUpdate(self: *Self, controllers: []Controller, tick: u64) !void {
             if (is_certain.isSet(player)) {
                 continue;
             }
-            self.buttons.items[tick][player] = inputs[player];
+            self.buttons.items[tick][player] = controller.polled_state;
             is_certain.set(player);
         }
     }
@@ -121,44 +120,51 @@ pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, player: u32, new_
     return changes != 0;
 }
 
-pub fn forceAutoAssign(self: *Self, tick: u64, controllers: []Controller, nth_controller: usize) bool {
+pub fn forceAutoAssign(self: *Self, prev_tick: u64, controllers: []Controller, nth_controller: usize) bool {
     // Works a bit like localUpdate() but forces a controller to go online (for testing).
 
     // Make sure that extendTimeline() is called before.
-    std.debug.assert(tick < self.buttons.items.len);
-    var result = self.buttons.items[tick];
+    std.debug.assert(prev_tick < self.buttons.items.len);
+    const inputs = self.buttons.items[prev_tick];
 
     // Find an available player.
-    var unavailable = [_]usize{std.math.maxInt(usize)} ** constants.max_player_count;
-    for (result, 0..) |inp, player_index| {
+    var unavailable = [_]bool{false} ** constants.max_player_count;
+    for (inputs, 0..) |inp, player_index| {
         if (inp.is_connected()) {
-            unavailable[player_index] = player_index;
+            unavailable[player_index] = true;
         }
     }
-    const available = std.mem.indexOfScalar(usize, &unavailable, std.math.maxInt(usize));
+
+    // We also check the controllers in case two or more controllers
+    // were force-assigned the same tick. This way we avoid having
+    // to change the timeline to prevent this.
+    for (controllers) |controller| {
+        if (controller.isAssigned()) {
+            unavailable[controller.input_index] = true;
+        }
+    }
+    const available = std.mem.indexOfScalar(bool, &unavailable, false);
 
     // Assign the available plyer to nth_controller.
     if (available) |available_player| {
         std.debug.print("Controller {} joined with id {}\n", .{ nth_controller, available_player });
         controllers[nth_controller].input_index = available_player;
-        result[available_player].dpad = .None;
-        self.buttons.items[tick] = result;
         return true;
     }
     return false;
 }
 
-pub fn autoAssign(self: *Self, controllers: []Controller, tick: u64) usize {
+pub fn autoAssign(self: *Self, controllers: []Controller, prev_tick: u64) usize {
     var count: usize = 0;
     for (controllers, 0..) |controller, nth_controller| {
         if (controller.isAssigned()) {
             count += 1;
             continue;
         }
-        if (!Controller.isActive(nth_controller)) {
+        if (!controller.givingInputs()) {
             continue;
         }
-        if (self.forceAutoAssign(tick, controllers, nth_controller)) {
+        if (self.forceAutoAssign(prev_tick, controllers, nth_controller)) {
             // Increase if we are successful in force-assigning this controller.
             // The if-statement will change our state a bit.
             count += 1;

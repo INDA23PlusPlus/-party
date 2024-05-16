@@ -234,12 +234,6 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
     }
 
     networking_queue.rw_lock.unlock();
-
-    //if (server_data.input_history.buttons.items.len == 300 + 1) {
-    //    const file = std.io.getStdErr();
-    //    const writer = file.writer();
-    //    try server_data.input_history.dumpInputs(writer);
-    //}
 }
 
 /// Sets conns_should_read[index] for any socket that has available data.
@@ -374,6 +368,7 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
         if (rl.isKeyPressed(rl.KeyboardKey.key_o)) {
             const file = std.io.getStdErr();
             const writer = file.writer();
+            std.debug.print("server_data input_merger len {d}\n", .{server_data.input_merger.buttons.items.len});
             try server_data.input_merger.dumpInputs((server_data.input_merger.buttons.items.len >> 9) << 9, writer);
         }
 
