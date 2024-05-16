@@ -69,11 +69,12 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
     const alive = countAlivePlayers(&sim.world);
 
     if (alive <= 1) {
-        var query = sim.world.query(&.{ ecs.component.Plr, ecs.component.Ctr }, &.{});
+        var query = sim.world.query(&.{
+            ecs.component.Plr,
+        }, &.{});
         while (query.next()) |_| {
             const plr = try query.get(ecs.component.Plr);
-            const ctr = try query.get(ecs.component.Ctr);
-            sim.meta.minigame_placements[plr.id] = ctr.count;
+            sim.meta.minigame_placements[plr.id] = alive - 1;
         }
         sim.meta.minigame_id = constants.minigame_scoreboard;
         return;
@@ -97,19 +98,13 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
 
     try scrollSystem(&sim.world);
 
-    try animationSystem(&sim.world, alive);
     animator.update(&sim.world);
 
     try crown.update(sim);
 }
 
-fn animationSystem(world: *ecs.world.World, alive: u64) !void {
-    _ = world;
-    _ = alive;
-}
-
-fn countAlivePlayers(world: *ecs.world.World) u64 {
-    var count: u64 = 0;
+fn countAlivePlayers(world: *ecs.world.World) u32 {
+    var count: u32 = 0;
     var query = world.query(&.{ ecs.component.Plr, ecs.component.Pos }, &.{ecs.component.Ctr});
     while (query.next()) |_| {
         count += 1;
@@ -203,10 +198,11 @@ fn deathSystem(sim: *simulation.Simulation, _: *collision.CollisionQueue, alive:
                 const plr = try sim.world.inspect(entity, ecs.component.Plr);
                 const id = plr.id;
                 const place = @as(u32, @intCast(alive - 1));
-                _ = try sim.world.spawnWith(.{
-                    ecs.component.Plr{ .id = id },
-                    ecs.component.Ctr{ .count = place },
-                });
+                sim.meta.minigame_placements[id] = place;
+                // _ = try sim.world.spawnWith(.{
+                //     ecs.component.Plr{ .id = id },
+                //     ecs.component.Ctr{ .count = place },
+                // });
             }
             sim.world.kill(entity);
             // std.debug.print("entity {} died\n", .{entity.identifier});
