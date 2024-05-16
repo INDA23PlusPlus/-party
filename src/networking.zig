@@ -245,7 +245,9 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
 }
 
 /// Sets conns_should_read[index] for any socket that has available data.
-fn pollAllSockets(server_data: *NetServerData) void {
+/// We also use this code in the client to poll the singular connection to the server.
+/// It is nice to reuse platform-level abstraction when possible.
+fn pollSockets(conns_type: []ConnectionType, conns_sockets: []std.posix.socket_t, conns_should_read: []bool) void {
     if (@import("builtin").os.tag == .windows) {
         var read_fd_set = std.os.windows.ws2_32.fd_set{
             .fd_array = undefined,
@@ -258,7 +260,7 @@ fn pollAllSockets(server_data: *NetServerData) void {
         };
 
         var fd_count: u32 = 0;
-        for (server_data.conns_type, server_data.conns_sockets) |conn_type, conn_socket| {
+        for (conns_type, conns_sockets) |conn_type, conn_socket| {
             if (conn_type == .remote) {
                 std.debug.assert(fd_count < read_fd_set.fd_array.len);
                 read_fd_set.fd_array[fd_count] = conn_socket;
@@ -274,9 +276,9 @@ fn pollAllSockets(server_data: *NetServerData) void {
 
         for (read_fd_set.fd_array[0..read_fd_set.fd_count]) |fd| {
             // O complexity is n^2. Luckily a read_fd_set can not be larger than 64...
-            for (server_data.conns_sockets, 0..) |other, conn_index| {
+            for (conns_sockets, 0..) |other, conn_index| {
                 if (other == fd) {
-                    server_data.conns_should_read[conn_index] = true;
+                    conns_should_read[conn_index] = true;
                 }
             }
         }
@@ -290,7 +292,7 @@ fn pollAllSockets(server_data: *NetServerData) void {
         }
 
         var fd_count: usize = 0;
-        for (server_data.conns_type, server_data.conns_sockets) |conn_type, conn_socket| {
+        for (conns_type, conns_sockets) |conn_type, conn_socket| {
             if (conn_type == .remote) {
                 std.debug.assert(fd_count < poll_fds.len);
                 poll_fds[fd_count].fd = conn_socket;
@@ -308,9 +310,9 @@ fn pollAllSockets(server_data: *NetServerData) void {
         }
 
         for (poll_fds[0..fd_count]) |poll_fd| {
-            for (server_data.conns_sockets, 0..) |other, conn_index| {
+            for (conns_sockets, 0..) |other, conn_index| {
                 if (other == poll_fd.fd and poll_fd.revents & INT_EVENTS != 0) {
-                    server_data.conns_should_read[conn_index] = true;
+                    conns_should_read[conn_index] = true;
                 }
             }
         }
@@ -319,7 +321,7 @@ fn pollAllSockets(server_data: *NetServerData) void {
 
 fn readFromSockets(server_data: *NetServerData) void {
     var read_buffer: [max_net_packet_size]u8 = undefined;
-    pollAllSockets(server_data);
+    pollSockets(&server_data.conns_type, &server_data.conns_sockets, &server_data.conns_should_read);
     for (&server_data.conns_list, server_data.conns_sockets, server_data.conns_type, server_data.conns_should_read, 0..) |*connection, fd, conn_type, should_read, conn_index| {
         if (conn_type != .remote) {
             continue;
@@ -421,6 +423,12 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !u64
     return newest_input_tick;
 }
 
+const PollerForClient = struct {
+    fd: [1]std.posix.socket_t,
+    connection: [1]ConnectionType = .{ConnectionType.remote},
+    should_read: [1]bool = .{false},
+};
+
 fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void {
     // We need the GPA because tcpConnectToHost needs to store the DNS lookups somewhere.
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -428,23 +436,26 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
     const alloc = gpa.allocator();
 
     const stream = try std.net.tcpConnectToHost(alloc, hostname, 8080);
+    var poller = PollerForClient { .fd = .{ stream.handle } };
 
-    // TODO: Use non-blocking reads such that input is always send even if other inputs are still in air.
     std.debug.print("connection established\n", .{});
     var newest_input_tick: u64 = 0;
 
-    //std.time.sleep(std.time.ns_per_s * 1);
     while (true) {
         var incoming_packet_buf: [max_net_packet_size]u8 = undefined;
-        const incoming_packet_len = try stream.read(&incoming_packet_buf);
+        pollSockets(&poller.connection, &poller.fd, &poller.should_read);
+        const incoming_packet_len = if (poller.should_read[0]) try stream.read(&incoming_packet_buf) else 0;
         const incoming_packet = incoming_packet_buf[0..incoming_packet_len];
 
-        //debugPacket(incoming_packet);
+        // Reset the poller. We don't care if it was ever set.
+        poller.should_read[0] = false;
 
         networking_queue.rw_lock.lock();
 
-        const possibly_newer = try handlePacketFromServer(networking_queue, incoming_packet);
-        newest_input_tick = @max(possibly_newer, newest_input_tick);
+        if (incoming_packet_len > 0) {
+            const possibly_newer = try handlePacketFromServer(networking_queue, incoming_packet);
+            newest_input_tick = @max(possibly_newer, newest_input_tick);
+        }
 
         var write_buffer: [max_net_packet_size]u8 = undefined;
         var fb = std.io.fixedBufferStream(&write_buffer);
@@ -465,7 +476,9 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
         _ = try stream.write(write_buffer[0..fb.pos]);
 
         networking_queue.rw_lock.unlock();
-        std.time.sleep(std.time.ns_per_ms * 20);
+
+        // TODO: Ideally, we avoid sleeping and either awake from changes to networking_queue or activity on stream.
+        std.time.sleep(std.time.ns_per_ms * 4);
     }
 }
 
