@@ -8,6 +8,20 @@ const AssetManager = @import("AssetManager.zig");
 /// The player entity must exist before calling this function and it must have the `Pos` and `Plr` components.
 /// `offset` sets the position of the crown in relation to the leading player's position.
 pub fn init(sim: *Simulation, offset: [2]i32) !void {
+    {
+        var old_crown = sim.world.query(&.{
+            ecs.component.Pos,
+            ecs.component.Tex,
+            ecs.component.Anm,
+            ecs.component.Lnk,
+            ecs.component.Kng,
+        }, &.{});
+
+        if (old_crown.next()) |oc| {
+            sim.world.kill(oc);
+        }
+    }
+
     var highest_player: ?ecs.entity.Entity = null;
     var highest_score: u32 = 0;
     var highest_exists: bool = false;
