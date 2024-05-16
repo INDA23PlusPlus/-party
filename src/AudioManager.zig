@@ -29,6 +29,13 @@ const AudioHashMap = std.HashMap(
 pub const default_audio = "assets/audio/default.wav";
 const audio_paths = [_][:0]const u8{
     default_audio,
+    "assets/audio/attack.wav",
+    "assets/audio/block.wav",
+    "assets/audio/death.wav",
+    "assets/audio/default.wav",
+    "assets/audio/hit.wav",
+    "assets/audio/join.wav",
+    "assets/audio/jump.wav",
 };
 
 audio_map: AudioHashMap,

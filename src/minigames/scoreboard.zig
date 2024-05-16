@@ -172,14 +172,22 @@ fn transitionSystem(sim: *simulation.Simulation) !void {
 
     if (sim.meta.minigame_timer < 2 * constants.ticks_per_second) return;
 
+    var winner = false;
+    var max_score: u32 = 0;
     for (sim.meta.global_score) |score| {
-        if (score >= 50) {
-            sim.meta.minigame_id = constants.minigame_winscreen;
-            return;
+        if (score > max_score and score >= 50) {
+            max_score = score;
+            winner = true;
+        } else if (score == max_score) {
+            winner = false;
         }
     }
 
-    sim.meta.minigame_id = constants.minigame_gamewheel;
+    if (winner) {
+        sim.meta.minigame_id = constants.minigame_winscreen;
+    } else {
+        sim.meta.minigame_id = constants.minigame_gamewheel;
+    }
 }
 
 /// Instantly skips score animation if any player presses a button
