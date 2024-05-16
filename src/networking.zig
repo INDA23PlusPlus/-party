@@ -368,6 +368,15 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
 
         // TODO: Take clock timestamp
         try serverThreadQueueTransfer(&server_data, networking_queue);
+
+        // Debug thing. Remove later.
+        const rl = @import("raylib");
+        if (rl.isKeyPressed(rl.KeyboardKey.key_o)) {
+            const file = std.io.getStdErr();
+            const writer = file.writer();
+            try server_data.input_merger.dumpInputs((server_data.input_merger.buttons.items.len >> 9) << 9, writer);
+        }
+
         std.time.sleep(std.time.ns_per_ms * 19);
         // TODO: Take clock timestamp
         // TODO: Compare these then sleep a bit to lock the ticks per second.

@@ -3,3 +3,4 @@ zig-out/
 .vscode/
 zigc/
 zls
+frames.txt

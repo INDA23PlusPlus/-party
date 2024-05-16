@@ -190,12 +190,12 @@ pub fn dumpInputs(self: *Self, until: u64, writer: anytype) !void {
         if (tick_index > until) {
             break;
         }
-        try writer.print("{d:0>4}: ", .{tick_index});
+        try writer.print("{d:0>4}:", .{tick_index});
         for (inputs, 0..) |inp, i| {
             const on = if (is_certain.isSet(i)) "+" else "?";
             const a: u8 = @intFromEnum(inp.button_a);
             const b: u8 = @intFromEnum(inp.button_a);
-            try writer.print("{s}{d}{d}({s}) ", .{ inp.dpad.shortDebugName(), a, b, on });
+            try writer.print(" {s}{d}{d}({s})", .{ inp.dpad.shortDebugName(), a, b, on });
         }
         try writer.print("\n", .{});
     }
