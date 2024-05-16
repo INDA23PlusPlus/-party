@@ -12,20 +12,6 @@ pub fn build(b: *std.Build) !void {
     const raylib_math = raylib_dep.module("raylib-math"); // raymath module
     const raylib_artifact = raylib_dep.artifact("raylib"); // raylib C library
 
-    // const text_tool = b.addExecutable(.{
-    //     .name = "text_tool",
-    //     .root_source_file = .{ .path = "src/text_tool.zig" },
-    //     .optimize = optimize,
-    //     .target = target,
-    // });
-    // const text_tool_cmd = b.addRunArtifact(text_tool);
-    // if (b.args) |args| {
-    //     text_tool_cmd.addArgs(args);
-    // }
-    // const text_tool_step = b.step("tool", "Run text_tool");
-    // text_tool_step.dependOn(&text_tool_cmd.step);
-    // b.installArtifact(text_tool);
-
     const exe = b.addExecutable(.{
         .name = "++party",
         .root_source_file = .{ .path = "src/main.zig" },
