@@ -25,7 +25,7 @@ const max_net_packet_size = 32768;
 const max_unresponded_ticks = 32;
 const max_inputs_per_socket_packet = 64;
 
-fn debugPacket(packet: []u8) void {
+fn debugPacket(packet: []const u8) void {
     // Print the CBOR contents.
     var debug_log_buffer: [1024]u8 = undefined;
     var debug_fb = std.io.fixedBufferStream(&debug_log_buffer);
@@ -40,12 +40,53 @@ fn debugPacket(packet: []u8) void {
     std.debug.print("parsed package: {s}\n", .{debug_log_buffer[0..debug_len]});
 }
 
+const PacketBuffer = struct {
+    buffer: [max_net_packet_size * 2]u8 = undefined,
+    index: u32 = 0,
+    to_remove: u32 = 0,
+
+    fn toPacket(self: *PacketBuffer, to_add: []u8) []const u8 {
+        // If someone forgot to call clean().
+        std.debug.assert(self.to_remove == 0);
+
+        if (to_add.len + self.index > self.buffer.len) {
+            std.debug.panic("packet buffer will overflow", .{});
+        }
+
+        // Regions do not overlap, so this is safe.
+        @memcpy(self.buffer[self.index .. self.index + to_add.len], to_add);
+        self.index += @truncate(to_add.len);
+
+        if (self.index < 4) {
+            // Not even the packet length has arrived... Sigh.
+            return "";
+        }
+
+        const expected_packet_len = std.mem.readInt(u32, self.buffer[0..4], std.builtin.Endian.little);
+
+        if (expected_packet_len + 4 > self.index) {
+            // Full packet has not arrvied yet.
+            return "";
+        }
+
+        return self.buffer[4 .. expected_packet_len + 4];
+    }
+
+    fn clean(self: *PacketBuffer) void {
+        const to_remove = self.to_remove;
+        std.mem.copyForwards(u8, self.buffer[0..], self.buffer[self.to_remove..]);
+        self.index -= to_remove;
+        self.to_remove = 0;
+    }
+};
+
 const NetServerData = struct {
     input_merger: InputMerger,
 
     conns_list: [constants.max_connected_count]ConnectedClient = undefined,
     conns_type: [constants.max_connected_count]ConnectionType = [_]ConnectionType{.unused} ** constants.max_connected_count,
     conns_sockets: [constants.max_connected_count]std.posix.socket_t = undefined,
+    conns_packet_buffer: [constants.max_connected_count]PacketBuffer = undefined,
     conns_incoming_packets: [constants.max_connected_count][max_inputs_per_socket_packet]NetworkingQueue.Packet = undefined,
     conns_should_read: [constants.max_connected_count]bool = undefined,
 
@@ -73,7 +114,7 @@ const NetServerData = struct {
     }
 };
 
-fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packet: []u8) !void {
+fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packet: []const u8) !void {
     debugPacket(packet);
 
     var client = &server_data.conns_list[client_index];
@@ -122,6 +163,7 @@ fn clientConnected(server_data: *NetServerData, conn: std.net.Server.Connection)
     if (server_data.reservSlot()) |slot| {
         server_data.conns_list[slot] = .{};
         server_data.conns_should_read[slot] = false;
+        server_data.conns_packet_buffer[slot] = .{};
         server_data.conns_sockets[slot] = conn.stream.handle;
     } else {
         std.log.warn("too many players", .{});
@@ -159,7 +201,7 @@ fn sendUpdatesToRemoteClient(fd: std.posix.socket_t, input_merger: *InputMerger,
     var send_buffer: [max_net_packet_size]u8 = undefined;
     const send_amount = targeted_tick - consistent_until;
 
-    var fb = std.io.fixedBufferStream(&send_buffer);
+    var fb = std.io.fixedBufferStream(send_buffer[4..]);
     const writer = fb.writer();
     try cbor.writeArrayHeader(writer, send_amount);
     for (consistent_until..targeted_tick) |tick_index| {
@@ -181,7 +223,11 @@ fn sendUpdatesToRemoteClient(fd: std.posix.socket_t, input_merger: *InputMerger,
             try cbor.writeUint(writer, @intFromEnum(input.button_b));
         }
     }
-    _ = try std.posix.send(fd, send_buffer[0..fb.pos], 0);
+
+    // There is an explanation for this line in this file. Just search for writeInt.
+    std.mem.writeInt(std.math.ByteAlignedInt(u32), send_buffer[0..4], @truncate(fb.pos), std.builtin.Endian.little);
+
+    _ = try std.posix.send(fd, send_buffer[0 .. fb.pos + 4], 0);
     return @max(consistent_until, targeted_tick);
 }
 
@@ -243,7 +289,9 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
 /// Sets conns_should_read[index] for any socket that has available data.
 /// We also use this code in the client to poll the singular connection to the server.
 /// It is nice to reuse platform-level abstraction when possible.
-fn pollSockets(conns_type: []ConnectionType, conns_sockets: []std.posix.socket_t, conns_should_read: []bool) void {
+fn pollSockets(timeout_ms: u32, conns_type: []ConnectionType, conns_sockets: []std.posix.socket_t, conns_should_read: []bool) void {
+    // TODO: Ideally, the select in pollSocket would awake from networking_queue as well, oh well!
+
     if (@import("builtin").os.tag == .windows) {
         var read_fd_set = std.os.windows.ws2_32.fd_set{
             .fd_array = undefined,
@@ -252,7 +300,7 @@ fn pollSockets(conns_type: []ConnectionType, conns_sockets: []std.posix.socket_t
 
         const timeval = std.os.windows.ws2_32.timeval{
             .tv_sec = 0,
-            .tv_usec = 1000,
+            .tv_usec = std.time.us_perms * timeout_ms,
         };
 
         var fd_count: u32 = 0;
@@ -296,7 +344,7 @@ fn pollSockets(conns_type: []ConnectionType, conns_sockets: []std.posix.socket_t
             }
         }
 
-        const i = std.posix.poll(&poll_fds, 1) catch {
+        const i = std.posix.poll(&poll_fds, @intCast(timeout_ms)) catch {
             std.debug.print("std.posix.poll() failed\n", .{});
             return;
         };
@@ -316,9 +364,9 @@ fn pollSockets(conns_type: []ConnectionType, conns_sockets: []std.posix.socket_t
 }
 
 fn readFromSockets(server_data: *NetServerData) void {
-    var read_buffer: [max_net_packet_size]u8 = undefined;
-    pollSockets(&server_data.conns_type, &server_data.conns_sockets, &server_data.conns_should_read);
-    for (&server_data.conns_list, server_data.conns_sockets, server_data.conns_type, server_data.conns_should_read, 0..) |*connection, fd, conn_type, should_read, conn_index| {
+    var packet_part_buf: [max_net_packet_size]u8 = undefined;
+    pollSockets(10, &server_data.conns_type, &server_data.conns_sockets, &server_data.conns_should_read);
+    for (&server_data.conns_packet_buffer, server_data.conns_sockets, server_data.conns_type, server_data.conns_should_read, 0..) |*packet_buffer, fd, conn_type, should_read, conn_index| {
         if (conn_type != .remote) {
             continue;
         }
@@ -327,22 +375,25 @@ fn readFromSockets(server_data: *NetServerData) void {
         }
         server_data.conns_should_read[conn_index] = false;
 
-        _ = connection;
-        const length = std.posix.read(fd, &read_buffer) catch 0;
-        if (length == 0) {
+        const packet_part_len = std.posix.read(fd, &packet_part_buf) catch 0;
+        if (packet_part_len == 0) {
             server_data.conns_type[conn_index] = .unused;
             // TODO: Disconnect player. But don't use conn_index.
             //server_data.input_merger.remoteUpdate(std.heap.page_allocator, , new_state: input.PlayerInputState, tick: u64)
             std.posix.close(fd);
             continue;
         }
+        const packet_part = packet_part_buf[0..packet_part_len];
+
+        const packet = packet_buffer.toPacket(packet_part);
 
         //std.debug.print("reading from player {d} length {d}", .{ conn_index, length });
         //debugPacket(read_buffer[0..length]);
-
-        parsePacketFromClient(conn_index, server_data, read_buffer[0..length]) catch |e| {
+        parsePacketFromClient(conn_index, server_data, packet) catch |e| {
             std.debug.print("error while parsing packet of player {d}: {any}\n", .{ conn_index, e });
         };
+
+        packet_buffer.clean();
     }
 }
 
@@ -376,7 +427,6 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
             try server_data.input_merger.dumpInputs((server_data.input_merger.buttons.items.len >> 9) << 9, writer);
         }
 
-        std.time.sleep(std.time.ns_per_ms * 19);
         // TODO: Take clock timestamp
         // TODO: Compare these then sleep a bit to lock the ticks per second.
     }
@@ -386,7 +436,7 @@ pub fn startServer(networking_queue: *NetworkingQueue) !void {
     _ = try std.Thread.spawn(.{}, serverThread, .{networking_queue});
 }
 
-fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []u8) !u64 {
+fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []const u8) !u64 {
     var scanner = cbor.Scanner{};
     var ctx = scanner.begin(packet);
     var all_packets = try ctx.readArray();
@@ -449,27 +499,31 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
     std.debug.print("connection established\n", .{});
     var newest_input_tick: u64 = 0;
 
+    var packet_buffer = PacketBuffer{};
+
     while (true) {
-        var incoming_packet_buf: [max_net_packet_size]u8 = undefined;
-        pollSockets(&poller.connection, &poller.fd, &poller.should_read);
-        const incoming_packet_len = if (poller.should_read[0]) try stream.read(&incoming_packet_buf) else 0;
-        const incoming_packet = incoming_packet_buf[0..incoming_packet_len];
+        var packet_part_buf: [max_net_packet_size]u8 = undefined;
+        pollSockets(4, &poller.connection, &poller.fd, &poller.should_read);
+        const packet_part_len = if (poller.should_read[0]) try stream.read(&packet_part_buf) else 0;
+        const packet_part = packet_part_buf[0..packet_part_len];
+
+        const full_packet = packet_buffer.toPacket(packet_part);
 
         // Reset the poller. We don't care if it was ever set.
         poller.should_read[0] = false;
 
         networking_queue.rw_lock.lock();
 
-        if (incoming_packet_len > 0) {
-            const possibly_newer = try handlePacketFromServer(networking_queue, incoming_packet);
+        if (full_packet.len > 0) {
+            const possibly_newer = try handlePacketFromServer(networking_queue, full_packet);
             newest_input_tick = @max(possibly_newer, newest_input_tick);
         }
 
-        var write_buffer: [max_net_packet_size]u8 = undefined;
-        var fb = std.io.fixedBufferStream(&write_buffer);
-        const writer = fb.writer();
+        packet_buffer.clean();
 
-        // WARNING: We are not chunking. This is causing us to drop packages! Very bad!!!
+        var send_buffer: [max_net_packet_size]u8 = undefined;
+        var fb = std.io.fixedBufferStream(send_buffer[4..]);
+        const writer = fb.writer();
 
         try cbor.writeArrayHeader(writer, 2);
         try cbor.writeUint(writer, newest_input_tick);
@@ -483,12 +537,19 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
             try cbor.writeUint(writer, @intFromEnum(packet.data.button_b));
         }
         networking_queue.incoming_data_count = 0;
-        _ = try stream.write(write_buffer[0..fb.pos]);
+
+        // Patch in the length of the packet encoded as 4 bytes.
+        // We use little endian because that is more common nowadays.
+        // Unfortunately CBOR uses big endian, so some inconsistencies exist.
+        // The reason we send the length in total bytes is that TCP over IP
+        // is a stream of bytes and does not distinguish between separate
+        // calls of write(). And we must know where a package ends so we can
+        // start reading the next.
+        std.mem.writeInt(std.math.ByteAlignedInt(u32), send_buffer[0..4], @truncate(fb.pos), std.builtin.Endian.little);
+
+        _ = try stream.write(send_buffer[0 .. fb.pos + 4]);
 
         networking_queue.rw_lock.unlock();
-
-        // TODO: Ideally, we avoid sleeping and either awake from changes to networking_queue or activity on stream.
-        std.time.sleep(std.time.ns_per_ms * 4);
     }
 }
 
