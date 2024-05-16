@@ -4,6 +4,7 @@ const rl = @import("raylib");
 const win = @import("window.zig");
 const input = @import("input.zig");
 const render = @import("render.zig");
+const playback = @import("playback.zig");
 const ecs = @import("ecs/ecs.zig");
 const networking = @import("networking.zig");
 const linear = @import("math/linear.zig");
@@ -11,7 +12,7 @@ const fixed = @import("math/fixed.zig");
 
 const SimulationCache = @import("SimulationCache.zig");
 const AssetManager = @import("AssetManager.zig");
-const AudioManager = @import("AudioManager.zig").AudioManager;
+const AudioManager = @import("AudioManager.zig");
 const Controller = @import("Controller.zig");
 const InputMerger = @import("InputMerger.zig");
 const Invariables = @import("Invariables.zig");
@@ -300,5 +301,7 @@ pub fn main() !void {
 
         // Stop rendering.
         rl.endDrawing();
+
+        playback.update(&simulation_cache.latest().world, &audm);
     }
 }
