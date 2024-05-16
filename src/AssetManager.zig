@@ -24,7 +24,6 @@ const paths = [_][:0]const u8{
     "assets/error.png",
     "assets/BABBA.png",
     "assets/morsetable_bitmap.png",
-    "assets/morse_input.png",
     "assets/morsecode_background.png",
     "assets/morsecode_buttons.png",
     "assets/borggarden.png",
