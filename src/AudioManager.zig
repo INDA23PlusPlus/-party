@@ -38,14 +38,13 @@ pub fn path_to_key(comptime path: [:0]const u8) u8 {
 
 pub const AudioManager = struct {
     const Self = @This();
-
     audio_map: AudioHashMap,
 
     pub fn init(alloc: Allocator) !AudioManager {
         rl.initAudioDevice();
         var audio_hash_map = AudioHashMap.init(alloc);
         for (audio_paths) |path| {
-            const key = std.hash.Wyhash.hash(0, path);
+            const key: u8 = @truncate(std.hash.Wyhash.hash(0, path));
             const sound = rl.loadSound(path);
             try audio_hash_map.put(key, sound);
         }
