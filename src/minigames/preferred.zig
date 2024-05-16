@@ -9,7 +9,7 @@ const Invariables = @import("../Invariables.zig");
 pub fn init(_: *simulation.Simulation, _: input.Timeline) !void {}
 
 pub fn update(sim: *simulation.Simulation, _: input.Timeline, _: Invariables) !void {
-    if (sim.meta.minigame_counter == 1) {
+    if (sim.meta.minigame_counter == 2) {
         sim.meta.minigame_id = sim.meta.preferred_minigame_id;
     }
     sim.meta.minigame_counter += 1;
