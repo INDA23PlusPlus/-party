@@ -22,7 +22,7 @@ const minigames_list = @import("minigames/list.zig").list;
 /// This is used for catching up to the server elapsed_tick.
 pub const max_simulations_per_frame = 512;
 
-/// We introduce an input delay on purpose such that there is a chance that the 
+/// We introduce an input delay on purpose such that there is a chance that the
 /// input travels to the server in time to avoid resimulations.
 /// A low value is very optimistic...
 const useful_input_delay = 1;
@@ -251,7 +251,7 @@ pub fn main() !void {
         if (rl.isKeyPressed(rl.KeyboardKey.key_p)) {
             const file = std.io.getStdErr();
             const writer = file.writer();
-            try input_merger.dumpInputs(writer);
+            try input_merger.dumpInputs((tick >> 9) << 9, writer);
         }
 
         //if (simulation_cache.head_tick_elapsed == 300 + 1) {
