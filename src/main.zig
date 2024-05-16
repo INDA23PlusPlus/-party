@@ -11,6 +11,7 @@ const fixed = @import("math/fixed.zig");
 
 const SimulationCache = @import("SimulationCache.zig");
 const AssetManager = @import("AssetManager.zig");
+const AudioManager = @import("AudioManager.zig").AudioManager;
 const Controller = @import("Controller.zig");
 const InputMerger = @import("InputMerger.zig");
 const Invariables = @import("Invariables.zig");
@@ -125,6 +126,9 @@ pub fn main() !void {
 
     var assets = AssetManager.init(static_allocator);
     defer assets.deinit();
+
+    var audm = try AudioManager.init(static_allocator);
+    defer audm.deinit();
 
     var simulation_cache = SimulationCache{};
     simulation_cache.start_state.meta.preferred_minigame_id = launch_options.force_minigame;
