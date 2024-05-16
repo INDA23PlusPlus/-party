@@ -338,7 +338,7 @@ fn pollSockets(timeout_ms: u32, conns_type: []ConnectionType, conns_sockets: []s
 
         const timeval = std.os.windows.ws2_32.timeval{
             .tv_sec = 0,
-            .tv_usec = std.time.us_per_ms * timeout_ms,
+            .tv_usec = @intCast(std.time.us_per_ms * timeout_ms),
         };
 
         var fd_count: u32 = 0;
