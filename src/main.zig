@@ -92,6 +92,23 @@ const LaunchOptions = struct {
     }
 };
 
+pub fn submitInputs(controllers: []Controller, input_merger: *InputMerger, input_tick: u64, main_thread_queue: *NetworkingQueue) void {
+    for (controllers) |controller| {
+        if (!controller.isAssigned()) {
+            continue;
+        }
+        const player_index = controller.input_index;
+        const data = input_merger.buttons.items[input_tick][player_index];
+
+        main_thread_queue.outgoing_data[main_thread_queue.outgoing_data_count] = .{
+            .tick = input_tick,
+            .data = data,
+            .player = @truncate(player_index),
+        };
+        main_thread_queue.outgoing_data_count += 1;
+    }
+}
+
 pub fn main() !void {
     const launch_options = try LaunchOptions.parse();
 
@@ -130,6 +147,13 @@ pub fn main() !void {
     if (launch_options.force_ijkl) {
         _ = input_merger.forceAutoAssign(1, &controllers, 1);
     }
+
+    // If this is not done, then we desynch. Maybe there is a prettier solution
+    // to forced input assignments. But this works, so too bad!
+    // In other words, we make sure that other clients know about the forceAutoAssigns.
+    // If no forceAutoAssign has happened, then all of the controllers will be unassigned at this stage.
+    // So the call can't hurt anyone.
+    submitInputs(&controllers, &input_merger, 1, &main_thread_queue);
 
     // Networking
     if (launch_options.start_as_role == .client) {
@@ -192,23 +216,10 @@ pub fn main() !void {
         if (main_thread_queue.outgoing_data_count + controllers_active <= main_thread_queue.outgoing_data.len) {
             // We can only get local input, if we have the ability to send it. If we can't send it, we
             // mustn't accept local input as that could cause desynchs.
-            // TODO: Adding tick + 2 instead would add a delay to input, which would reduce resimulations.
             try input_merger.localUpdate(&controllers, input_tick_delayed);
 
-            for (controllers) |controller| {
-                if (!controller.isAssigned()) {
-                    continue;
-                }
-                const player_index = controller.input_index;
-                const data = input_merger.buttons.items[input_tick_delayed][player_index];
-
-                main_thread_queue.outgoing_data[main_thread_queue.outgoing_data_count] = .{
-                    .tick = input_tick_delayed,
-                    .data = data,
-                    .player = @truncate(player_index),
-                };
-                main_thread_queue.outgoing_data_count += 1;
-            }
+            // Tell the networking thread about the changes we just made to the timeline.
+            submitInputs(&controllers, &input_merger, input_tick_delayed, &main_thread_queue);
         } else {
             std.debug.print("unable to send further inputs as too many have been sent without answer\n", .{});
         }
