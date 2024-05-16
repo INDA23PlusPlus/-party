@@ -45,7 +45,11 @@ const PacketBuffer = struct {
     index: u32 = 0,
     to_remove: u32 = 0,
 
-    fn toPacket(self: *PacketBuffer, to_add: []u8) []const u8 {
+    fn toPacket(self: *PacketBuffer, to_add: []const u8) []const u8 {
+        if (to_add.len == 0) {
+            return "";
+        }
+
         // If someone forgot to call clean().
         std.debug.assert(self.to_remove == 0);
 
@@ -63,18 +67,25 @@ const PacketBuffer = struct {
         }
 
         const expected_packet_len = std.mem.readInt(u32, self.buffer[0..4], std.builtin.Endian.little);
+        const with_header_len = expected_packet_len + 4;
 
-        if (expected_packet_len + 4 > self.index) {
+        if (with_header_len > self.index) {
             // Full packet has not arrvied yet.
             return "";
         }
 
-        return self.buffer[4 .. expected_packet_len + 4];
+        std.debug.print("reading package of size {d} {d} {d}\n", .{ expected_packet_len, self.index, self.to_remove });
+
+        self.to_remove = with_header_len;
+        return self.buffer[4..with_header_len];
     }
 
     fn clean(self: *PacketBuffer) void {
         const to_remove = self.to_remove;
-        std.mem.copyForwards(u8, self.buffer[0..], self.buffer[self.to_remove..]);
+        if (to_remove == 0) {
+            return;
+        }
+        std.mem.copyForwards(u8, self.buffer[0..self.index], self.buffer[self.to_remove..self.index]);
         self.index -= to_remove;
         self.to_remove = 0;
     }
@@ -115,7 +126,11 @@ const NetServerData = struct {
 };
 
 fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packet: []const u8) !void {
-    debugPacket(packet);
+    if (packet.len == 0) {
+        return;
+    }
+
+    //debugPacket(packet);
 
     var client = &server_data.conns_list[client_index];
     var scanner = cbor.Scanner{};
@@ -224,6 +239,7 @@ fn sendUpdatesToRemoteClient(fd: std.posix.socket_t, input_merger: *InputMerger,
         }
     }
 
+    std.debug.print("sending packet of length {d}\n", .{fb.pos});
     // There is an explanation for this line in this file. Just search for writeInt.
     std.mem.writeInt(std.math.ByteAlignedInt(u32), send_buffer[0..4], @truncate(fb.pos), std.builtin.Endian.little);
 
@@ -508,6 +524,7 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
         const packet_part = packet_part_buf[0..packet_part_len];
 
         const full_packet = packet_buffer.toPacket(packet_part);
+        //debugPacket(full_packet);
 
         // Reset the poller. We don't care if it was ever set.
         poller.should_read[0] = false;
@@ -555,4 +572,40 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
 
 pub fn startClient(networking_queue: *NetworkingQueue, hostname: []const u8) !void {
     _ = try std.Thread.spawn(.{}, clientThread, .{ networking_queue, hostname });
+}
+
+test "packet buffer two part" {
+    var buffer = PacketBuffer{};
+    try std.testing.expectEqualStrings("", buffer.toPacket(""));
+    buffer.clean();
+    try std.testing.expectEqualStrings("", buffer.toPacket("\x01\x00\x00\x00"));
+    buffer.clean();
+    try std.testing.expectEqualStrings("Q", buffer.toPacket("Q"));
+    buffer.clean();
+    try std.testing.expectEqualStrings("", buffer.toPacket(""));
+    buffer.clean();
+}
+
+test "packet buffer directly" {
+    var buffer = PacketBuffer{};
+    try std.testing.expectEqualStrings("", buffer.toPacket(""));
+    buffer.clean();
+    try std.testing.expectEqualStrings("Q", buffer.toPacket("\x01\x00\x00\x00Q"));
+    buffer.clean();
+    try std.testing.expectEqualStrings("", buffer.toPacket(""));
+    buffer.clean();
+}
+
+test "packet buffer two in one" {
+    var buffer = PacketBuffer{};
+    try std.testing.expectEqualStrings("", buffer.toPacket(""));
+    buffer.clean();
+    try std.testing.expectEqualStrings("Q", buffer.toPacket("\x01\x00\x00\x00Q\x01\x00\x00\x00W"));
+    buffer.clean();
+    try std.testing.expectEqualStrings("W", buffer.toPacket("\x01\x00\x00\x00A\x01\x00\x00\x00B"));
+    buffer.clean();
+    try std.testing.expectEqualStrings("A", buffer.toPacket(""));
+    buffer.clean();
+    try std.testing.expectEqualStrings("B", buffer.toPacket(""));
+    buffer.clean();
 }
