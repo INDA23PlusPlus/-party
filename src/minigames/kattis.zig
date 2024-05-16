@@ -9,6 +9,8 @@ const animator = @import("../animation/animator.zig");
 const Animation = @import("../animation/animations.zig").Animation;
 const Invariables = @import("../Invariables.zig");
 const Crown = @import("../crown.zig");
+const AudioManager = @import("../AudioManager.zig");
+const Audio = @import("../audio.zig");
 
 // Hey, nice code you got there!   (^‿^ )
 // Would be a shame if someone deleted everything...   (0‿0  )
@@ -74,6 +76,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
+    Audio.update(&sim.world);
     inputSystem(&sim.world, timeline);
     updateTextures(&sim.world, timeline);
     animator.update(&sim.world);
@@ -151,7 +154,7 @@ fn updateTextures(world: *ecs.world.World, timeline: input.Timeline) void {
         ecs.component.Anm,
     }, &.{});
 
-    while (query_p.next()) |_| {
+    while (query_p.next()) |ent| {
         const plr = query_p.get(ecs.component.Plr) catch unreachable;
         const ctr = query_p.get(ecs.component.Ctr) catch unreachable;
         const anm = query_p.get(ecs.component.Anm) catch unreachable;
@@ -183,11 +186,13 @@ fn updateTextures(world: *ecs.world.World, timeline: input.Timeline) void {
 
             if (timer.count > 1) {
                 if (timer.count % 20 == 0) {
+                    world.promote(ent, &.{ecs.component.Snd});
                     ctr.count = ((ctr.count << 1) >> 2) | 0x80000000;
                 }
 
                 timer.count = timer.count - 1;
             } else {
+                world.promote(ent, &.{ecs.component.Snd});
                 anm.animation = Animation.CatPortrait;
                 anm.interval = 20;
                 ctr.count = 1;
