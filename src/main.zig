@@ -210,6 +210,9 @@ pub fn main() !void {
             // Make sure we can scream into the void as much as we wish.
             main_thread_queue.outgoing_data_count = 0;
         } else {
+            // Make sure the server knows how far the local client has come.
+            main_thread_queue.client_acknowledge_tick = known_server_tick;
+
             main_thread_queue.interchange(&net_thread_queue);
         }
 

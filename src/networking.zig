@@ -66,7 +66,7 @@ const NetServerData = struct {
         }
 
         inline for (&self.conns_list, self.conns_type) |*connection, conn_type| {
-            if (conn_type == .remote) {
+            if (conn_type != .unused) {
                 connection.consistent_until = @min(connection.consistent_until, change.tick);
             }
         }
@@ -79,7 +79,8 @@ fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packe
     var ctx = scanner.begin(packet);
     var header = try ctx.readArray();
     std.debug.assert(header.items == 2);
-    client.tick_acknowledged = try header.readU64();
+    client.tick_acknowledged = @max(client.tick_acknowledged, try header.readU64());
+    //std.debug.print("packet from client with tick ack {}\n", .{new_tick_acknowledged});
     var packets = try header.readArray();
     for (0..packets.items) |_| {
         var packet_ctx = try packets.readArray();
@@ -124,6 +125,64 @@ fn clientConnected(server_data: *NetServerData, conn: std.net.Server.Connection)
     }
 }
 
+fn sendUpdatesToLocalClient(networking_queue: *NetworkingQueue, input_merger: *InputMerger, consistent_until: u64, targeted_tick: u64) u64 {
+    var new_consistent_until = consistent_until;
+    for (consistent_until..targeted_tick) |tick_index| {
+        const inputs = input_merger.buttons.items[tick_index];
+        const is_certain = input_merger.is_certain.items[tick_index];
+        for (inputs, 0..) |packet, player_index| {
+            if (!is_certain.isSet(player_index)) {
+                continue;
+            }
+            // TODO: Reduce the nesting.
+            if (networking_queue.outgoing_data_count >= networking_queue.outgoing_data.len) {
+                return new_consistent_until;
+            }
+            if (player_index == 1) {
+                std.debug.print("sending to main thread concerning {d} {any}\n", .{player_index, packet});
+            }
+            networking_queue.outgoing_data[networking_queue.outgoing_data_count] = .{
+                .tick = tick_index,
+                .player = @truncate(player_index),
+                .data = packet,
+            };
+            networking_queue.outgoing_data_count += 1;
+            new_consistent_until = @max(new_consistent_until, targeted_tick);
+        }
+    }
+    return new_consistent_until;
+}
+
+fn sendUpdatesToRemoteClient(fd: std.posix.socket_t, input_merger: *InputMerger, consistent_until: u64, targeted_tick: u64) !u64 {
+    var send_buffer: [max_net_packet_size]u8 = undefined;
+    const send_amount = targeted_tick - consistent_until;
+
+    var fb = std.io.fixedBufferStream(&send_buffer);
+    const writer = fb.writer();
+    try cbor.writeArrayHeader(writer, send_amount);
+    for (consistent_until..targeted_tick) |tick_index| {
+        const inputs = input_merger.buttons.items[tick_index];
+        const is_certain = input_merger.is_certain.items[tick_index];
+
+        try cbor.writeArrayHeader(writer, 2);
+        try cbor.writeUint(writer, tick_index);
+        try cbor.writeArrayHeader(writer, is_certain.count());
+        for (0..constants.max_player_count) |player| {
+            if (!is_certain.isSet(player)) {
+                continue;
+            }
+            const input = inputs[player];
+            try cbor.writeArrayHeader(writer, 4);
+            try cbor.writeUint(writer, player);
+            try cbor.writeUint(writer, @intFromEnum(input.dpad));
+            try cbor.writeUint(writer, @intFromEnum(input.button_a));
+            try cbor.writeUint(writer, @intFromEnum(input.button_b));
+        }
+    }
+    _ = try std.posix.send(fd, send_buffer[0..fb.pos], 0);
+    return @max(consistent_until, targeted_tick);
+}
+
 fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *NetworkingQueue) !void {
     networking_queue.rw_lock.lock();
 
@@ -132,6 +191,13 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
         try server_data.ingestPlayerInput(change);
     }
     networking_queue.incoming_data_count = 0;
+
+    // Update local tick_acknowledged.
+    for (&server_data.conns_list, server_data.conns_type) |*connection, conn_type| {
+        if (conn_type == .local) {
+            connection.tick_acknowledged = @max(connection.tick_acknowledged, networking_queue.client_acknowledge_tick);
+        }
+    }
 
     // Ingest the updates from the connected clients.
     for (&server_data.conns_list, server_data.conns_type, &server_data.conns_incoming_packets) |*connection, conn_type, *conns_packets| {
@@ -144,70 +210,31 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
         connection.packets_available = 0;
     }
 
-    // Scratch place for sending packets to clietns.
-    var send_buffer: [max_net_packet_size]u8 = undefined;
 
     // Send the updates to the clients.
     for (&server_data.conns_list, server_data.conns_type, &server_data.conns_sockets) |*connection, conn_type, fd| {
         // Send the missing inputs. But only N at the time.
         const send_start = connection.consistent_until + 1;
         const send_until = @min(server_data.input_merger.buttons.items.len, send_start + max_inputs_per_socket_packet);
-        const input_tick_count = send_until -| send_start;
-        const targeted_tick = connection.consistent_until + input_tick_count;
 
-        if (conn_type == .local) {
-            for (connection.consistent_until..targeted_tick) |tick_index| {
-                const inputs = server_data.input_merger.buttons.items[tick_index];
-                for (inputs, 0..) |packet, player_index| {
-                    // TODO: Reduce the nesting.
-                    if (networking_queue.outgoing_data_count >= networking_queue.outgoing_data.len) {
-                        continue;
-                    }
-                    networking_queue.outgoing_data[networking_queue.outgoing_data_count] = .{
-                        .tick = tick_index,
-                        .player = @truncate(player_index),
-                        .data = packet,
-                    };
-                    networking_queue.outgoing_data_count += 1;
-                }
-            }
+        if (send_until <= send_start) {
+            // Nothing to send.
+            continue;
         }
 
-        if (conn_type != .remote) {
+        if (conn_type == .unused) {
             continue;
         }
 
         if (connection.tick_acknowledged + max_unresponded_ticks < connection.consistent_until) {
             // We have sent too much without a response, time to wait for a response.
+            //std.debug.print("tick ack {} and consistent until {}\n", .{connection.tick_acknowledged, connection.consistent_until});
             continue;
         }
 
-        var fb = std.io.fixedBufferStream(&send_buffer);
-        const writer = fb.writer();
-        try cbor.writeArrayHeader(writer, input_tick_count);
-        for (connection.consistent_until..targeted_tick) |tick_index| {
-            const inputs = server_data.input_merger.buttons.items[tick_index];
-            const is_certain = server_data.input_merger.is_certain.items[tick_index];
-
-            try cbor.writeArrayHeader(writer, 2);
-            try cbor.writeUint(writer, tick_index);
-            try cbor.writeArrayHeader(writer, is_certain.count());
-            for (0..constants.max_player_count) |player| {
-                if (!is_certain.isSet(player)) {
-                    continue;
-                }
-                const input = inputs[player];
-                try cbor.writeArrayHeader(writer, 4);
-                try cbor.writeUint(writer, player);
-                try cbor.writeUint(writer, @intFromEnum(input.dpad));
-                try cbor.writeUint(writer, @intFromEnum(input.button_a));
-                try cbor.writeUint(writer, @intFromEnum(input.button_b));
-
-                //std.debug.print("sending to player X tick {d} from player {d} with dpad {s}\n", .{tick_index, player, @tagName(input.dpad)});
-            }
-        }
-        _ = try std.posix.send(fd, send_buffer[0..fb.pos], 0);
-        connection.consistent_until = targeted_tick;
+        connection.consistent_until =
+            if (conn_type == .local) sendUpdatesToLocalClient(networking_queue, &server_data.input_merger, connection.consistent_until, send_until)
+            else try sendUpdatesToRemoteClient(fd, &server_data.input_merger, connection.consistent_until, send_until);
     }
 
     networking_queue.rw_lock.unlock();
