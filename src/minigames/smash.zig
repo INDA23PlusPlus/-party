@@ -234,6 +234,7 @@ fn actionSystem(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                 ecs.component.Tmr{},
                 ecs.component.Anm{ .interval = 8, .animation = .SmashJumpSmoke },
                 ecs.component.Jmp{},
+                ecs.component.Snd{ .sound_hash = comptime AudioManager.path_to_key("assets/audio/jump.wav") },
             });
         }
 
@@ -266,7 +267,7 @@ fn actionSystem(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                 ecs.component.Anm{ .interval = 8, .animation = .SmashAttackSmoke }, // TODO: Block animation
                 ecs.component.Ctr{},
                 ecs.component.Blk{},
-                ecs.component.Snd{ .sound_hash = AudioManager.path_to_key("assets/audio/block.wav") },
+                ecs.component.Snd{ .sound_hash = comptime AudioManager.path_to_key("assets/audio/block.wav") },
             });
 
             continue;
@@ -317,6 +318,7 @@ fn actionSystem(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                 ecs.component.Anm{ .interval = 8, .animation = .SmashAttackSmoke },
                 ecs.component.Lnk{ .child = entity },
                 ecs.component.Atk{},
+                ecs.component.Snd{ .sound_hash = comptime AudioManager.path_to_key("assets/audio/attack.wav") },
             });
         }
     }
@@ -619,6 +621,7 @@ fn deathSystem(sim: *simulation.Simulation, inputs: *const input.AllPlayerButton
                     .tint = rl.Color.init(100, 100, 100, 100),
                 },
                 ecs.component.Anm{ .interval = 8, .animation = .SmashAttackSmoke },
+                ecs.component.Snd{ .sound_hash = comptime AudioManager.path_to_key("assets/audio/death.wav") },
             });
 
             sim.world.demote(entity, &.{
