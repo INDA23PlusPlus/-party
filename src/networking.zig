@@ -216,7 +216,7 @@ fn sendUpdatesToLocalClient(networking_queue: *NetworkingQueue, input_merger: *I
 fn sendUpdatesToRemoteClient(fd: std.posix.socket_t, input_merger: *InputMerger, consistent_until: u64, targeted_tick: u64) !u64 {
     var send_buffer: [max_net_packet_size]u8 = undefined;
     const send_amount = targeted_tick - consistent_until;
-    std.debug.print("sending remote updates {} {} {}\n", .{ send_amount, targeted_tick, consistent_until });
+    //std.debug.print("sending remote updates {} {} {}\n", .{ send_amount, targeted_tick, consistent_until });
 
     var fb = std.io.fixedBufferStream(send_buffer[4..]);
     const writer = fb.writer();
