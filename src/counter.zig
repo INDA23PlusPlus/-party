@@ -186,3 +186,44 @@ pub fn move(world: *ecs.world.World, entity: ecs.entity.Entity, velocity: @Vecto
         try move(world, child, velocity);
     }
 }
+
+pub fn reposition(world: *ecs.world.World, entity: ecs.entity.Entity, position: @Vector(2, i32)) !void {
+    const pos = try world.inspect(entity, ecs.component.Pos);
+    const tex = try world.inspect(entity, ecs.component.Tex);
+    const lnk = try world.inspect(entity, ecs.component.Lnk);
+
+    if (world.checkSignature(entity, &.{}, &.{
+        ecs.component.Ctr,
+        ecs.component.Str,
+    })) {
+        return ecs.world.WorldError.InvalidInspection;
+    }
+
+    var digits_minus_one: i32 = 0;
+
+    var current = lnk.child;
+
+    while (current) |child| {
+        const child_lnk = try world.inspect(child, ecs.component.Lnk);
+
+        if (world.checkSignature(entity, &.{}, &.{
+            ecs.component.Pos,
+            ecs.component.Ctr,
+            ecs.component.Tex,
+            ecs.component.Str,
+        })) {
+            return ecs.world.WorldError.InvalidInspection;
+        }
+
+        digits_minus_one += 1;
+        current = child_lnk.child;
+    }
+
+    const velocity = position - pos.pos + [_]i32{ digits_minus_one * 6 * tex.size, 0 };
+
+    pos.pos += velocity;
+
+    if (lnk.child) |child| {
+        try move(world, child, velocity);
+    }
+}

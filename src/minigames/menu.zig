@@ -110,6 +110,9 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
     //     if (rl.isKeyPressed(rl.KeyboardKey.key_right)) {
     //         try @import("../counter.zig").move(&sim.world, entity, .{ 16, 0 });
     //     }
+    //     if (rl.isKeyPressed(rl.KeyboardKey.key_zero)) {
+    //         try @import("../counter.zig").reposition(&sim.world, entity, .{ 64, 64 });
+    //     }
     // }
 
     for (timeline.latest(), 0..) |inp, player_index| {
