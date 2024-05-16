@@ -98,6 +98,8 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
 
     try scrollSystem(&sim.world);
 
+    try particleSystem(&sim.world);
+
     animator.update(&sim.world);
 
     try crown.update(sim);
@@ -157,15 +159,57 @@ fn pushSystem(world: *ecs.world.World, _: *collision.CollisionQueue) !void {
 }
 
 fn jetpackSystem(world: *ecs.world.World, inputs: input.AllPlayerButtons) !void {
-    var query = world.query(&.{ ecs.component.Mov, ecs.component.Plr }, &.{});
+    var query = world.query(&.{ ecs.component.Mov, ecs.component.Plr, ecs.component.Pos }, &.{});
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
         const mov = try query.get(ecs.component.Mov);
+        const pos = try query.get(ecs.component.Pos);
         const state = inputs[plr.id];
         if (state.is_connected()) {
             if (state.vertical() > 0) {
                 mov.velocity = mov.velocity.add(player_boost);
+                try spawnSmokeParticles(world, pos.pos);
             }
+        }
+    }
+}
+
+fn spawnSmokeParticles(world: *ecs.world.World, pos: @Vector(2, i32)) !void {
+    _ = try world.spawnWith(.{
+        ecs.component.Pos{ .pos = pos },
+        ecs.component.Tex{
+            .texture_hash = AssetManager.pathHash("assets/smash_jump_smoke.png"),
+            .w = 2,
+            .h = 2,
+            .subpos = .{ -12, 8 },
+            .flip_vertical = true,
+        },
+        ecs.component.Anm{
+            .animation = Animation.SmashAttackSmoke,
+            .interval = 2,
+            .looping = true,
+        },
+        ecs.component.Tmr{ .ticks = 8 }, // lifetime
+        ecs.component.Src{},
+    });
+}
+
+fn particleSystem(
+    world: *ecs.world.World,
+) !void {
+    var query = world.query(&.{
+        ecs.component.Pos,
+        ecs.component.Tex,
+        ecs.component.Anm,
+        ecs.component.Tmr,
+        ecs.component.Src,
+    }, &.{});
+    while (query.next()) |entity| {
+        var tmr = try query.get(ecs.component.Tmr);
+        if (tmr.ticks == 0) {
+            world.kill(entity);
+        } else {
+            tmr.ticks -= 1;
         }
     }
 }
