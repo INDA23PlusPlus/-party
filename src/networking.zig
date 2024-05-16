@@ -553,10 +553,12 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
     while (true) {
         var packet_part_buf: [max_net_packet_size]u8 = undefined;
         pollSockets(4, &poller.connection, &poller.fd, &poller.should_read);
-        const packet_part_len = if (poller.should_read[0]) try stream.read(&packet_part_buf) else 0;
+        const should_read = poller.should_read[0];
+        const packet_part_len = if (should_read) try stream.read(&packet_part_buf) else 0;
         const packet_part = packet_part_buf[0..packet_part_len];
 
         var full_packet = packet_buffer.toPacket(packet_part);
+
         //debugPacket(full_packet);
 
         // Reset the poller. We don't care if it was ever set.
@@ -571,6 +573,10 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
             newest_input_tick = @max(possibly_newer, newest_input_tick);
             full_packet = packet_buffer.toPacket("");
         }
+
+
+        // We only send packets without input if we have received a packet.
+        const should_send = networking_queue.incoming_data_count > 0 or should_read;
 
         var send_buffer: [max_net_packet_size]u8 = undefined;
         var fb = std.io.fixedBufferStream(send_buffer[4..]);
@@ -599,7 +605,9 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
         // start reading the next.
         std.mem.writeInt(std.math.ByteAlignedInt(u32), send_buffer[0..4], @truncate(fb.pos), std.builtin.Endian.little);
 
-        _ = try stream.write(send_buffer[0 .. fb.pos + 4]);
+        if (should_send) {
+            _ = try stream.write(send_buffer[0 .. fb.pos + 4]);
+        }
 
         networking_queue.rw_lock.unlock();
     }
