@@ -13,6 +13,7 @@ pub const F32 = @import("../math/fixed.zig").F(16, 16);
 pub const Vec2 = @import("../math/linear.zig").V(2, F32);
 const Animation = @import("../animation/animations.zig").Animation;
 const AssetManager = @import("../AssetManager.zig");
+const AudioManager = @import("../AudioManager.zig");
 
 /// Components the ECS supports.
 /// All components MUST be default initializable.
@@ -121,7 +122,7 @@ pub const Tex = struct {
 
 /// Entities with this component
 pub const Snd = struct {
-    sound_hash: u8 = 0,
+    sound_hash: u8 = AudioManager.path_to_key(AudioManager.default_audio),
 };
 
 /// Entities with this component are animated.

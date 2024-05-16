@@ -1,5 +1,5 @@
-const ecs = @import("ecs/ecs.zig");
 const rl = @import("raylib");
+const ecs = @import("ecs/ecs.zig");
 const AudioManager = @import("AudioManager.zig");
 
 pub fn update(world: *ecs.world.World, am: *AudioManager) void {
