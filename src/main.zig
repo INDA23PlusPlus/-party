@@ -22,6 +22,11 @@ const minigames_list = @import("minigames/list.zig").list;
 /// This is used for catching up to the server elapsed_tick.
 pub const max_simulations_per_frame = 512;
 
+/// We introduce an input delay on purpose such that there is a chance that the 
+/// input travels to the server in time to avoid resimulations.
+/// A low value is very optimistic...
+const useful_input_delay = 1;
+
 fn findMinigameID(preferred_minigame: []const u8) u32 {
     for (minigames_list, 0..) |mg, i| {
         if (std.mem.eql(u8, mg.name, preferred_minigame)) {
@@ -165,10 +170,11 @@ pub fn main() !void {
         // Fetch input.
         const tick = simulation_cache.head_tick_elapsed;
 
-        // Make sure that the timeline extends far enough for the input polling to work.
-        try input_merger.extendTimeline(std.heap.page_allocator, tick + 1);
+        const input_tick_delayed = tick + 1 + useful_input_delay;
 
-        // TODO: Move to before polling local inputs.
+        // Make sure that the timeline extends far enough for the input polling to work.
+        try input_merger.extendTimeline(std.heap.page_allocator, input_tick_delayed);
+
         // Ingest the updates.
         for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_count]) |change| {
             known_server_tick = @max(change.tick, known_server_tick);
@@ -181,22 +187,23 @@ pub fn main() !void {
 
         // We want to know how many controllers are active locally in order to know if
         // all of their states can be sent over to the networking thread later on.
-        const controllers_active = input_merger.autoAssign(&controllers, tick + 1);
+        const controllers_active = input_merger.autoAssign(&controllers, input_tick_delayed);
 
         if (main_thread_queue.outgoing_data_count + controllers_active <= main_thread_queue.outgoing_data.len) {
             // We can only get local input, if we have the ability to send it. If we can't send it, we
             // mustn't accept local input as that could cause desynchs.
-            try input_merger.localUpdate(&controllers, tick + 1);
+            // TODO: Adding tick + 2 instead would add a delay to input, which would reduce resimulations.
+            try input_merger.localUpdate(&controllers, input_tick_delayed);
 
             for (controllers) |controller| {
                 if (!controller.isAssigned()) {
                     continue;
                 }
                 const player_index = controller.input_index;
-                const data = input_merger.buttons.items[tick][player_index];
+                const data = input_merger.buttons.items[input_tick_delayed][player_index];
 
                 main_thread_queue.outgoing_data[main_thread_queue.outgoing_data_count] = .{
-                    .tick = tick,
+                    .tick = input_tick_delayed,
                     .data = data,
                     .player = @truncate(player_index),
                 };
@@ -255,7 +262,8 @@ pub fn main() !void {
             }
             _ = frame_arena.reset(.retain_capacity);
 
-            if (simulation_cache.head_tick_elapsed >= known_server_tick) {
+            // TODO: Is it correct to add useful_input_delay? We don't want to resimulate if we are close enough to the target.
+            if (simulation_cache.head_tick_elapsed + useful_input_delay >= known_server_tick) {
                 // We have caught up. No need to do extra simulation steps now.
                 break;
             }
