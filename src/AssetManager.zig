@@ -23,7 +23,7 @@ const paths = [_][:0]const u8{
     "assets/smash_cat.png",
     "assets/error.png",
     "assets/BABBA.png",
-    "assets/morsetable.png",
+    "assets/morsetable_bitmap.png",
     "assets/morsecode_background.png",
     "assets/borggarden.png",
     "assets/kattis_testcases.png",

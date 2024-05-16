@@ -87,9 +87,9 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{ .pos = [2]i32{ 246, 108 } },
         ecs.component.Tex{
-            .texture_hash = AssetManager.pathHash("assets/morsetable.png"),
-            .w = 18,
-            .h = 12,
+            .texture_hash = AssetManager.pathHash("assets/morsetable_bitmap.png"),
+            .w = constants.world_width_tiles / 2,
+            .h = constants.world_height_tiles / 2,
         },
     });
 
