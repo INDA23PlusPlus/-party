@@ -29,6 +29,7 @@ pub const components: []const type = &.{
     Lnk,
     Ctr,
     Tmr,
+    Snd,
     // Tags
     Dbg,
     Air,
@@ -116,6 +117,11 @@ pub const Tex = struct {
     flip_horizontal: bool = false,
     flip_vertical: bool = false,
     size: u8 = 1, // TODO: scale texture when rendering
+};
+
+/// Entities with this component
+pub const Snd = struct {
+    sound_hash: u8 = 0,
 };
 
 /// Entities with this component are animated.
