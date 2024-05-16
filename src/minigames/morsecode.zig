@@ -260,7 +260,7 @@ fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
             }
         }
 
-        if (ctr.count >= 29) {
+        if (ctr.count >= 10) {
             keystrokes_bitset.ticks = 0;
             ctr.count = 0;
             //tex.u = 2;
