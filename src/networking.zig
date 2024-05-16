@@ -214,6 +214,7 @@ fn sendUpdatesToLocalClient(networking_queue: *NetworkingQueue, input_merger: *I
             }
 
             if (networking_queue.outgoing_data_count >= networking_queue.outgoing_data.len) {
+                std.debug.print("a local client is having trouble keeping up with server\n", .{});
                 return new_consistent_until;
             }
 
@@ -492,7 +493,6 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []const u8
         var tick_info = try all_packets.readArray();
         std.debug.assert(tick_info.items == 2);
         const input_tick_index = try tick_info.readU64();
-        newest_input_tick = @max(newest_input_tick, input_tick_index);
         var all_inputs = try tick_info.readArray();
         for (0..all_inputs.items) |_| {
             var player_input = try all_inputs.readArray();
@@ -505,6 +505,7 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []const u8
             try player_input.readEnd();
 
             if (networking_queue.outgoing_data_count >= networking_queue.outgoing_data.len) {
+                std.debug.print("some input packets were ignored due to network_queue bandwith\n", .{});
                 continue;
             }
 
@@ -519,9 +520,16 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []const u8
                 .is_owned = if (is_owned == 1) true else false,
             };
             //std.debug.print("received dpad: {any} for player {d} and tick {d}\n", .{networking_queue.outgoing_data[networking_queue.outgoing_data_count].data.dpad, player_i, input_tick_index});
+            //std.debug.print("received tick {d}\n", .{input_tick_index});
 
             networking_queue.outgoing_data_count += 1;
         }
+
+        // All inputs were consumed for this tick. We may now ask the server
+        // to send us newer inputs. We can only set this value after we are
+        // sure of all inputs being consumed.
+        newest_input_tick = @max(newest_input_tick, input_tick_index);
+
         try all_inputs.readEnd();
         try tick_info.readEnd();
     }
@@ -566,6 +574,24 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
 
         networking_queue.rw_lock.lock();
 
+        while (networking_queue.outgoing_data_count > networking_queue.outgoing_data.len / 2) {
+            // If half the outgoing queue is filled, we should give the the
+            // main thread some time to catch up.
+
+            // First unlock it so that the main thread doesn't hang.
+            networking_queue.rw_lock.unlock();
+
+            // Give main thread some time...
+            std.time.sleep(std.time.ns_per_ms * 2);
+
+            std.debug.print("net sleeping to catch up\n", .{});
+
+            // Lock it again so that the above check is safe.
+            // Also makes the code following the while-loop safe.
+            networking_queue.rw_lock.lock();
+
+        }
+
         // The rational for this loop is the same as for the similiar
         // looking code found in the server thread.
         while (full_packet.len > 0) {
@@ -576,7 +602,8 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
 
 
         // We only send packets without input if we have received a packet.
-        const should_send = networking_queue.incoming_data_count > 0 or should_read;
+        // Packets with input are always sent.
+        const should_send = should_read or networking_queue.incoming_data_count > 0;
 
         var send_buffer: [max_net_packet_size]u8 = undefined;
         var fb = std.io.fixedBufferStream(send_buffer[4..]);
