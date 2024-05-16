@@ -7,6 +7,7 @@ const AssetManager = @import("../AssetManager.zig");
 const Invariables = @import("../Invariables.zig");
 const constants = @import("../constants.zig");
 const Animation = @import("../animation/animations.zig").Animation;
+const crown = @import("../crown.zig");
 const animator = @import("../animation/animator.zig");
 
 // all morse characters are less than 8 long
@@ -152,6 +153,8 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
         },
     });
 
+    try crown.init(sim, .{ 0, -16 });
+
     // Count down.
     sim.meta.minigame_timer = 60 * 60;
 }
@@ -161,10 +164,14 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
     try inputSystem(&sim.world, timeline);
     try wordSystem(&sim.world, &sim.meta);
     animator.update(&sim.world);
-    try scoreSystem(&sim.meta);
+    try scoreSystem(&sim.world, &sim.meta);
+    try crown.update(sim);
 }
 
-fn scoreSystem(meta: *simulation.Metadata) !void {
+fn scoreSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
+    const alive = countAlivePlayers(world);
+    //std.debug.print("players: {any}\n", .{alive});
+    //std.debug.print("timer: {any}\n", .{meta.minigame_timer});
     if (meta.minigame_timer <= 0) {
         std.debug.print("ending pfo: {any}\n", .{meta.minigame_placements});
         for (0..constants.max_player_count) |j| {
@@ -175,9 +182,20 @@ fn scoreSystem(meta: *simulation.Metadata) !void {
         std.debug.print("ending miniplaces: {any}\n", .{meta.minigame_placements});
         meta.minigame_id = constants.minigame_scoreboard;
         return;
+    } else if (alive == 0 and meta.minigame_timer > 60) {
+        meta.minigame_timer = 60;
     } else {
         meta.minigame_timer -= 1;
     }
+}
+
+fn countAlivePlayers(world: *ecs.world.World) u32 {
+    var count: u32 = 0;
+    var query = world.query(&.{ecs.component.Plr}, &.{});
+    while (query.next()) |_| {
+        count += 1;
+    }
+    return count;
 }
 
 fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
