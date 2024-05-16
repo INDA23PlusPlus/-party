@@ -101,6 +101,8 @@ const NetServerData = struct {
     conns_packet_buffer: [constants.max_connected_count]PacketBuffer = undefined,
     conns_incoming_packets: [constants.max_connected_count][max_inputs_per_socket_packet]NetworkingQueue.Packet = undefined,
     conns_should_read: [constants.max_connected_count]bool = undefined,
+    conns_latest_input_from_client: [constants.max_connected_count]u64 = undefined,
+    conns_owned_players: [constants.max_connected_count]InputMerger.PlayerBitSet = undefined,
 
     fn reservSlot(self: *NetServerData) ?usize {
         for (self.conns_type, 0..) |t, i| {
@@ -141,6 +143,11 @@ fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packe
     client.tick_acknowledged = @max(client.tick_acknowledged, try header.readU64());
     //std.debug.print("packet from client with tick ack {}\n", .{new_tick_acknowledged});
     var packets = try header.readArray();
+
+    var owned_players = InputMerger.empty_player_bit_set;
+
+    var latest_input_from_player: u64 = 0;
+
     for (0..packets.items) |_| {
         var packet_ctx = try packets.readArray();
         std.debug.assert(packet_ctx.items == 5);
@@ -163,12 +170,20 @@ fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packe
                 .button_b = @enumFromInt(button_b),
             },
             .player = @truncate(player_index),
+            .is_owned = true, // Simply assumed to be true.
         };
 
         client.packets_available += 1;
+        latest_input_from_player = @max(latest_input_from_player, frame_tick_index);
+        owned_players.set(player_index);
     }
     try packets.readEnd();
     try header.readEnd();
+
+    if (server_data.conns_latest_input_from_client[client_index] < latest_input_from_player) {
+        server_data.conns_latest_input_from_client[client_index] = latest_input_from_player;
+        server_data.conns_owned_players[client_index] = owned_players;
+    }
 }
 
 fn clientConnected(server_data: *NetServerData, conn: std.net.Server.Connection) void {
@@ -178,20 +193,23 @@ fn clientConnected(server_data: *NetServerData, conn: std.net.Server.Connection)
         server_data.conns_list[slot] = .{};
         server_data.conns_should_read[slot] = false;
         server_data.conns_packet_buffer[slot] = .{};
+        server_data.conns_latest_input_from_client[slot] = std.math.maxInt(u64);
         server_data.conns_sockets[slot] = conn.stream.handle;
+        server_data.conns_owned_players[slot] = InputMerger.empty_player_bit_set;
     } else {
         std.log.warn("too many players", .{});
         conn.stream.close();
     }
 }
 
-fn sendUpdatesToLocalClient(networking_queue: *NetworkingQueue, input_merger: *InputMerger, consistent_until: u64, targeted_tick: u64) u64 {
+fn sendUpdatesToLocalClient(networking_queue: *NetworkingQueue, input_merger: *InputMerger, consistent_until: u64, targeted_tick: u64, is_owned: InputMerger.PlayerBitSet) u64 {
     var new_consistent_until = consistent_until;
     for (consistent_until..targeted_tick) |tick_index| {
         const inputs = input_merger.buttons.items[tick_index];
         const is_certain = input_merger.is_certain.items[tick_index];
         for (inputs, 0..) |packet, player_index| {
             if (!is_certain.isSet(player_index)) {
+                // No point in sending something that we are unsure of.
                 continue;
             }
 
@@ -203,6 +221,7 @@ fn sendUpdatesToLocalClient(networking_queue: *NetworkingQueue, input_merger: *I
                 .tick = tick_index,
                 .player = @truncate(player_index),
                 .data = packet,
+                .is_owned = is_owned.isSet(player_index),
             };
             networking_queue.outgoing_data_count += 1;
             new_consistent_until = @max(new_consistent_until, targeted_tick);
@@ -211,7 +230,7 @@ fn sendUpdatesToLocalClient(networking_queue: *NetworkingQueue, input_merger: *I
     return new_consistent_until;
 }
 
-fn sendUpdatesToRemoteClient(fd: std.posix.socket_t, input_merger: *InputMerger, consistent_until: u64, targeted_tick: u64) !u64 {
+fn sendUpdatesToRemoteClient(fd: std.posix.socket_t, input_merger: *InputMerger, consistent_until: u64, targeted_tick: u64, is_owned: InputMerger.PlayerBitSet) !u64 {
     var send_buffer: [max_net_packet_size]u8 = undefined;
     const send_amount = targeted_tick - consistent_until;
     //std.debug.print("sending remote updates {} {} {}\n", .{ send_amount, targeted_tick, consistent_until });
@@ -228,10 +247,12 @@ fn sendUpdatesToRemoteClient(fd: std.posix.socket_t, input_merger: *InputMerger,
         try cbor.writeArrayHeader(writer, is_certain.count());
         for (0..constants.max_player_count) |player| {
             if (!is_certain.isSet(player)) {
+                // No point in sending something that we are unsure of.
                 continue;
             }
             const input = inputs[player];
-            try cbor.writeArrayHeader(writer, 4);
+            try cbor.writeArrayHeader(writer, 5);
+            try cbor.writeUint(writer, if (is_owned.isSet(player)) 1 else 0);
             try cbor.writeUint(writer, player);
             try cbor.writeUint(writer, @intFromEnum(input.dpad));
             try cbor.writeUint(writer, @intFromEnum(input.button_a));
@@ -276,7 +297,7 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
     }
 
     // Send the updates to the clients.
-    for (&server_data.conns_list, server_data.conns_type, &server_data.conns_sockets) |*connection, conn_type, fd| {
+    for (&server_data.conns_list, server_data.conns_type, &server_data.conns_sockets, server_data.conns_owned_players) |*connection, conn_type, fd, is_owned| {
         // Send the missing inputs. But only N at the time.
         const send_start = connection.consistent_until + 1;
         const send_until = @min(server_data.input_merger.buttons.items.len, send_start + max_inputs_per_socket_packet);
@@ -297,7 +318,7 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
         }
 
         connection.consistent_until =
-            if (conn_type == .local) sendUpdatesToLocalClient(networking_queue, &server_data.input_merger, connection.consistent_until, send_until) else try sendUpdatesToRemoteClient(fd, &server_data.input_merger, connection.consistent_until, send_until);
+            if (conn_type == .local) sendUpdatesToLocalClient(networking_queue, &server_data.input_merger, connection.consistent_until, send_until, is_owned) else try sendUpdatesToRemoteClient(fd, &server_data.input_merger, connection.consistent_until, send_until, is_owned);
     }
 
     networking_queue.rw_lock.unlock();
@@ -475,7 +496,8 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []const u8
         var all_inputs = try tick_info.readArray();
         for (0..all_inputs.items) |_| {
             var player_input = try all_inputs.readArray();
-            std.debug.assert(player_input.items == 4);
+            std.debug.assert(player_input.items == 5);
+            const is_owned = try player_input.readU64();
             const player_i = try player_input.readU64();
             const dpad = try player_input.readU64();
             const button_a = try player_input.readU64();
@@ -494,6 +516,7 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []const u8
                     .button_b = @enumFromInt(button_b),
                 },
                 .player = @truncate(player_i),
+                .is_owned = if (is_owned == 1) true else false,
             };
             //std.debug.print("received dpad: {any} for player {d} and tick {d}\n", .{networking_queue.outgoing_data[networking_queue.outgoing_data_count].data.dpad, player_i, input_tick_index});
 

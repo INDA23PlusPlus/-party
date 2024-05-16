@@ -106,6 +106,7 @@ pub fn submitInputs(controllers: []Controller, input_merger: *InputMerger, input
             .tick = input_tick,
             .data = data,
             .player = @truncate(player_index),
+            .is_owned = true, // Not really used right now.
         };
         main_thread_queue.outgoing_data_count += 1;
     }
@@ -207,6 +208,12 @@ pub fn main() !void {
         // Ingest the updates.
         for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_count]) |change| {
             known_server_tick = @max(change.tick, known_server_tick);
+            if (change.is_owned and change.tick == input_tick_delayed) {
+                // We skip our own updates only if it regards the current tick of interest.
+                // Otherwise, we could desynch.
+                std.debug.print("skipping because of ownership\n", .{});
+                continue;
+            }
             if (try input_merger.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick)) {
                 std.debug.assert(change.tick != 0);
                 rewind_to_tick = @min(change.tick -| 1, rewind_to_tick);

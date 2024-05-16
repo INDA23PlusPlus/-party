@@ -7,9 +7,9 @@ const Controller = @import("Controller.zig");
 const Self = @This();
 
 const InputStateArrayList = std.ArrayListUnmanaged(input.AllPlayerButtons);
-const PlayerBitSet = std.bit_set.IntegerBitSet(constants.max_player_count);
+pub const PlayerBitSet = std.bit_set.IntegerBitSet(constants.max_player_count);
 const PlayerBitSetArrayList = std.ArrayListUnmanaged(PlayerBitSet);
-const empty_player_bit_set = PlayerBitSet.initEmpty();
+pub const empty_player_bit_set = PlayerBitSet.initEmpty();
 const full_player_bit_set = PlayerBitSet.initFull();
 
 rw_lock: std.Thread.RwLock = .{},
