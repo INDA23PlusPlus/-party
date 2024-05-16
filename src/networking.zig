@@ -134,13 +134,11 @@ fn sendUpdatesToLocalClient(networking_queue: *NetworkingQueue, input_merger: *I
             if (!is_certain.isSet(player_index)) {
                 continue;
             }
-            // TODO: Reduce the nesting.
+
             if (networking_queue.outgoing_data_count >= networking_queue.outgoing_data.len) {
                 return new_consistent_until;
             }
-            if (player_index == 1) {
-                std.debug.print("sending to main thread concerning {d} {any}\n", .{player_index, packet});
-            }
+
             networking_queue.outgoing_data[networking_queue.outgoing_data_count] = .{
                 .tick = tick_index,
                 .player = @truncate(player_index),
