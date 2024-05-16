@@ -87,9 +87,9 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{ .pos = [2]i32{ 246, 108 } },
         ecs.component.Tex{
-            .texture_hash = AssetManager.pathHash("assets/morsetable.png"),
-            .w = 18,
-            .h = 12,
+            .texture_hash = AssetManager.pathHash("assets/morsetable_bitmap.png"),
+            .w = constants.world_width_tiles / 2,
+            .h = constants.world_height_tiles / 2,
         },
     });
 
@@ -112,10 +112,14 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
                 },
                 ecs.component.Pos{ .pos = assigned_pos(id) },
                 ecs.component.Tex{
-                    .texture_hash = AssetManager.pathHash("assets/kattis.png"),
+                    //.texture_hash = AssetManager.pathHash("assets/kattis.png"),
+                    .texture_hash = AssetManager.pathHash("assets/cat_portrait.png"),
                     .tint = constants.player_colors[id],
+                    .w = 1,
+                    .h = 1,
                 },
-                ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
+                //ecs.component.Anm{ .animation = Animation.KattisIdle, .interval = 16, .looping = true },
+                ecs.component.Anm{ .animation = Animation.CatPortrait, .interval = 20, .looping = true },
             });
             var button_position: @Vector(2, i32) = assigned_pos(id);
             button_position[1] += @intCast(-17);
@@ -123,6 +127,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             // data_entity cause I need it
             const data_entity = try sim.world.spawnWith(.{
                 ecs.component.Ctr{ .count = 0 },
+                ecs.component.Tmr{ .ticks = 0 },
                 ecs.component.Lnk{ .child = string_info },
             });
 
@@ -130,7 +135,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             _ = try sim.world.spawnWith(.{
                 ecs.component.Plr{ .id = @intCast(id) },
                 ecs.component.Pos{ .pos = .{ button_position[0], button_position[1] } },
-                ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/kattis_testcases.png") },
+                ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/morsecode_buttons.png") },
                 ecs.component.Ctr{ .count = 0 }, // count = bit_index, id = current letter
                 ecs.component.Lnk{ .child = data_entity },
                 ecs.component.Tmr{ .ticks = 0 }, // for keystroke_bitset
@@ -148,7 +153,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     });
 
     // Count down.
-    sim.meta.minigame_timer = 40 * 60;
+    sim.meta.minigame_timer = 60 * 60;
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
@@ -177,7 +182,7 @@ fn scoreSystem(meta: *simulation.Metadata) !void {
 
 fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
     const inputs: input.AllPlayerButtons = timeline.latest();
-    var query = world.query(&.{ ecs.component.Plr, ecs.component.Tex, ecs.component.Ctr, ecs.component.Tmr }, &.{});
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Tex, ecs.component.Ctr, ecs.component.Tmr, ecs.component.Lnk }, &.{});
 
     while (query.next()) |_| {
         const plr = try query.get(ecs.component.Plr);
@@ -187,10 +192,14 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
         //std.debug.print("plr: {any}\n", .{plr.id});
         //std.debug.print("keystroke_bitset: {any}\n\n", .{keystroke_bitset.ticks});
         var tex = query.get(ecs.component.Tex) catch unreachable;
+        const lnk = query.get(ecs.component.Lnk) catch unreachable;
+        var correct_letter_typed = world.inspect(lnk.child.?, ecs.component.Tmr) catch unreachable;
 
         if (state.is_connected()) {
-            if (state.button_a == .Held or state.button_b == .Held) {
-                tex.u = if (state.button_a == .Held) 1 else 2;
+            if (bit_index.count == 0 and correct_letter_typed.ticks != 0) {
+                tex.u = correct_letter_typed.ticks;
+            } else if (state.button_a == .Held or state.button_b == .Held) {
+                tex.u = if (state.button_a == .Held) 3 else 4;
             } else {
                 tex.u = 0;
             }
@@ -200,6 +209,8 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
                 bit_index.count += 1;
             } else if (timeline.horizontal_pressed(plr.id) != 0 and bit_index.count > 0) {
                 // should work as a backspace / undo
+                std.debug.print("backspace\n", .{});
+                correct_letter_typed.ticks = 0;
                 keystroke_bitset.ticks &= ~(@as(u32, 1) << @as(u5, @intCast(bit_index.count - 1)));
                 if ((bit_index.count >= 2) and (keystroke_bitset.ticks & (@as(u32, 1) << @as(u5, @intCast(bit_index.count - 2))) == 0)) {
                     bit_index.count -= 2;
@@ -220,27 +231,28 @@ fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
         const lnk = query.get(ecs.component.Lnk) catch unreachable;
         var ctr = query.get(ecs.component.Ctr) catch unreachable; // count = bit_index, id = current letter
         var keystrokes_bitset = query.get(ecs.component.Tmr) catch unreachable;
-        var tex = query.get(ecs.component.Tex) catch unreachable;
+        //var tex = query.get(ecs.component.Tex) catch unreachable;
 
         var current_letter = world.inspect(lnk.child.?, ecs.component.Ctr) catch unreachable;
         const child_lnk = world.inspect(lnk.child.?, ecs.component.Lnk) catch unreachable;
         const game_string_comp = world.inspect(child_lnk.child.?, ecs.component.Txx) catch unreachable;
         const game_string = game_string_from_hash(game_string_comp.hash);
+        var correct_letter_typed = world.inspect(lnk.child.?, ecs.component.Tmr) catch unreachable;
 
         if (ctr.count == 0) continue;
 
         const character: u8 = code_to_char(keystrokes_bitset.ticks);
-        std.debug.print("char: {any}\n", .{character});
-        std.debug.print("real: {any}\n\n", .{game_string[current_letter.count]});
+        //std.debug.print("char: {any}\n", .{character});
+        //std.debug.print("real: {any}\n\n", .{game_string[current_letter.count]});
         if (character == game_string[current_letter.count]) {
-            std.debug.print("IN\n", .{});
+            //std.debug.print("IN\n", .{});
             ctr.count = 0;
             current_letter.count += 1;
             keystrokes_bitset.ticks = 0;
+            correct_letter_typed.ticks = 1;
             if (current_letter.count == game_string.len) {
                 meta.minigame_placements[meta.minigame_counter] = @intCast(plr.id);
                 meta.minigame_counter += 1;
-                tex.u = 1;
                 world.kill(entity);
                 std.debug.print("Player finish order: {any}\n", .{meta.minigame_placements});
                 // player has finished
@@ -251,7 +263,8 @@ fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
         if (ctr.count >= 29) {
             keystrokes_bitset.ticks = 0;
             ctr.count = 0;
-            tex.u = 2;
+            //tex.u = 2;
+            correct_letter_typed.ticks = 2;
         }
     }
 }

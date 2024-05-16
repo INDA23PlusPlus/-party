@@ -12,7 +12,12 @@ pub fn init(sim: *Simulation, offset: [2]i32) !void {
     var highest_score: u32 = 0;
     var highest_exists: bool = false;
 
-    var query = sim.world.query(&.{ ecs.component.Plr, ecs.component.Pos }, &.{});
+    var query = sim.world.query(&.{
+        ecs.component.Plr,
+        ecs.component.Pos,
+    }, &.{
+        ecs.component.Str,
+    });
 
     while (query.next()) |entity| {
         const plr = query.get(ecs.component.Plr) catch unreachable;
