@@ -174,13 +174,23 @@ pub const World = struct {
         self.signatures[entity.identifier].setUnion(comptime componentSignature(Components));
     }
 
-    /// TODO
     /// Adds components to an entity. Components should be passed as a struct.
     pub fn promoteWith(self: *Self, entity: Entity, Components: anytype) void {
-        _ = self;
-        _ = entity;
-        _ = Components;
-        @compileError("unimplemented");
+        std.debug.assert(self.entities.isSet(entity.identifier));
+
+        const Type = @TypeOf(Components);
+        const info = @typeInfo(Type);
+        if (info != .Struct) {
+            @compileError("expected tuple or struct argument, found " ++ @typeName(Type));
+        }
+
+        const fields = info.Struct.fields;
+        inline for (fields) |field| {
+            const component = @field(Components, field.name);
+            std.debug.assert(self.signatures[entity.identifier].intersectWith(comptime componentSignature(&.{@TypeOf(component)})).mask == 0);
+            self.componentArray(@TypeOf(component))[entity.identifier] = component;
+            self.signatures[entity.identifier].setUnion(comptime componentTag(@TypeOf(component)));
+        }
     }
 
     /// TODO
