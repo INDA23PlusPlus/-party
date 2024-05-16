@@ -46,10 +46,6 @@ const PacketBuffer = struct {
     to_remove: u32 = 0,
 
     fn toPacket(self: *PacketBuffer, to_add: []const u8) []const u8 {
-        if (to_add.len == 0) {
-            return "";
-        }
-
         // If someone forgot to call clean().
         std.debug.assert(self.to_remove == 0);
 
@@ -58,8 +54,10 @@ const PacketBuffer = struct {
         }
 
         // Regions do not overlap, so this is safe.
-        @memcpy(self.buffer[self.index .. self.index + to_add.len], to_add);
-        self.index += @truncate(to_add.len);
+        if (to_add.len != 0) {
+            @memcpy(self.buffer[self.index .. self.index + to_add.len], to_add);
+            self.index += @truncate(to_add.len);
+        }
 
         if (self.index < 4) {
             // Not even the packet length has arrived... Sigh.
