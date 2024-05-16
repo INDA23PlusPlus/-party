@@ -4,6 +4,7 @@ const rl = @import("raylib");
 const win = @import("window.zig");
 const input = @import("input.zig");
 const render = @import("render.zig");
+const playback = @import("playback.zig");
 const ecs = @import("ecs/ecs.zig");
 const networking = @import("networking.zig");
 const linear = @import("math/linear.zig");
@@ -11,6 +12,7 @@ const fixed = @import("math/fixed.zig");
 
 const SimulationCache = @import("SimulationCache.zig");
 const AssetManager = @import("AssetManager.zig");
+const AudioManager = @import("AudioManager.zig");
 const Controller = @import("Controller.zig");
 const InputMerger = @import("InputMerger.zig");
 const Invariables = @import("Invariables.zig");
@@ -125,6 +127,9 @@ pub fn main() !void {
 
     var assets = AssetManager.init(static_allocator);
     defer assets.deinit();
+
+    var audm = try AudioManager.init(static_allocator);
+    defer audm.deinit();
 
     var simulation_cache = SimulationCache{};
     simulation_cache.start_state.meta.preferred_minigame_id = launch_options.force_minigame;
@@ -296,5 +301,7 @@ pub fn main() !void {
 
         // Stop rendering.
         rl.endDrawing();
+
+        playback.update(&simulation_cache.latest().world, &audm);
     }
 }
