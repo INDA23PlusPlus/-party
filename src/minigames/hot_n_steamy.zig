@@ -105,7 +105,7 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, invar: Invari
 
 fn countAlivePlayers(world: *ecs.world.World) u32 {
     var count: u32 = 0;
-    var query = world.query(&.{ ecs.component.Plr, ecs.component.Pos }, &.{ecs.component.Ctr});
+    var query = world.query(&.{ ecs.component.Plr, ecs.component.Pos }, &.{});
     while (query.next()) |_| {
         count += 1;
     }
@@ -199,13 +199,8 @@ fn deathSystem(sim: *simulation.Simulation, _: *collision.CollisionQueue, alive:
                 const id = plr.id;
                 const place = @as(u32, @intCast(alive - 1));
                 sim.meta.minigame_placements[id] = place;
-                // _ = try sim.world.spawnWith(.{
-                //     ecs.component.Plr{ .id = id },
-                //     ecs.component.Ctr{ .count = place },
-                // });
             }
             sim.world.kill(entity);
-            // std.debug.print("entity {} died\n", .{entity.identifier});
         }
     }
 }
