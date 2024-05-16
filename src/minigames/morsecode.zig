@@ -14,9 +14,9 @@ const animator = @import("../animation/animator.zig");
 const morsecode_maxlen = 6;
 
 fn assigned_pos(id: usize) @Vector(2, i32) {
-    const top_left_x = 110;
-    const top_left_y = 160;
-    const pos: @Vector(2, i32) = [_]i32{ @intCast(80 * (id % 4) + top_left_x), @intCast(80 * (id / 4) + top_left_y) };
+    const top_left_x = 30;
+    const top_left_y = 30;
+    const pos: @Vector(2, i32) = [_]i32{ @intCast(80 * (id / 4) + top_left_x), @intCast(70 * (id % 4) + top_left_y) };
     return pos;
 }
 
