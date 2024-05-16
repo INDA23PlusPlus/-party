@@ -165,8 +165,6 @@ fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packe
             .player = @truncate(player_index),
         };
 
-        std.debug.print("parsed {d}\n", .{frame_tick_index});
-
         client.packets_available += 1;
     }
     try packets.readEnd();
