@@ -7,9 +7,14 @@ const Controller = @This();
 pub const DefaultControllers: [constants.max_controller_count]Controller = [_]Controller{.{}} ** constants.max_controller_count;
 
 input_index: usize = std.math.maxInt(usize),
+polled_state: input.PlayerInputState = input.PlayerInputState{},
 
 pub inline fn isAssigned(self: Controller) bool {
     return self.input_index < constants.max_player_count;
+}
+
+pub fn givingInputs(controller: Controller) bool {
+    return controller.polled_state.button_a.is_down() or controller.polled_state.button_b.is_down();
 }
 
 inline fn fourBoolsToDirection(up: bool, down: bool, left: bool, right: bool) input.InputDirection {
@@ -117,35 +122,14 @@ fn pollGamepad(gamepad: i32, previous: input.PlayerInputState) input.PlayerInput
     };
 }
 
-/// Polls the state of all input devices at the current time.
-pub fn poll(controllers: []Controller, previous: input.AllPlayerButtons) input.AllPlayerButtons {
-    var result = previous;
-    if (controllers[0].isAssigned()) {
-        const index = controllers[0].input_index;
-        result[index] = pollKeyboard1(previous[index]);
+/// Polls the state of all input devices possible.
+pub fn pollAll(controllers: []Controller, previous: input.AllPlayerButtons) void {
+    for (controllers, 0..) |*controller, nth_controller| {
+        const previous_buttons = if (controller.isAssigned()) previous[controller.input_index] else input.PlayerInputState{};
+        controller.polled_state = switch (nth_controller) {
+            0 => pollKeyboard1(previous_buttons),
+            1 => pollKeyboard2(previous_buttons),
+            else => pollGamepad(@intCast(nth_controller), previous_buttons),
+        };
     }
-
-    if (controllers[1].isAssigned()) {
-        const index = controllers[1].input_index;
-        result[index] = pollKeyboard2(previous[index]);
-    }
-
-    for (controllers[2..], 0..) |controller, gamepad_id| {
-        const index = controller.input_index;
-        if (controller.isAssigned()) {
-            result[index] = pollGamepad(@intCast(gamepad_id), previous[index]);
-
-        }
-    }
-    return result;
-}
-
-pub fn isActive(nth_controller: usize) bool {
-    const input_state = switch (nth_controller) {
-        0 => pollKeyboard1(input.default_input_state[0]),
-        1 => pollKeyboard2(input.default_input_state[0]),
-        else => pollGamepad(@intCast(nth_controller), input.default_input_state[0]),
-    };
-
-    return input_state.button_a.is_down() or input_state.button_b.is_down();
 }

@@ -74,6 +74,8 @@ const NetServerData = struct {
 };
 
 fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packet: []u8) !void {
+    debugPacket(packet);
+
     var client = &server_data.conns_list[client_index];
     var scanner = cbor.Scanner{};
     var ctx = scanner.begin(packet);
@@ -93,7 +95,7 @@ fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packe
         try packet_ctx.readEnd();
 
         if (client.packets_available >= server_data.conns_incoming_packets.len) {
-            continue;
+            std.debug.panic("desynch caused by too many packets from player\n", .{});
         }
 
         server_data.conns_incoming_packets[client_index][client.packets_available] = .{
@@ -105,6 +107,8 @@ fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packe
             },
             .player = @truncate(player_index),
         };
+
+        std.debug.print("parsed {d}\n", .{frame_tick_index});
 
         client.packets_available += 1;
     }
@@ -234,12 +238,6 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
     }
 
     networking_queue.rw_lock.unlock();
-
-    //if (server_data.input_history.buttons.items.len == 300 + 1) {
-    //    const file = std.io.getStdErr();
-    //    const writer = file.writer();
-    //    try server_data.input_history.dumpInputs(writer);
-    //}
 }
 
 /// Sets conns_should_read[index] for any socket that has available data.
@@ -374,6 +372,7 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
         if (rl.isKeyPressed(rl.KeyboardKey.key_o)) {
             const file = std.io.getStdErr();
             const writer = file.writer();
+            std.debug.print("server_data input_merger len {d}\n", .{server_data.input_merger.buttons.items.len});
             try server_data.input_merger.dumpInputs((server_data.input_merger.buttons.items.len >> 9) << 9, writer);
         }
 
@@ -469,6 +468,8 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
         var write_buffer: [max_net_packet_size]u8 = undefined;
         var fb = std.io.fixedBufferStream(&write_buffer);
         const writer = fb.writer();
+
+        // WARNING: We are not chunking. This is causing us to drop packages! Very bad!!!
 
         try cbor.writeArrayHeader(writer, 2);
         try cbor.writeUint(writer, newest_input_tick);

@@ -142,10 +142,10 @@ pub fn main() !void {
         try input_merger.extendTimeline(std.heap.page_allocator, 1);
     }
     if (launch_options.force_wasd) {
-        _ = input_merger.forceAutoAssign(1, &controllers, 0);
+        _ = input_merger.forceAutoAssign(0, &controllers, 0);
     }
     if (launch_options.force_ijkl) {
-        _ = input_merger.forceAutoAssign(1, &controllers, 1);
+        _ = input_merger.forceAutoAssign(0, &controllers, 1);
     }
 
     // If this is not done, then we desynch. Maybe there is a prettier solution
@@ -209,9 +209,11 @@ pub fn main() !void {
         }
         main_thread_queue.incoming_data_count = 0;
 
+        Controller.pollAll(&controllers, input_merger.buttons.items[input_tick_delayed - 1]);
+
         // We want to know how many controllers are active locally in order to know if
         // all of their states can be sent over to the networking thread later on.
-        const controllers_active = input_merger.autoAssign(&controllers, input_tick_delayed);
+        const controllers_active = input_merger.autoAssign(&controllers, input_tick_delayed - 1);
 
         if (main_thread_queue.outgoing_data_count + controllers_active <= main_thread_queue.outgoing_data.len) {
             // We can only get local input, if we have the ability to send it. If we can't send it, we
