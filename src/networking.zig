@@ -474,9 +474,6 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
             std.debug.print("server_data input_merger len {d}\n", .{server_data.input_merger.buttons.items.len});
             try server_data.input_merger.dumpInputs((server_data.input_merger.buttons.items.len >> 9) << 9, writer);
         }
-
-        // TODO: Take clock timestamp
-        // TODO: Compare these then sleep a bit to lock the ticks per second.
     }
 }
 
@@ -556,6 +553,8 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8) !void 
     std.debug.print("connection established\n", .{});
     var newest_input_tick: u64 = 0;
 
+    // We need a packet buffer because TCP over IP is a stream protocl
+    // and not a fragment protocol.
     var packet_buffer = PacketBuffer{};
 
     while (true) {
