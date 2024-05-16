@@ -95,8 +95,6 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             },
         });
     }
-
-    try crown.init(sim, .{ 16, -10 });
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
@@ -200,6 +198,14 @@ fn skipSystem(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     }
 }
 
+fn crownSystem(sim: *simulation.Simulation) !void {
+    var query = sim.world.query(&.{ecs.component.Kng}, &.{});
+    while (query.next()) |entity| {
+        sim.world.kill(entity);
+    }
+    try crown.init(sim, .{ 16, -10 });
+}
+
 fn positionSystem(sim: *simulation.Simulation) !void {
     const scores = sim.meta.global_score;
 
@@ -223,6 +229,7 @@ fn positionSystem(sim: *simulation.Simulation) !void {
                     try counter.move(&sim.world, entity, .{ 0, delta_y });
                 } else {
                     pos.pos[1] = 16 + (16 + constants.asset_resolution) * @as(i32, @intCast(i));
+                    try crownSystem(sim);
                 }
             }
         }

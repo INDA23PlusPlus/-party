@@ -25,7 +25,6 @@ pub const components: []const type = &.{
     Col,
     Dir,
     Tex,
-    TextDeprecated,
     Anm,
     Lnk,
     Ctr,
@@ -40,7 +39,7 @@ pub const components: []const type = &.{
     Blk,
     Kng,
     Src,
-    Txx,
+    Txt,
     Str,
 };
 
@@ -89,20 +88,11 @@ pub const Plr = struct {
 };
 
 /// Entities with this component render text using a asset hash just like Tex components. All strings must be added to the list in AssetManager at comptime
-pub const Txx = struct {
+pub const Txt = struct {
     hash: u64 = AssetManager.default_string_hash,
     color: u32 = 0xFFFFFFFF,
-    font_size: u8 = 10,
+    font_size: u8 = 1,
     subpos: @Vector(2, i32) = .{ 0, 0 },
-};
-
-/// Entities with this component have associated text.
-pub const TextDeprecated = struct {
-    string: [:0]const u8 = "", // TODO: use hash instead of slice
-    color: u32 = 0xFFFFFFFF,
-    font_size: u8 = 24,
-    subpos: @Vector(2, i32) = .{ 0, 0 },
-    draw: bool = true, // This is very ugly, but is useful for menu items. Change if needed. (Use dynamic strings??)
 };
 
 /// Entities with this component have an associated texture.

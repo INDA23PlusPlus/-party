@@ -51,41 +51,17 @@ pub fn update(world: *ecs.world.World, am: *AssetManager, window: *win.Window) v
         rl.drawTexturePro(tex, src, dst, rl.Vector2.init(0, 0), rotation, tex_component.tint);
     }
 
-    var text_query = world.query(&.{ ecs.component.Pos, ecs.component.TextDeprecated }, &.{});
-
-    // Draw text
-    while (text_query.next()) |_| {
-        const pos_component = text_query.get(ecs.component.Pos) catch unreachable;
-        const text_c = text_query.get(ecs.component.TextDeprecated) catch unreachable;
-
-        const color = rl.Color.fromInt(text_c.color);
-        const pos = pos_component.pos + text_c.subpos;
-        const pos_x = pos[0];
-        const pos_y = pos[1];
-
-        const font_size_scaled = @as(f32, @floatFromInt(text_c.font_size * window.height)) * 138889.0 / 50000000.0; // Super specific magic number go brrrrr
-
-        const text_dim_x = rl.measureText(text_c.string, @intFromFloat(font_size_scaled));
-        const text_width_half: i32 = @divFloor(text_dim_x, 2);
-        const text_height_half: i32 = @intFromFloat(font_size_scaled * (1.0 / 3.0));
-
-        const dst_x = @divFloor(pos_x * window.width, constants.world_width) - text_width_half;
-        const dst_y = @divFloor(pos_y * window.height, constants.world_height) - text_height_half;
-
-        rl.drawText(text_c.string, dst_x, dst_y, @intFromFloat(font_size_scaled), color);
-    }
-
-    var new_text_query = world.query(&.{ ecs.component.Pos, ecs.component.Txx }, &.{});
+    var text_query = world.query(&.{ ecs.component.Pos, ecs.component.Txt }, &.{});
 
     // Draw text using the AssetManager instead of a slice also uses the correct scaling and font to look like the new standard
-    while (new_text_query.next()) |_| {
-        const pos_component = new_text_query.get(ecs.component.Pos) catch unreachable;
-        const text_c = new_text_query.get(ecs.component.Txx) catch unreachable;
+    while (text_query.next()) |_| {
+        const pos_component = text_query.get(ecs.component.Pos) catch unreachable;
+        const text_c = text_query.get(ecs.component.Txt) catch unreachable;
 
         const color = rl.Color.fromInt(text_c.color);
         const pos = @as(@Vector(2, f32), @floatFromInt(pos_component.pos + text_c.subpos)) * scaling;
 
-        const font_size_scaled = @as(f32, @floatFromInt(text_c.font_size)) * scaling[0];
+        const font_size_scaled = @as(f32, @floatFromInt(text_c.font_size * am.font.baseSize)) * scaling[0];
 
         const string = am.text_map.get(text_c.hash) orelse am.text_map.get(AssetManager.default_string_hash) orelse unreachable;
 

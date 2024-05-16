@@ -96,7 +96,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
     const game_string = set_string_info(&sim.meta);
     const string_info = try sim.world.spawnWith(.{
-        ecs.component.Txx{
+        ecs.component.Txt{
             .hash = AssetManager.pathHash(game_string),
         },
     });
@@ -105,9 +105,9 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
         if (inp.is_connected()) {
             _ = try sim.world.spawnWith(.{
                 // cats
-                ecs.component.Txx{
+                ecs.component.Txt{
                     .hash = AssetManager.pathHash(player_strings[id]),
-                    .font_size = 10,
+                    .font_size = 1,
                     .color = 0xff0066ff,
                     .subpos = .{ -10, 16 },
                 },
@@ -146,10 +146,10 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{ .pos = [2]i32{ 230, 30 } },
-        ecs.component.Txx{
+        ecs.component.Txt{
             .hash = AssetManager.pathHash(game_string),
             .color = 0xF4743BFF,
-            .font_size = 45,
+            .font_size = 2,
         },
     });
 
@@ -253,7 +253,7 @@ fn wordSystem(world: *ecs.world.World, meta: *simulation.Metadata) !void {
 
         var current_letter = world.inspect(lnk.child.?, ecs.component.Ctr) catch unreachable;
         const child_lnk = world.inspect(lnk.child.?, ecs.component.Lnk) catch unreachable;
-        const game_string_comp = world.inspect(child_lnk.child.?, ecs.component.Txx) catch unreachable;
+        const game_string_comp = world.inspect(child_lnk.child.?, ecs.component.Txt) catch unreachable;
         const game_string = game_string_from_hash(game_string_comp.hash);
         var correct_letter_typed = world.inspect(lnk.child.?, ecs.component.Tmr) catch unreachable;
 
