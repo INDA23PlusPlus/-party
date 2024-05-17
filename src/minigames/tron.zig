@@ -255,13 +255,17 @@ fn trailSystem(sim: *simulation.Simulation) !void {
     }, &.{});
 
     while (spawn_query.next()) |_| {
+        const plr = spawn_query.get(ecs.component.Plr) catch unreachable;
         const pos = spawn_query.get(ecs.component.Pos) catch unreachable;
 
         _ = try sim.world.spawnWith(.{
             ecs.component.Pos{ .pos = pos.pos },
             ecs.component.Col{ .dim = [_]i32{ 16, 16 } },
             ecs.component.Ctr{ .count = 18 - sim.meta.minigame_counter },
-            ecs.component.Tex{ .texture_hash = AssetManager.pathHash("assets/tron_skull.png") },
+            ecs.component.Tex{
+                .texture_hash = AssetManager.pathHash("assets/tron_skull.png"),
+                .tint = constants.player_colors[plr.id],
+            },
             ecs.component.Anm{
                 .animation = .TronSkull,
                 .looping = true,
