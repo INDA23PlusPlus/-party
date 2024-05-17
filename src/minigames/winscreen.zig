@@ -18,32 +18,21 @@ const counter = @import("../counter.zig");
 const font_size = 1;
 
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
-    // _ = timeline;
-    sim.meta.minigame_counter = 8;
-    std.debug.print("Press B to go to lobby\n", .{});
-    _ = try sim.world.spawnWith(.{
-        ecs.component.Pos{ .pos = .{ 0, 0 } },
-        ecs.component.Tex{
-            .texture_hash = AssetManager.pathHash("assets/tron_map.png"),
-            .h = constants.world_height_tiles,
-            .w = constants.world_width_tiles,
-            .tint = rl.Color.maroon,
-        },
-    });
+    sim.meta.minigame_counter = @intCast(timeline.connectedPlayerCount());
+    // background
+    _ = try sim.world.spawnWith(.{ ecs.component.Pos{}, ecs.component.Tex{
+        .texture_hash = AssetManager.pathHash("assets/background_animated.png"),
+        .w = constants.world_width_tiles,
+        .h = constants.world_height_tiles,
+        .u = 0,
+        .v = 0,
+    }, ecs.component.Anm{
+        .animation = .ScoreboardBackground,
+        .interval = 16,
+    } });
+    // podium
     _ = try spawnPodium(sim);
-    // for (0..8) |id| {
-    //     _ = try sim.world.spawnWith(.{
-    //         ecs.component.Plr{ .id = @intCast(id) },
-    //         ecs.component.Pos{ .pos = .{ constants.asset_resolution * -4, constants.asset_resolution * -4 } },
-    //         ecs.component.Tex{
-    //             .texture_hash = AssetManager.pathHash("assets/smash_cat.png"),
-    //             .w = 2,
-    //             .h = 1,
-    //             .tint = constants.player_colors[id],
-    //         },
-    //         ecs.component.Anm{ .animation = Animation.SmashIdle, .interval = 16, .looping = true },
-    //     });
-    // }
+    // players
     for (timeline.latest(), 0..) |inp, id| {
         if (inp.is_connected()) {
             _ = try sim.world.spawnWith(.{
@@ -59,16 +48,26 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             });
         }
     }
-
     try crown.init(sim, .{ 16, -10 });
+
+    // text
+    _ = try sim.world.spawnWith(.{ ecs.component.Pos{ .pos = .{ constants.world_width / 2, constants.world_height - 100 } }, ecs.component.Tex{
+        .texture_hash = AssetManager.pathHash("assets/press_any_button.png"),
+        .w = 11,
+        .h = 1,
+        .u = 0,
+        .v = 0,
+        .subpos = .{ -5 * 16, 8 },
+        .tint = rl.Color.white,
+    } });
 }
 
 pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, _: Invariables) !void {
-    const sorted_players = sortPlayerAterScore(sim);
-    if (sim.meta.minigame_timer == 30) {
+    const sorted_players = sortPlayersByScore(sim);
+    if (sim.meta.minigame_timer == 32) {
         if (sim.meta.minigame_counter > 0) {
-            try placePlayer(sim, sorted_players);
             sim.meta.minigame_timer = 0;
+            try placePlayer(sim, sorted_players);
         } else {
             try moveToLobby(sim, inputs);
         }
@@ -79,7 +78,7 @@ pub fn update(sim: *simulation.Simulation, inputs: input.Timeline, _: Invariable
     animator.update(&sim.world);
 }
 
-fn placePlayer(sim: *simulation.Simulation, sorted_players: [8][2]u32) !void {
+fn placePlayer(sim: *simulation.Simulation, sorted_players: [constants.max_player_count][2]u32) !void {
     const player = sorted_players[sim.meta.minigame_counter - 1];
     var query = sim.world.query(&.{ ecs.component.Plr, ecs.component.Pos }, &.{});
     while (query.next()) |_| {
@@ -142,12 +141,13 @@ fn moveToLobby(sim: *simulation.Simulation, inputs: input.Timeline) !void {
         const plr = query.get(ecs.component.Plr) catch unreachable;
         const id = plr.id;
         const state = latest[id];
-        if (state.button_b == .Pressed) {
-            for (&sim.meta.global_score) |*score| {
-                score.* = 0;
+        if (state.is_connected()) {
+            if (state.button_a == .Pressed or state.button_b == .Pressed) {
+                for (&sim.meta.global_score) |*score| {
+                    score.* = 0;
+                }
+                sim.meta.minigame_id = constants.minigame_lobby;
             }
-
-            sim.meta.minigame_id = 2;
         }
     }
 }
@@ -185,17 +185,15 @@ fn spawnPodium(sim: *simulation.Simulation) !void {
     });
 }
 
-fn sortPlayerAterScore(sim: *simulation.Simulation) [8][2]u32 {
-    //Sort player afterscore
-    //Returns an array of two place arrays where index 0 is the score of the player and index 1 is the player id
+/// Returns a sorted array of player (score, id) pairs.
+fn sortPlayersByScore(sim: *simulation.Simulation) [constants.max_player_count][2]u32 {
     const scores = sim.meta.global_score;
-    var scores_with_id: [8][2]u32 = .{ .{ undefined, undefined }, .{ undefined, undefined }, .{ undefined, undefined }, .{ undefined, undefined }, .{ undefined, undefined }, .{ undefined, undefined }, .{ undefined, undefined }, .{ undefined, undefined } };
+    var scores_and_ids: [constants.max_player_count][2]u32 = .{.{ undefined, undefined }} ** constants.max_player_count;
     for (scores, 0..scores.len) |score, id| {
-        scores_with_id[id] = .{ score, @as(u32, @intCast(id)) };
+        scores_and_ids[id] = .{ score, @as(u32, @intCast(id)) };
     }
-    std.mem.sort([2]u32, &scores_with_id, {}, lessThanFn);
-    return scores_with_id;
-    // v
+    std.mem.sort([2]u32, &scores_and_ids, {}, lessThanFn);
+    return scores_and_ids;
 }
 
 fn lessThanFn(_: void, a: [2]u32, b: [2]u32) bool {
