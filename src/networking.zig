@@ -15,9 +15,18 @@ const ConnectedClient = struct {
 };
 
 const ConnectionType = enum(u8) {
-    unused,
+    /// The connection/client slot can be assigned to a new connection.
+    empty,
+
+    /// This slot is reserved for the local client.
     local,
+
+    /// Already occupied by a remote client.
     remote,
+
+    /// Only set while waiting for the special "disconnect" packet to be
+    /// ingested by the InputMerger.
+    disconnecting,
 };
 
 const max_net_packet_size = 32768;
@@ -95,18 +104,35 @@ const PacketBuffer = struct {
 const NetServerData = struct {
     input_merger: InputMerger,
 
+    /// The connection status of every client/connection slot.
+    conns_type: [constants.max_connected_count]ConnectionType = [_]ConnectionType{.empty} ** constants.max_connected_count,
+
+    /// Some smaller flags for every client. TODO: Perhaps each field could become its own array
     conns_list: [constants.max_connected_count]ConnectedClient = undefined,
-    conns_type: [constants.max_connected_count]ConnectionType = [_]ConnectionType{.unused} ** constants.max_connected_count,
+
+    /// The underlying OS handles for every client.
     conns_sockets: [constants.max_connected_count]std.posix.socket_t = undefined,
+
+    /// Because TCP over IP is a stream protocol we must chunk the packets using a PacketBuffer.
     conns_packet_buffer: [constants.max_connected_count]PacketBuffer = undefined,
+
+    /// Parsed packages that are ready to be ingested by the InputMerger.
     conns_incoming_packets: [constants.max_connected_count][max_inputs_per_socket_packet]NetworkingQueue.Packet = undefined,
+
+    /// Modified by the pollSockets procedure.
     conns_should_read: [constants.max_connected_count]bool = undefined,
+
+    /// Used to know when to set conns_owned_players as only the latest input packets
+    /// should affect conns_owned_players.
     conns_latest_input_from_client: [constants.max_connected_count]u64 = undefined,
+
+    /// What player does the server thing a certain client is trying to control.
+    /// This affects disconnect logic as well as the is_owned flag when sending the timeline.
     conns_owned_players: [constants.max_connected_count]InputMerger.PlayerBitSet = undefined,
 
     fn reservSlot(self: *NetServerData) ?usize {
         for (self.conns_type, 0..) |t, i| {
-            if (t == .unused) {
+            if (t == .empty) {
                 self.conns_type[i] = .remote;
                 return i;
             }
@@ -121,7 +147,7 @@ const NetServerData = struct {
         }
 
         inline for (&self.conns_list, self.conns_type) |*connection, conn_type| {
-            if (conn_type != .unused) {
+            if (conn_type != .empty) {
                 connection.consistent_until = @min(connection.consistent_until, change.tick);
             }
         }
@@ -183,6 +209,7 @@ fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packe
     if (server_data.conns_latest_input_from_client[client_index] < latest_input_from_player) {
         server_data.conns_latest_input_from_client[client_index] = latest_input_from_player;
         server_data.conns_owned_players[client_index] = owned_players;
+        //std.debug.print("setting ownership mask {b}\n", .{server_data.conns_owned_players[client_index].mask});
     }
 }
 
@@ -193,7 +220,7 @@ fn clientConnected(server_data: *NetServerData, conn: std.net.Server.Connection)
         server_data.conns_list[slot] = .{};
         server_data.conns_should_read[slot] = false;
         server_data.conns_packet_buffer[slot] = .{};
-        server_data.conns_latest_input_from_client[slot] = std.math.maxInt(u64);
+        server_data.conns_latest_input_from_client[slot] = 0;
         server_data.conns_sockets[slot] = conn.stream.handle;
         server_data.conns_owned_players[slot] = InputMerger.empty_player_bit_set;
     } else {
@@ -270,6 +297,17 @@ fn sendUpdatesToRemoteClient(fd: std.posix.socket_t, input_merger: *InputMerger,
     return @max(consistent_until, targeted_tick);
 }
 
+/// Ingest all the pending inputs into the InputMerger.
+/// This is not called currently for the local client since
+/// it just accesses the networking_queue directly.
+inline fn ingestAllPendingInputs(server_data: *NetServerData, conn_index: u32) !void {
+    const packets = server_data.conns_list[conn_index].packets_available;
+    for (server_data.conns_incoming_packets[conn_index][0..packets]) |change| {
+        try server_data.ingestPlayerInput(change);
+    }
+    server_data.conns_list[conn_index].packets_available = 0;
+}
+
 fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *NetworkingQueue) !void {
     networking_queue.rw_lock.lock();
 
@@ -287,14 +325,16 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
     }
 
     // Ingest the updates from the connected clients.
-    for (&server_data.conns_list, server_data.conns_type, &server_data.conns_incoming_packets) |*connection, conn_type, *conns_packets| {
-        if (conn_type != .remote) {
-            continue;
+    inline for (server_data.conns_type, 0..) |conn_type, conn_index| {
+        if (conn_type == .disconnecting) {
+            try ingestAllPendingInputs(server_data, conn_index);
+
+            // After ingesting the disconnect input states, we may make the slot available.
+            server_data.conns_type[conn_index] = .empty;
         }
-        for (conns_packets[0..connection.packets_available]) |change| {
-            try server_data.ingestPlayerInput(change);
+        if (conn_type == .remote) {
+            try ingestAllPendingInputs(server_data, conn_index);
         }
-        connection.packets_available = 0;
     }
 
     // Send the updates to the clients.
@@ -308,7 +348,7 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
             continue;
         }
 
-        if (conn_type == .unused) {
+        if (conn_type == .empty) {
             continue;
         }
 
@@ -402,6 +442,28 @@ fn pollSockets(timeout_ms: u32, conns_type: []ConnectionType, conns_sockets: []s
     }
 }
 
+fn performDisconnect(server_data: *NetServerData, conn_index: u32) void {
+    std.debug.print("disconnecting players {b}\n", .{server_data.conns_owned_players[conn_index].mask});
+    const fd = server_data.conns_sockets[conn_index];
+    server_data.conns_type[conn_index] = .disconnecting;
+
+    var packet_index: u32 = 0;
+    var player_iterator = server_data.conns_owned_players[conn_index].iterator(.{});
+    while (player_iterator.next()) |player_index| {
+        std.debug.print("disconnected player {d}\n", .{player_index});
+        server_data.conns_incoming_packets[conn_index][0] = .{
+            .tick = server_data.input_merger.buttons.items.len,
+            .data = .{.dpad = .Disconnected},
+            .player = @truncate(player_index),
+            .is_owned = true,
+        };
+        packet_index += 1;
+    }
+
+    server_data.conns_list[conn_index].packets_available = packet_index;
+    std.posix.close(fd);
+}
+
 fn readFromSockets(server_data: *NetServerData) void {
     var packet_part_buf: [max_net_packet_size]u8 = undefined;
     pollSockets(10, &server_data.conns_type, &server_data.conns_sockets, &server_data.conns_should_read);
@@ -416,10 +478,7 @@ fn readFromSockets(server_data: *NetServerData) void {
 
         const packet_part_len = std.posix.read(fd, &packet_part_buf) catch 0;
         if (packet_part_len == 0) {
-            server_data.conns_type[conn_index] = .unused;
-            // TODO: Disconnect player. But don't use conn_index.
-            //server_data.input_merger.remoteUpdate(std.heap.page_allocator, , new_state: input.PlayerInputState, tick: u64)
-            std.posix.close(fd);
+            performDisconnect(server_data, @truncate(conn_index));
             continue;
         }
         const packet_part = packet_part_buf[0..packet_part_len];
@@ -463,7 +522,6 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
 
         readFromSockets(&server_data);
 
-        // TODO: Take clock timestamp
         try serverThreadQueueTransfer(&server_data, networking_queue);
 
         // Debug thing. Remove later.

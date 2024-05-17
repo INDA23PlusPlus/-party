@@ -61,7 +61,7 @@ pub fn extendTimeline(self: *Self, allocator: std.mem.Allocator, tick: u64) !voi
 
 pub fn localUpdate(self: *Self, controllers: []Controller, tick: u64) !void {
     if (tick < self.newest_remote_frame) {
-        std.debug.print("newest_remote_frame prevent localUpdate()\n", .{});
+        // TODO: prevent std.debug.print("newest_remote_frame prevent localUpdate()\n", .{});
         // No need to submit frames that happened.
         return;
     }
@@ -73,7 +73,7 @@ pub fn localUpdate(self: *Self, controllers: []Controller, tick: u64) !void {
         const player = controller.input_index;
         if (controller.isAssigned()) {
             if (is_certain.isSet(player)) {
-                std.debug.print("local client is attempting to override previous input\n", .{});
+                // TODO: prevent std.debug.print("local client is attempting to override previous input\n", .{});
                 continue;
             }
             self.buttons.items[tick][player] = controller.polled_state;
