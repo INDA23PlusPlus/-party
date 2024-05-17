@@ -178,7 +178,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
 
     gravitySystem(&sim.world); // 150 laps/ms
     movement.update(&sim.world, &collisions, rt.arena) catch @panic("movement"); // 70 laps/ms
-    resolveCollisions(&sim.world, &collisions); // 400 laps/ms
+    try resolveCollisions(&sim.world, &collisions); // 400 laps/ms
     airborneSystem(&sim.world); // 70 laps/ms
     forceSystem(&sim.world, inputs); // 120 laps/ms
 
@@ -843,7 +843,7 @@ fn airborneSystem(world: *ecs.world.World) void {
     }
 }
 
-fn resolveCollisions(world: *ecs.world.World, collisions: *collision.CollisionQueue) void {
+fn resolveCollisions(world: *ecs.world.World, collisions: *collision.CollisionQueue) !void {
     for (collisions.data.keys()) |c| {
         const ent1 = c.a;
         const ent2 = c.b;
@@ -863,6 +863,8 @@ fn resolveCollisions(world: *ecs.world.World, collisions: *collision.CollisionQu
                 const tmp = mov1.velocity;
                 mov1.velocity = mov2.velocity;
                 mov2.velocity = tmp;
+
+                _ = try world.spawnWith(.{ecs.component.Snd{ .sound_hash = comptime AudioManager.path_to_key("assets/audio/bounce.wav") }});
             } else {
                 const left: i16 = @intFromBool(pos1.pos[0] < pos2.pos[0]);
                 const right: i16 = @intFromBool(pos1.pos[0] > pos2.pos[0]);
@@ -888,6 +890,8 @@ fn resolveCollisions(world: *ecs.world.World, collisions: *collision.CollisionQu
             } else {
                 mov1.velocity = mov1.velocity.mul(attack_bounce.mul(-1));
             }
+
+            _ = try world.spawnWith(.{ecs.component.Snd{ .sound_hash = comptime AudioManager.path_to_key("assets/audio/bounce.wav") }});
         } else if (plr2 and hit2) {
             const pos1 = world.inspect(ent1, ecs.component.Pos) catch unreachable;
             const pos2 = world.inspect(ent2, ecs.component.Pos) catch unreachable;
@@ -900,7 +904,15 @@ fn resolveCollisions(world: *ecs.world.World, collisions: *collision.CollisionQu
             } else {
                 mov2.velocity = mov2.velocity.mul(attack_bounce.mul(-1));
             }
+
+            _ = try world.spawnWith(.{ecs.component.Snd{ .sound_hash = comptime AudioManager.path_to_key("assets/audio/bounce.wav") }});
         }
+    }
+
+    var bounceSounds = world.query(&.{}, ecs.component.components);
+
+    while (bounceSounds.next()) |entity| {
+        world.kill(entity);
     }
 }
 
