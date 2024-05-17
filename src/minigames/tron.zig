@@ -82,6 +82,8 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
+    if (sim.meta.minigame_counter <= 1) sim.meta.minigame_id = constants.minigame_scoreboard;
+
     audio.update(&sim.world);
 
     // Set move direction.
@@ -118,8 +120,6 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
             sim.world.kill(entity);
         }
     }
-
-    if (sim.meta.minigame_counter <= 1) sim.meta.minigame_id = constants.minigame_scoreboard;
 }
 
 fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) void {

@@ -175,6 +175,8 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invariables) !void {
+    if (sim.meta.minigame_counter <= 1) sim.meta.minigame_id = constants.minigame_scoreboard;
+
     sim.meta.minigame_timer = @min(60, sim.meta.minigame_timer + @intFromBool(sim.meta.ticks_elapsed % 60 == 0));
 
     audio.update(&sim.world);
@@ -208,8 +210,6 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
     while (dead_entities.next()) |entity| {
         sim.world.kill(entity);
     }
-
-    if (sim.meta.minigame_counter <= 1) sim.meta.minigame_id = constants.minigame_scoreboard;
 }
 
 fn actionSystem(sim: *simulation.Simulation, timeline: input.Timeline) !void {
@@ -616,6 +616,7 @@ fn deathSystem(sim: *simulation.Simulation, inputs: *const input.AllPlayerButton
                 },
                 ecs.component.Anm{ .animation = .SmashDeath, .interval = 4 },
                 ecs.component.Tmr{},
+                ecs.component.Snd{ .sound_hash = comptime AudioManager.path_to_key("assets/audio/death.wav") },
             });
 
             sim.world.demote(entity, &.{
@@ -642,7 +643,6 @@ fn deathSystem(sim: *simulation.Simulation, inputs: *const input.AllPlayerButton
                     .tint = rl.Color.init(100, 100, 100, 100),
                 },
                 ecs.component.Anm{ .interval = 8, .animation = .SmashAttackSmoke },
-                ecs.component.Snd{ .sound_hash = comptime AudioManager.path_to_key("assets/audio/death.wav") },
             });
 
             sim.world.demote(entity, &.{
