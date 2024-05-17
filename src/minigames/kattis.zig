@@ -72,7 +72,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
         ecs.component.Ctr{ .count = 30 * 60 },
     });
 
-    try Crown.init(sim, .{ -16, 0 });
+    try Crown.init(sim, .{ 0, -10 });
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {

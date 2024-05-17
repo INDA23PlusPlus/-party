@@ -20,7 +20,7 @@ const font_size = 1;
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
     // _ = timeline;
     sim.meta.minigame_counter = 8;
-    std.debug.print("Press B to go to lobby", .{});
+    std.debug.print("Press B to go to lobby\n", .{});
     _ = try sim.world.spawnWith(.{
         ecs.component.Pos{ .pos = .{ 0, 0 } },
         ecs.component.Tex{
