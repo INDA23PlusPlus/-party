@@ -40,6 +40,7 @@ const paths = [_][:0]const u8{
     "assets/lobby.png",
     "assets/gamewheel.png",
     "assets/background_animated.png",
+    "assets/press_any_button.png",
 };
 
 pub const default_string = "DEFAULT STRING";
