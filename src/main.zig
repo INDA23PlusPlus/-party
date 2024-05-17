@@ -300,7 +300,7 @@ pub fn main() !void {
             _ = frame_arena.reset(.retain_capacity);
 
             const close_to_server = simulation_cache.head_tick_elapsed >= known_server_tick;
-            const close_to_local = simulation_cache.head_tick_elapsed >= newest_local_input_tick -| useful_input_delay;
+            const close_to_local = simulation_cache.head_tick_elapsed >= newest_local_input_tick -| (useful_input_delay + 1);
 
             if (close_to_server and close_to_local) {
                 // We have caught up. No need to do extra simulation steps now.
