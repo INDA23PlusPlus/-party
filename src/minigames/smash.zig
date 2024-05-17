@@ -191,6 +191,13 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
 
     try @import("../crown.zig").update(sim);
 
+    var dead_entities = sim.world.query(&.{}, ecs.component.components);
+
+    while (dead_entities.next()) |entity| {
+        sim.world.kill(entity);
+        std.debug.print("-\n", .{});
+    }
+
     if (sim.meta.minigame_counter <= 1) sim.meta.minigame_id = constants.minigame_scoreboard;
 }
 
@@ -907,12 +914,6 @@ fn resolveCollisions(world: *ecs.world.World, collisions: *collision.CollisionQu
 
             _ = try world.spawnWith(.{ecs.component.Snd{ .sound_hash = comptime AudioManager.path_to_key("assets/audio/bounce.wav") }});
         }
-    }
-
-    var bounceSounds = world.query(&.{}, ecs.component.components);
-
-    while (bounceSounds.next()) |entity| {
-        world.kill(entity);
     }
 }
 
