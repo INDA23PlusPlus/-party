@@ -2,11 +2,13 @@ const std = @import("std");
 const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
 const render = @import("../render.zig");
+const audio = @import("../audio.zig");
 const input = @import("../input.zig");
 const constants = @import("../constants.zig");
 const animator = @import("../animation/animator.zig");
 
 const AssetManager = @import("../AssetManager.zig");
+const AudioManager = @import("../AudioManager.zig");
 const Invariables = @import("../Invariables.zig");
 const Minigame = @import("Minigame.zig");
 
@@ -49,6 +51,8 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
 }
 
 pub fn update(sim: *simulation.Simulation, _: input.Timeline, rt: Invariables) !void {
+    audio.update(&sim.world);
+
     const minigames: u32 = @intCast(rt.minigames_list[sim.meta.minigame_id + 1 ..].len);
 
     var query = sim.world.query(&.{
@@ -56,7 +60,7 @@ pub fn update(sim: *simulation.Simulation, _: input.Timeline, rt: Invariables) !
         ecs.component.Ctr,
     }, &.{});
 
-    while (query.next()) |_| {
+    while (query.next()) |entity| {
         const pos = query.get(ecs.component.Pos) catch unreachable;
         const ctr = query.get(ecs.component.Ctr) catch unreachable;
 
@@ -66,6 +70,10 @@ pub fn update(sim: *simulation.Simulation, _: input.Timeline, rt: Invariables) !
 
             ctr.count = (ctr.count + 1) % minigames;
             pos.pos = [_]i32{ 192, 96 + @as(i32, @intCast(16 * ctr.count)) };
+
+            sim.world.promoteWith(entity, .{ecs.component.Snd{
+                .sound_hash = comptime AudioManager.path_to_key("assets/audio/scroll.wav"),
+            }});
         } else if (sim.meta.minigame_timer == 75) {
             sim.meta.minigame_id = ctr.count + sim.meta.minigame_id + 1;
         }

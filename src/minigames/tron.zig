@@ -3,6 +3,7 @@ const rl = @import("raylib");
 const ecs = @import("../ecs/ecs.zig");
 const simulation = @import("../simulation.zig");
 const render = @import("../render.zig");
+const audio = @import("../audio.zig");
 const input = @import("../input.zig");
 const movement = @import("../physics/movement.zig");
 const collision = @import("../physics/collision.zig");
@@ -11,6 +12,7 @@ const Animation = @import("../animation/animations.zig").Animation;
 const constants = @import("../constants.zig");
 
 const AssetManager = @import("../AssetManager.zig");
+const AudioManager = @import("../AudioManager.zig");
 const Invariables = @import("../Invariables.zig");
 
 const left_texture_offset = [_]i32{ -5, -10 };
@@ -79,6 +81,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
+    audio.update(&sim.world);
 
     // Set move direction.
     inputSystem(&sim.world, timeline);
@@ -89,7 +92,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
     repositionSystem(sim);
 
     // Kills players.
-    deathSystem(sim);
+    try deathSystem(sim);
 
     // Set move velocity for animation.
     velocitySystem(sim);
@@ -256,7 +259,7 @@ fn trailSystem(sim: *simulation.Simulation) !void {
     }
 }
 
-fn deathSystem(sim: *simulation.Simulation) void {
+fn deathSystem(sim: *simulation.Simulation) !void {
     if (sim.meta.ticks_elapsed % sim.meta.minigame_timer != 0) return;
 
     var player_query = sim.world.query(&.{
@@ -311,5 +314,17 @@ fn deathSystem(sim: *simulation.Simulation) void {
 
         sim.meta.minigame_placements[plr.id] = sim.meta.minigame_counter + dead_players - 1;
         sim.world.kill(player);
+    }
+
+    if (dead_players > 0) {
+        _ = try sim.world.spawnWith(.{ecs.component.Snd{
+            .sound_hash = comptime AudioManager.path_to_key("assets/audio/death.wav"),
+        }});
+    }
+
+    var deathSounds = sim.world.query(&.{}, ecs.component.components);
+
+    while (deathSounds.next()) |entity| {
+        sim.world.kill(entity);
     }
 }

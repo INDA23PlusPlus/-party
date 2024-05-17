@@ -1,6 +1,7 @@
 const std = @import("std");
 const rl = @import("raylib");
 const AssetManager = @import("../AssetManager.zig");
+const AudioManager = @import("../AudioManager.zig");
 const Animation = @import("../animation/animations.zig").Animation;
 const Invariables = @import("../Invariables.zig");
 const simulation = @import("../simulation.zig");
@@ -9,6 +10,7 @@ const ecs = @import("../ecs/ecs.zig");
 const movement = @import("../physics/movement.zig");
 const collision = @import("../physics/collision.zig");
 const animator = @import("../animation/animator.zig");
+const audio = @import("../audio.zig");
 const constants = @import("../constants.zig");
 
 const PlayerChange = enum { remove, add, nothing };
@@ -29,6 +31,8 @@ pub fn init(sim: *simulation.Simulation, _: input.Timeline) !void {
 }
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invariables) !void {
+    audio.update(&sim.world);
+
     const inputs = timeline.latest();
     var current_players = sim.world.query(&.{ecs.component.Plr}, &.{});
     var player_changes = [_]PlayerChange{.nothing} ** constants.max_player_count;
@@ -85,6 +89,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
                 ecs.component.Ctr{ .count = 0 },
                 ecs.component.Col{ .dim = .{ 16, 8 }, .layer = .{ .base = false } },
                 ecs.component.Lnk{ .child = text },
+                ecs.component.Snd{ .sound_hash = comptime AudioManager.path_to_key("assets/audio/join.wav") },
             });
         } else if (change == .remove) {
             if (entity) |e| {

@@ -2,9 +2,11 @@ const std = @import("std");
 const rl = @import("raylib");
 const simulation = @import("../simulation.zig");
 const input = @import("../input.zig");
+const audio = @import("../audio.zig");
 const ecs = @import("../ecs/ecs.zig");
 const constants = @import("../constants.zig");
 const AssetManager = @import("../AssetManager.zig");
+const AudioManager = @import("../AudioManager.zig");
 
 const Invariables = @import("../Invariables.zig");
 
@@ -115,6 +117,8 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
     //     }
     // }
 
+    audio.update(&sim.world);
+
     for (timeline.latest(), 0..) |inp, player_index| {
         if (!inp.is_connected()) continue;
 
@@ -130,7 +134,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
             ecs.component.Str,
         });
 
-        while (query.next()) |_| {
+        while (query.next()) |entity| {
             const pos = query.get(ecs.component.Pos) catch unreachable;
             const tex = query.get(ecs.component.Tex) catch unreachable;
             const ctr = query.get(ecs.component.Ctr) catch unreachable;
@@ -145,6 +149,10 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
                 ctr.count = switcheroo;
                 tex.v = switcheroo + 1;
                 pos.pos = .{ 160, @intCast(128 + 32 * ctr.count) };
+
+                sim.world.promoteWith(entity, .{ecs.component.Snd{
+                    .sound_hash = comptime AudioManager.path_to_key("assets/audio/scroll.wav"),
+                }});
             } else if (ctr.count == 0 and inp.button_a == .Pressed) {
                 sim.meta.minigame_id += 1;
             } else if (ctr.count != 0 and horizontal != 0) {
@@ -160,6 +168,10 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
                     3 => rl.setWindowSize(1980, 1080),
                     else => unreachable,
                 }
+
+                sim.world.promoteWith(entity, .{ecs.component.Snd{
+                    .sound_hash = comptime AudioManager.path_to_key("assets/audio/scroll.wav"),
+                }});
             }
         }
     }
