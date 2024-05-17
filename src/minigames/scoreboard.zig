@@ -14,12 +14,14 @@ const collision = @import("../physics/collision.zig");
 const constants = @import("../constants.zig");
 const crown = @import("../crown.zig");
 const counter = @import("../counter.zig");
+const audio = @import("../audio.zig");
+const AudioManager = @import("../AudioManager.zig");
 
 // Scoreboard:
 //  Deplete local score and add to global score
 //  Change minigame once all scores are depleted
 
-const depletion_interval_ticks = 2; // Time between awarding score points
+const depletion_interval_ticks = 3; // Time between awarding score points
 
 pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
@@ -102,7 +104,7 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
     // while (query.next()) |entity| {
     //     try counter.move(&sim.world, entity, .{ 0, 1 });
     // }
-
+    audio.update(&sim.world);
     try skipSystem(sim, timeline);
     if (try depleteSystem(sim)) {
         try transitionSystem(sim);
@@ -158,6 +160,10 @@ fn depleteSystem(sim: *simulation.Simulation) !bool {
                 sim.meta.global_score[plr.id] += 1;
                 _ = try counter.increment(&sim.world, lnk.child.?);
             }
+        }
+
+        if (!depleted) {
+            _ = try sim.world.spawnWith(.{ecs.component.Snd{ .sound_hash = comptime AudioManager.path_to_key("assets/audio/tick.wav") }});
         }
     }
 

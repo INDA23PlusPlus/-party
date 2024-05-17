@@ -40,6 +40,7 @@ const audio_paths = [_][:0]const u8{
     "assets/audio/scroll.wav",
     "assets/audio/whoosh.wav",
     "assets/audio/bonk.wav",
+    "assets/audio/tick.wav",
 };
 
 audio_map: AudioHashMap,
