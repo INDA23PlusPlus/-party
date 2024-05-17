@@ -106,6 +106,18 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariab
     // Animate sprites.
     animator.update(&sim.world);
 
+    if (sim.meta.ticks_elapsed % sim.meta.minigame_timer == 0) {
+        _ = try sim.world.spawnWith(.{ecs.component.Snd{
+            .sound_hash = comptime AudioManager.path_to_key("assets/audio/walk.wav"),
+        }});
+
+        var sounds = sim.world.query(&.{}, ecs.component.components);
+
+        while (sounds.next()) |entity| {
+            sim.world.kill(entity);
+        }
+    }
+
     if (sim.meta.minigame_counter <= 1) sim.meta.minigame_id = constants.minigame_scoreboard;
 }
 
@@ -320,11 +332,5 @@ fn deathSystem(sim: *simulation.Simulation) !void {
         _ = try sim.world.spawnWith(.{ecs.component.Snd{
             .sound_hash = comptime AudioManager.path_to_key("assets/audio/death.wav"),
         }});
-    }
-
-    var deathSounds = sim.world.query(&.{}, ecs.component.components);
-
-    while (deathSounds.next()) |entity| {
-        sim.world.kill(entity);
     }
 }
