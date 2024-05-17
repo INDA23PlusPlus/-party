@@ -1,7 +1,7 @@
 const std = @import("std");
 const input = @import("input.zig");
 
-// TODO: make data an array and replace player with player_bitset
+// TODO: is_owned has no purpose on the main thread. Perhaps remove from the protocol?
 pub const Packet = struct { tick: u64, data: input.PlayerInputState, player: u32, is_owned: bool };
 const max_backlog = 1024;
 

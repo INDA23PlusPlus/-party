@@ -524,9 +524,10 @@ fn serverThread(networking_queue: *NetworkingQueue) !void {
 
         try serverThreadQueueTransfer(&server_data, networking_queue);
 
-        // Debug thing. Remove later.
+        // TODO: Debug thing. Remove later. Or refactor somehow and make it less ugly.
         const rl = @import("raylib");
-        if (rl.isKeyPressed(rl.KeyboardKey.key_o)) {
+        const debug_key_down = rl.isKeyDown(rl.KeyboardKey.key_p);
+        if (debug_key_down and rl.isKeyPressed(rl.KeyboardKey.key_three)) {
             const file = std.io.getStdErr();
             const writer = file.writer();
             std.debug.print("server_data input_merger len {d}\n", .{server_data.input_merger.buttons.items.len});

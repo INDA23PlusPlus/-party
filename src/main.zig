@@ -29,6 +29,11 @@ pub const max_simulations_per_frame = 512;
 /// A low value is very optimistic...
 const useful_input_delay = 1;
 
+/// The maximum number of frames that the client may be ahead of the known_server_tick before
+/// the client will reset its newest_local_input_tick to prevent further resimulations into
+/// the future.
+const max_allowed_time_travel_to_future = 8;
+
 fn findMinigameID(preferred_minigame: []const u8) u32 {
     for (minigames_list, 0..) |mg, i| {
         if (std.mem.eql(u8, mg.name, preferred_minigame)) {
@@ -188,6 +193,7 @@ pub fn main() !void {
     // Used by networking code.
     var rewind_to_tick: u64 = std.math.maxInt(u64);
     var known_server_tick: u64 = 0;
+    var newest_local_input_tick: u64 = 0;
 
     // var benchmarker = try @import("Benchmarker.zig").init("Simulation");
 
@@ -208,12 +214,8 @@ pub fn main() !void {
         // Ingest the updates.
         for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_count]) |change| {
             known_server_tick = @max(change.tick, known_server_tick);
-            if (change.is_owned and change.tick == input_tick_delayed) {
-                // We skip our own updates only if it regards the current tick of interest.
-                // Otherwise, we could desynch.
-                std.debug.print("skipping because of ownership\n", .{});
-                continue;
-            }
+
+            //std.debug.print("setting remote {d} {d}\n", .{change.tick, change.player});
             if (try input_merger.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick)) {
                 std.debug.assert(change.tick != 0);
                 rewind_to_tick = @min(change.tick -| 1, rewind_to_tick);
@@ -230,12 +232,29 @@ pub fn main() !void {
         if (main_thread_queue.outgoing_data_count + controllers_active <= main_thread_queue.outgoing_data.len) {
             // We can only get local input, if we have the ability to send it. If we can't send it, we
             // mustn't accept local input as that could cause desynchs.
-            try input_merger.localUpdate(&controllers, input_tick_delayed);
 
-            // Tell the networking thread about the changes we just made to the timeline.
-            submitInputs(&controllers, &input_merger, input_tick_delayed, &main_thread_queue);
+            if (known_server_tick -| (useful_input_delay * 2) < input_tick_delayed) {
+                // We only try to update the timeline if we are not too far back in the past.
+
+                //std.debug.print("setting local {d}\n", .{input_tick_delayed});
+                try input_merger.localUpdate(&controllers, input_tick_delayed);
+
+                // Tell the networking thread about the changes we just made to the timeline.
+                submitInputs(&controllers, &input_merger, input_tick_delayed, &main_thread_queue);
+
+                newest_local_input_tick = @max(newest_local_input_tick, input_tick_delayed);
+            } else {
+                std.debug.print("too far back in the past to take input\n", .{});
+            }
         } else {
             std.debug.print("unable to send further inputs as too many have been sent without answer\n", .{});
+        }
+
+        if (newest_local_input_tick > known_server_tick + max_allowed_time_travel_to_future) {
+            // If we stray too far away from the known_server_tick, we reset
+            // the variable such that resimulation doesn't take us too far
+            // into the future.
+            newest_local_input_tick = 0;
         }
 
         if (launch_options.start_as_role == .local) {
@@ -257,23 +276,16 @@ pub fn main() !void {
             rewind_to_tick = std.math.maxInt(u64);
         }
 
-        if (rl.isKeyPressed(rl.KeyboardKey.key_r)) {
+        const debug_key_down = rl.isKeyDown(rl.KeyboardKey.key_p);
+        if (debug_key_down and rl.isKeyPressed(rl.KeyboardKey.key_one)) {
             std.debug.print("debug reset activated\n", .{});
             simulation_cache.rewind(0);
         }
-
-        if (rl.isKeyPressed(rl.KeyboardKey.key_p)) {
+        if (debug_key_down and rl.isKeyPressed(rl.KeyboardKey.key_two)) {
             const file = std.io.getStdErr();
             const writer = file.writer();
             try input_merger.dumpInputs((tick >> 9) << 9, writer);
         }
-
-        //if (simulation_cache.head_tick_elapsed == 300 + 1) {
-        //    const file = std.io.getStdErr();
-        //    const writer = file.writer();
-        //    std.time.sleep(std.time.ns_per_s * 1);
-        //    try input_consolidation.dumpInputs(writer);
-        //}
 
         // benchmarker.start();
 
@@ -287,8 +299,10 @@ pub fn main() !void {
             }
             _ = frame_arena.reset(.retain_capacity);
 
-            // TODO: Is it correct to add useful_input_delay? We don't want to resimulate if we are close enough to the target.
-            if (simulation_cache.head_tick_elapsed + useful_input_delay >= known_server_tick) {
+            const close_to_server = simulation_cache.head_tick_elapsed >= known_server_tick;
+            const close_to_local = simulation_cache.head_tick_elapsed >= newest_local_input_tick -| useful_input_delay;
+
+            if (close_to_server and close_to_local) {
                 // We have caught up. No need to do extra simulation steps now.
                 break;
             }

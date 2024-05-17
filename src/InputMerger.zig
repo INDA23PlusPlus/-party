@@ -16,9 +16,6 @@ rw_lock: std.Thread.RwLock = .{},
 buttons: InputStateArrayList,
 is_certain: PlayerBitSetArrayList,
 
-// TODO: Move this logic out of InputMerger.zig
-newest_remote_frame: u64 = 0,
-
 pub fn init(allocator: std.mem.Allocator) !Self {
     // We append one to each array because extendTimeline() must have at least one frame available
     // such that it can be used as inspiration for the rest of the timeline.
@@ -42,7 +39,14 @@ pub fn extendTimeline(self: *Self, allocator: std.mem.Allocator, tick: u64) !voi
         return;
     }
 
-    const guess_buttons = self.buttons.getLast();
+    var guess_buttons = self.buttons.getLast();
+    for (&guess_buttons) |*guess_player| {
+        // It doesn't make sense for the prediction
+        // to be that the player keeps button mashing at a pefect
+        // 1 click per tick. So we adjust it.
+        guess_player.button_a = guess_player.button_a.prediction();
+        guess_player.button_b = guess_player.button_b.prediction();
+    }
     const start = self.buttons.items.len;
 
     try self.buttons.ensureTotalCapacity(allocator, tick + 1);
@@ -60,20 +64,15 @@ pub fn extendTimeline(self: *Self, allocator: std.mem.Allocator, tick: u64) !voi
 }
 
 pub fn localUpdate(self: *Self, controllers: []Controller, tick: u64) !void {
-    if (tick < self.newest_remote_frame) {
-        // TODO: prevent std.debug.print("newest_remote_frame prevent localUpdate()\n", .{});
-        // No need to submit frames that happened.
-        return;
-    }
-
     // Make sure that extendTimeline() is called before.
     std.debug.assert(tick < self.buttons.items.len);
+
     var is_certain = self.is_certain.items[tick];
     for (controllers) |controller| {
         const player = controller.input_index;
         if (controller.isAssigned()) {
             if (is_certain.isSet(player)) {
-                // TODO: prevent std.debug.print("local client is attempting to override previous input\n", .{});
+                std.debug.print("warning local client is attempting to override previous input\n", .{});
                 continue;
             }
             self.buttons.items[tick][player] = controller.polled_state;
@@ -116,8 +115,6 @@ pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, player: u32, new_
     // Setting this flag also lets us know that it is worth sending in the net-code.
     // We only set consistency for <tick> because future values are just "guesses".
     self.is_certain.items[tick].set(player);
-
-    self.newest_remote_frame = @max(self.newest_remote_frame, tick);
 
     return changes != 0;
 }

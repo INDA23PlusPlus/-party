@@ -41,6 +41,12 @@ pub const ButtonState = enum(u2) {
     pub inline fn is_up(self: ButtonState) bool {
         return self == .Released or self == .NotHeld;
     }
+    pub inline fn prediction(self: ButtonState) ButtonState {
+        return switch (self) {
+            .Pressed, .Held => .Held,
+            .Released, .NotHeld => .NotHeld,
+        };
+    }
 };
 pub const PlayerInputState = packed struct(u8) {
     dpad: InputDirection = .Disconnected,
