@@ -186,13 +186,17 @@ fn updateTextures(world: *ecs.world.World, timeline: input.Timeline) void {
 
             if (timer.count > 1) {
                 if (timer.count % 20 == 0) {
-                    world.promote(ent, &.{ecs.component.Snd});
+                    world.promoteWith(ent, .{ecs.component.Snd{
+                        .sound_hash = comptime AudioManager.path_to_key("assets/audio/bonk.wav"),
+                    }});
                     ctr.count = ((ctr.count << 1) >> 2) | 0x80000000;
                 }
 
                 timer.count = timer.count - 1;
             } else {
-                world.promote(ent, &.{ecs.component.Snd});
+                world.promoteWith(ent, .{ecs.component.Snd{
+                    .sound_hash = comptime AudioManager.path_to_key("assets/audio/bonk.wav"),
+                }});
                 anm.animation = Animation.CatPortrait;
                 anm.interval = 20;
                 ctr.count = 1;

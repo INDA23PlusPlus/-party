@@ -37,6 +37,7 @@ const audio_paths = [_][:0]const u8{
     "assets/audio/join.wav",
     "assets/audio/jump.wav",
     "assets/audio/whoosh.wav",
+    "assets/audio/bonk.wav",
 };
 
 audio_map: AudioHashMap,
