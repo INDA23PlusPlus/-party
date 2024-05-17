@@ -56,11 +56,12 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
         if (plr.dpad == .Disconnected) continue;
 
         const id: u32 = @intCast(i);
-        const x: i32 = @intCast(128 + i * 64);
+        const x: i32 = @intCast(64 + (i % 4) * 64);
+        const y: i32 = @intCast(64 + (i / 4) * 64);
 
         _ = try sim.world.spawnWith(.{
             ecs.component.Plr{ .id = id },
-            ecs.component.Pos{ .pos = [_]i32{ x, 256 } },
+            ecs.component.Pos{ .pos = [_]i32{ x, y } },
             ecs.component.Col{ .dim = [_]i32{ 16, 16 } },
             ecs.component.Mov{ .velocity = ecs.component.Vec2.init(1, 0) },
             ecs.component.Tex{

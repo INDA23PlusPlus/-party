@@ -129,15 +129,26 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
         },
     });
 
+    var offset: i32 = 0;
+
     // Players
     for (timeline.latest(), 0..) |plr, i| {
         if (plr.dpad == .Disconnected) continue;
+
+        const left: i32 = @intFromBool(i % 2 == 0);
+        const side: i32 = 1 - 2 * left;
+        offset += 16 * left;
 
         const id: u32 = @intCast(i);
 
         _ = try sim.world.spawnWith(.{
             ecs.component.Plr{ .id = id },
-            ecs.component.Pos{ .pos = [_]i32{ 128 + 16 * @as(i32, @intCast(i)), 234 } },
+            ecs.component.Pos{
+                .pos = [_]i32{
+                    (constants.world_width / 2) + side * offset - left * 6,
+                    234,
+                },
+            },
             ecs.component.Col{
                 .dim = [_]i32{ 6, 6 },
                 .layer = collision.Layer{ .base = false, .player = true },
@@ -147,7 +158,8 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
             ecs.component.Tex{
                 .texture_hash = AssetManager.pathHash("assets/smash_cat.png"),
                 .w = 2,
-                .subpos = right_texture_offset,
+                .subpos = if (i % 2 == 0) right_texture_offset else left_texture_offset,
+                .flip_horizontal = i % 2 != 0,
                 .tint = constants.player_colors[i],
             },
             ecs.component.Anm{ .animation = Animation.SmashIdle, .interval = 8, .looping = true },
@@ -195,7 +207,6 @@ pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, rt: Invaria
 
     while (dead_entities.next()) |entity| {
         sim.world.kill(entity);
-        std.debug.print("-\n", .{});
     }
 
     if (sim.meta.minigame_counter <= 1) sim.meta.minigame_id = constants.minigame_scoreboard;
