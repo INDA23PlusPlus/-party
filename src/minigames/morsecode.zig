@@ -9,6 +9,8 @@ const constants = @import("../constants.zig");
 const Animation = @import("../animation/animations.zig").Animation;
 const crown = @import("../crown.zig");
 const animator = @import("../animation/animator.zig");
+const audio = @import("../audio.zig");
+const AudioManager = @import("../AudioManager.zig");
 
 // all morse characters are less than 8 long
 // 1 for * , 2 for -, 0 otherwise, could be done with bitmasks if we choose to not have a "new_word" key
@@ -161,6 +163,7 @@ pub fn init(sim: *simulation.Simulation, timeline: input.Timeline) !void {
 
 pub fn update(sim: *simulation.Simulation, timeline: input.Timeline, _: Invariables) !void {
     //rl.drawText("Morsecode Minigame", 300, 8, 32, rl.Color.blue);
+    audio.update(&sim.world);
     try inputSystem(&sim.world, timeline);
     try wordSystem(&sim.world, &sim.meta);
     animator.update(&sim.world);
@@ -217,11 +220,20 @@ fn inputSystem(world: *ecs.world.World, timeline: input.Timeline) !void {
             if (bit_index.count == 0 and correct_letter_typed.ticks != 0) {
                 tex.u = correct_letter_typed.ticks;
             } else if (state.button_a == .Held or state.button_b == .Held) {
-                tex.u = if (state.button_a == .Held) 3 else 4;
+                if (state.button_a == .Held) {
+                    tex.u = 3;
+                } else {
+                    tex.u = 4;
+                }
             } else {
                 tex.u = 0;
             }
             if (state.button_a == .Pressed or state.button_b == .Pressed) {
+                if (state.button_a == .Pressed) {
+                    _ = try world.spawnWith(.{ecs.component.Snd{ .sound_hash = comptime AudioManager.path_to_key("assets/audio/walk.wav") }});
+                } else {
+                    _ = try world.spawnWith(.{ecs.component.Snd{ .sound_hash = comptime AudioManager.path_to_key("assets/audio/bounce.wav") }});
+                }
                 bit_index.count += if (state.button_b == .Pressed) 1 else 0;
                 keystroke_bitset.ticks |= (@as(u32, 1) << @as(u5, @intCast(bit_index.count)));
                 bit_index.count += 1;
