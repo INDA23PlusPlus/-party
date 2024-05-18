@@ -258,7 +258,6 @@ fn clientConnected(server_data: *NetServerData, conn: std.net.Server.Connection)
 }
 
 fn sendUpdatesToLocalClient(networking_queue: *NetworkingQueue, input_merger: *InputMerger, consistent_until: u64, targeted_tick: u64) u64 {
-    std.debug.print("sendUpdatesToLocalClient called from {d} to {d}\n", .{consistent_until, targeted_tick});
     var new_consistent_until = consistent_until;
     for (consistent_until..targeted_tick) |tick_index| {
         const inputs = input_merger.buttons.items[tick_index];
@@ -284,7 +283,6 @@ fn sendUpdatesToLocalClient(networking_queue: *NetworkingQueue, input_merger: *I
 fn sendUpdatesToRemoteClient(fd: std.posix.socket_t, input_merger: *InputMerger, consistent_until: u64, targeted_tick: u64, is_owned: input.PlayerBitSet) !u64 {
     var send_buffer: [max_net_packet_size]u8 = undefined;
     const send_amount = targeted_tick - consistent_until;
-    std.debug.print("sending remote updates {} {} {}\n", .{ send_amount, targeted_tick, consistent_until });
 
     var fb = std.io.fixedBufferStream(send_buffer[4..]);
     const writer = fb.writer();
@@ -364,7 +362,7 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
             continue;
         }
 
-        //std.debug.print("packet bandwith is: {d}\n", .{packet_count_bandwidth});
+        //std.debug.print("sending {any} {d} to {d} with packet bandwith {d}\n", .{conn_type, send_start, send_until, packet_count_bandwidth});
 
         connection.consistent_until = switch (conn_type) {
             .local => sendUpdatesToLocalClient(networking_queue, &server_data.input_merger, send_start, send_until),
