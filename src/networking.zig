@@ -25,10 +25,13 @@ const ConnectionType = enum(u8) {
     remote,
 };
 
-const max_net_packet_size = 32768;
+const max_net_packet_size = 65535 - 8;
 
-const max_unresponded_ticks = 32;
-const max_inputs_per_socket_packet = 64;
+const max_input_packets_per_socket = 64;
+const max_packets_to_send = 256;
+const max_unresponded_ticks = 128 + 64;
+
+
 
 fn debugPacket(packet: []const u8) void {
     // Print the CBOR contents.
@@ -108,6 +111,8 @@ const NetServerData = struct {
     /// Because TCP over IP is a stream protocol we must chunk the packets using a PacketBuffer.
     conns_packet_buffer: [constants.max_connected_count]PacketBuffer = undefined,
 
+    /// Client bandwith in packets per send decided by if client has to throw away packets or not.
+    conns_max_packets_per_send: [constants.max_connected_count]u32 = undefined,
 
     /// Modified by the pollSockets procedure.
     conns_should_read: [constants.max_connected_count]bool = undefined,
@@ -121,22 +126,24 @@ const NetServerData = struct {
     conns_owned_players: [constants.max_connected_count]input.PlayerBitSet = undefined,
 
     /// Parsed packages that are ready to be ingested by the InputMerger.
-    incoming_packets: [constants.max_connected_count * max_inputs_per_socket_packet]NetworkingQueue.Packet = undefined,
+    incoming_packets: [constants.max_connected_count * max_input_packets_per_socket]NetworkingQueue.Packet = undefined,
 
     /// How many packets are in the incoming_packets queue.
     incoming_packets_count: u64 = 0,
 
     fn connectSlot(self: *NetServerData) ?usize {
         for (self.conns_type, 0..) |t, i| {
-            if (t == .empty) {
-                self.conns_type[i] = .remote;
-                self.conns_list[i] = .{};
-                self.conns_should_read[i] = false;
-                self.conns_packet_buffer[i] = .{};
-                self.conns_latest_input_from_client[i] = 0;
-                self.conns_owned_players[i] = input.empty_player_bit_set;
-                return i;
+            if (t != .empty) {
+                continue;
             }
+            self.conns_type[i] = .remote;
+            self.conns_list[i] = .{};
+            self.conns_should_read[i] = false;
+            self.conns_packet_buffer[i] = .{};
+            self.conns_latest_input_from_client[i] = 0;
+            self.conns_max_packets_per_send[i] = 8;
+            self.conns_owned_players[i] = input.empty_player_bit_set;
+            return i;
         }
         return null;
     }
@@ -169,8 +176,9 @@ fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packe
     var scanner = cbor.Scanner{};
     var ctx = scanner.begin(packet);
     var input_synch = try ctx.readArray();
-    std.debug.assert(input_synch.items == 2);
+    std.debug.assert(input_synch.items == 3);
     client.tick_acknowledged = @max(client.tick_acknowledged, try input_synch.readU64());
+    server_data.conns_max_packets_per_send[client_index] = @truncate(try input_synch.readU64());
     //std.debug.print("packet from client with tick ack {}\n", .{new_tick_acknowledged});
     var all_packets = try input_synch.readArray();
 
@@ -178,6 +186,7 @@ fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packe
         var tick_info = try all_packets.readArray();
         std.debug.assert(tick_info.items == 2);
         const input_tick_index = try tick_info.readU64();
+
         var all_inputs = try tick_info.readArray();
 
         var players_affected = input.empty_player_bit_set;
@@ -267,7 +276,7 @@ fn sendUpdatesToLocalClient(networking_queue: *NetworkingQueue, input_merger: *I
             .data = inputs,
         };
         networking_queue.outgoing_data_count += 1;
-        new_consistent_until = @max(new_consistent_until, tick_index);
+        new_consistent_until = @max(new_consistent_until, tick_index + 1);
     }
     return new_consistent_until;
 }
@@ -333,10 +342,12 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
     server_data.incoming_packets_count = 0;
 
     // Send the updates to the clients.
-    for (&server_data.conns_list, server_data.conns_type, &server_data.conns_sockets, server_data.conns_owned_players) |*connection, conn_type, fd, is_owned| {
+    for (&server_data.conns_list, server_data.conns_type, &server_data.conns_sockets, server_data.conns_owned_players, server_data.conns_max_packets_per_send) |*connection, conn_type, fd, is_owned, packet_count_bandwidth| {
+
         // Send the missing inputs. But only N at the time.
         const send_start = connection.consistent_until;
-        const send_until = @min(server_data.input_merger.buttons.items.len, send_start + max_inputs_per_socket_packet);
+
+        const send_until = @min(server_data.input_merger.buttons.items.len, send_start + packet_count_bandwidth);
 
         if (send_until <= send_start) {
             // Nothing to send.
@@ -353,8 +364,13 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
             continue;
         }
 
-        connection.consistent_until =
-            if (conn_type == .local) sendUpdatesToLocalClient(networking_queue, &server_data.input_merger, send_start, send_until) else try sendUpdatesToRemoteClient(fd, &server_data.input_merger, send_start, send_until, is_owned);
+        //std.debug.print("packet bandwith is: {d}\n", .{packet_count_bandwidth});
+
+        connection.consistent_until = switch (conn_type) {
+            .local => sendUpdatesToLocalClient(networking_queue, &server_data.input_merger, send_start, send_until),
+            .remote => try sendUpdatesToRemoteClient(fd, &server_data.input_merger, send_start, send_until, is_owned),
+            .empty => 0,
+        };
     }
 
     networking_queue.rw_lock.unlock();
@@ -627,6 +643,8 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8, port: 
     // and not a fragment protocol.
     var packet_buffer = PacketBuffer{};
 
+    var packet_per_receive_bandwidth: u32 = 8;
+
     while (true) {
         var packet_part_buf: [max_net_packet_size]u8 = undefined;
         pollSockets(4, &poller.connection, &poller.fd, &poller.should_read);
@@ -636,6 +654,8 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8, port: 
 
         var full_packet = packet_buffer.toPacket(packet_part);
 
+        var should_reduce_bandwidth = false;
+
         //debugPacket(full_packet);
 
         // Reset the poller. We don't care if it was ever set.
@@ -644,6 +664,8 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8, port: 
         networking_queue.rw_lock.lock();
 
         while (networking_queue.outgoing_data_count > networking_queue.outgoing_data.len / 2) {
+            should_reduce_bandwidth = true;
+
             // If half the outgoing queue is filled, we should give the the
             // main thread some time to catch up.
 
@@ -660,6 +682,13 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8, port: 
             networking_queue.rw_lock.lock();
 
         }
+
+        if (should_reduce_bandwidth) {
+            packet_per_receive_bandwidth /= 2;
+        } else {
+            packet_per_receive_bandwidth += 4;
+        }
+        packet_per_receive_bandwidth = std.math.clamp(packet_per_receive_bandwidth, 1, max_packets_to_send);
 
         // The rational for this loop is the same as for the similiar
         // looking code found in the server thread.
@@ -678,8 +707,10 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8, port: 
         var fb = std.io.fixedBufferStream(send_buffer[4..]);
         const writer = fb.writer();
 
-        try cbor.writeArrayHeader(writer, 2);
+        try cbor.writeArrayHeader(writer, 3);
         try cbor.writeUint(writer, newest_input_tick);
+        try cbor.writeUint(writer, packet_per_receive_bandwidth);
+
         //std.debug.print("client is sending {}\n", .{networking_queue.incoming_data_count});
         try cbor.writeArrayHeader(writer, networking_queue.incoming_data_count);
         for (networking_queue.incoming_data[0..networking_queue.incoming_data_count]) |packet| {
