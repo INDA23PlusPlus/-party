@@ -62,6 +62,7 @@ const LaunchOptions = struct {
     force_ijkl: bool = false,
     force_minigame: u32 = 1,
     hostname: []const u8 = "127.0.0.1",
+    port: u16 = 8080,
     fn parse() !LaunchOptions {
         var result = LaunchOptions{};
         var mem: [1024]u8 = undefined;
@@ -89,6 +90,8 @@ const LaunchOptions = struct {
                 std.debug.print("will launch minigame {d}\n", .{result.force_minigame});
             } else if (std.mem.eql(u8, arg, "--hostname")) {
                 result.hostname = args.next() orelse "";
+            } else if (std.mem.eql(u8, arg, "--port")) {
+                result.port = try std.fmt.parseInt(u16, args.next() orelse "missing", 10);
             } else {
                 std.debug.print("unknown argument: {s}\n", .{arg});
                 return error.UnknownArg;
@@ -100,21 +103,20 @@ const LaunchOptions = struct {
 };
 
 pub fn submitInputs(controllers: []Controller, input_merger: *InputMerger, input_tick: u64, main_thread_queue: *NetworkingQueue) void {
+    var players_affected = input.empty_player_bit_set;
+    const data = input_merger.buttons.items[input_tick];
     for (controllers) |controller| {
         if (!controller.isAssigned()) {
             continue;
         }
-        const player_index = controller.input_index;
-        const data = input_merger.buttons.items[input_tick][player_index];
-
-        main_thread_queue.outgoing_data[main_thread_queue.outgoing_data_count] = .{
-            .tick = input_tick,
-            .data = data,
-            .player = @truncate(player_index),
-            .is_owned = true, // Not really used right now.
-        };
-        main_thread_queue.outgoing_data_count += 1;
+        players_affected.set(controller.input_index);
     }
+    main_thread_queue.outgoing_data[main_thread_queue.outgoing_data_count] = .{
+        .tick = input_tick,
+        .data = data,
+        .players = players_affected,
+    };
+    main_thread_queue.outgoing_data_count += 1;
 }
 
 pub fn main() !void {
@@ -149,9 +151,7 @@ pub fn main() !void {
     var net_thread_queue = NetworkingQueue{};
 
     // Force WASD or IJKL for games that do not support hot-joining.
-    if (launch_options.force_wasd or launch_options.force_ijkl) {
-        try input_merger.extendTimeline(std.heap.page_allocator, 1);
-    }
+    try input_merger.extendTimeline(std.heap.page_allocator, 1);
     if (launch_options.force_wasd) {
         _ = input_merger.forceAutoAssign(0, &controllers, 0);
     }
@@ -172,10 +172,10 @@ pub fn main() !void {
         if (std.mem.eql(u8, launch_options.hostname, "")) {
             @panic("missing hostname parameter");
         }
-        try networking.startClient(&net_thread_queue, launch_options.hostname);
+        try networking.startClient(&net_thread_queue, launch_options.hostname, launch_options.port);
     } else if (launch_options.start_as_role == .server) {
         std.debug.print("starting server thread\n", .{});
-        try networking.startServer(&net_thread_queue);
+        try networking.startServer(&net_thread_queue, launch_options.port);
     } else {
         std.debug.print("warning: multiplayer is disabled\n", .{});
     }
@@ -211,14 +211,22 @@ pub fn main() !void {
         // Make sure that the timeline extends far enough for the input polling to work.
         try input_merger.extendTimeline(std.heap.page_allocator, input_tick_delayed);
 
+        // Make sure we have the newest inputs from the server.
+        if (launch_options.start_as_role != .local) {
+            main_thread_queue.interchange(&net_thread_queue);
+        }
+
         // Ingest the updates.
         for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_count]) |change| {
             known_server_tick = @max(change.tick, known_server_tick);
 
-            //std.debug.print("setting remote {d} {d}\n", .{change.tick, change.player});
-            if (try input_merger.remoteUpdate(std.heap.page_allocator, change.player, change.data, change.tick)) {
-                std.debug.assert(change.tick != 0);
-                rewind_to_tick = @min(change.tick -| 1, rewind_to_tick);
+            var player_iterator = change.players.iterator(.{});
+            //std.debug.print("remoteUpdate {d} 0b{b}\n", .{change.tick, change.players.mask});
+            while (player_iterator.next()) |player| {
+                if (try input_merger.remoteUpdate(std.heap.page_allocator, @truncate(player), change.data[player], change.tick)) {
+                    std.debug.assert(change.tick != 0);
+                    rewind_to_tick = @min(change.tick -| 1, rewind_to_tick);
+                }
             }
         }
         main_thread_queue.incoming_data_count = 0;
@@ -250,13 +258,6 @@ pub fn main() !void {
             std.debug.print("unable to send further inputs as too many have been sent without answer\n", .{});
         }
 
-        if (newest_local_input_tick > known_server_tick + max_allowed_time_travel_to_future) {
-            // If we stray too far away from the known_server_tick, we reset
-            // the variable such that resimulation doesn't take us too far
-            // into the future.
-            newest_local_input_tick = 0;
-        }
-
         if (launch_options.start_as_role == .local) {
             // Make sure we can scream into the void as much as we wish.
             main_thread_queue.outgoing_data_count = 0;
@@ -265,6 +266,13 @@ pub fn main() !void {
             main_thread_queue.client_acknowledge_tick = known_server_tick;
 
             main_thread_queue.interchange(&net_thread_queue);
+        }
+
+         if (newest_local_input_tick > known_server_tick + max_allowed_time_travel_to_future) {
+            // If we stray too far away from the known_server_tick, we reset
+            // the variable such that resimulation doesn't take us too far
+            // into the future.
+            newest_local_input_tick = 0;
         }
 
         if (rewind_to_tick < simulation_cache.head_tick_elapsed) {

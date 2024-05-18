@@ -76,8 +76,12 @@ pub const PlayerInputState = packed struct(u8) {
 };
 
 pub const AllPlayerButtons = [constants.max_player_count]PlayerInputState;
-pub const IsLocalBitfield = std.bit_set.IntegerBitSet(constants.max_player_count);
-pub const default_input_state = [_]PlayerInputState{.{}} ** constants.max_player_count;
+pub const default_input_state: AllPlayerButtons = [_]PlayerInputState{.{}} ** constants.max_player_count;
+
+// TODO: Find a better file for these.
+pub const PlayerBitSet = std.bit_set.IntegerBitSet(constants.max_player_count);
+pub const empty_player_bit_set = PlayerBitSet.initEmpty();
+pub const full_player_bit_set = PlayerBitSet.initFull();
 
 pub const Timeline = struct {
     // Normally one would not make a struct for just one variable.

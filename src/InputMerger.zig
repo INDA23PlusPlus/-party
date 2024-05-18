@@ -7,10 +7,7 @@ const Controller = @import("Controller.zig");
 const Self = @This();
 
 const InputStateArrayList = std.ArrayListUnmanaged(input.AllPlayerButtons);
-pub const PlayerBitSet = std.bit_set.IntegerBitSet(constants.max_player_count);
-const PlayerBitSetArrayList = std.ArrayListUnmanaged(PlayerBitSet);
-pub const empty_player_bit_set = PlayerBitSet.initEmpty();
-const full_player_bit_set = PlayerBitSet.initFull();
+const PlayerBitSetArrayList = std.ArrayListUnmanaged(input.PlayerBitSet);
 
 rw_lock: std.Thread.RwLock = .{},
 buttons: InputStateArrayList,
@@ -25,7 +22,7 @@ pub fn init(allocator: std.mem.Allocator) !Self {
     // We are always certain of the zero frame as changes to it
     // should be ignored.
     var is_certain = try PlayerBitSetArrayList.initCapacity(allocator, 1024);
-    try is_certain.append(allocator, full_player_bit_set);
+    try is_certain.append(allocator, input.full_player_bit_set);
 
     return .{
         .buttons = buttons,
@@ -59,7 +56,8 @@ pub fn extendTimeline(self: *Self, allocator: std.mem.Allocator, tick: u64) !voi
     }
 
     for (self.is_certain.items[start..]) |*frame| {
-        frame.* = empty_player_bit_set;
+        // We are always unsure when we are guessing.
+        frame.* = input.empty_player_bit_set;
     }
 }
 

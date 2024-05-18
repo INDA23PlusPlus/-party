@@ -1,8 +1,7 @@
 const std = @import("std");
 const input = @import("input.zig");
 
-// TODO: is_owned has no purpose on the main thread. Perhaps remove from the protocol?
-pub const Packet = struct { tick: u64, data: input.PlayerInputState, player: u32, is_owned: bool };
+pub const Packet = struct { tick: u64, data: input.AllPlayerButtons, players: input.PlayerBitSet };
 const max_backlog = 1024;
 
 rw_lock: std.Thread.RwLock = .{},
