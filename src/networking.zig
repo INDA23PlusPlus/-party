@@ -314,7 +314,10 @@ fn sendUpdatesToRemoteClient(fd: std.posix.socket_t, input_merger: *InputMerger,
     // There is an explanation for this line in this file. Just search for writeInt.
     std.mem.writeInt(std.math.ByteAlignedInt(u32), send_buffer[0..4], @truncate(fb.pos), std.builtin.Endian.little);
 
-    _ = try std.posix.send(fd, send_buffer[0 .. fb.pos + 4], 0);
+    _ = std.posix.send(fd, send_buffer[0 .. fb.pos + 4], 0) catch |e| switch (e) {
+        error.WouldBlock => 0,
+        else => return e,
+    };
     return @max(consistent_until, targeted_tick);
 }
 
@@ -366,7 +369,10 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
 
         connection.consistent_until = switch (conn_type) {
             .local => sendUpdatesToLocalClient(networking_queue, &server_data.input_merger, send_start, send_until),
-            .remote => try sendUpdatesToRemoteClient(fd, &server_data.input_merger, send_start, send_until, is_owned),
+            .remote => sendUpdatesToRemoteClient(fd, &server_data.input_merger, send_start, send_until, is_owned) catch |e| {
+                std.debug.print("error while sending to remote client: {any}", .{e});
+                continue;
+            },
             .empty => 0,
         };
     }
