@@ -241,16 +241,17 @@ pub fn main() !void {
 
         Controller.pollAll(&controllers, input_merger.buttons.items[input_tick_delayed - 1]);
 
-        // We want to know how many controllers are active locally in order to know if
-        // all of their states can be sent over to the networking thread later on.
-        const controllers_active = input_merger.autoAssign(&controllers, input_tick_delayed - 1);
 
-        if (main_thread_queue.outgoing_data_count + controllers_active <= main_thread_queue.outgoing_data.len) {
-            // We can only get local input, if we have the ability to send it. If we can't send it, we
-            // mustn't accept local input as that could cause desynchs.
+        if (main_thread_queue.server_timeline_length -| max_allowed_behind_time_inputs < input_tick_delayed) {
+            // We only try to update the timeline if we are not too far back in the past.
+    
+            // We want to know how many controllers are active locally in order to know if
+            // all of their states can be sent over to the networking thread later on.
+            const controllers_active = input_merger.autoAssign(&controllers, input_tick_delayed - 1);
 
-            if (main_thread_queue.server_timeline_length -| max_allowed_behind_time_inputs < input_tick_delayed) {
-                // We only try to update the timeline if we are not too far back in the past.
+            if (main_thread_queue.outgoing_data_count + controllers_active <= main_thread_queue.outgoing_data.len) {
+                // We can only get local input, if we have the ability to send it. If we can't send it, we
+                // mustn't accept local input as that could cause desynchs.
 
                 //std.debug.print("setting local {d}\n", .{input_tick_delayed});
                 try input_merger.localUpdate(&controllers, input_tick_delayed);
@@ -260,10 +261,10 @@ pub fn main() !void {
 
                 newest_local_input_tick = @max(newest_local_input_tick, input_tick_delayed);
             } else {
-                std.debug.print("too far back in the past to take input\n", .{});
+                std.debug.print("unable to send further inputs as too many have been sent without answer\n", .{});
             }
         } else {
-            std.debug.print("unable to send further inputs as too many have been sent without answer\n", .{});
+            std.debug.print("too far back in the past to take input as server has length {d} and client has tick {d}\n", .{main_thread_queue.server_timeline_length, input_tick_delayed});
         }
 
         if (launch_options.start_as_role == .local) {

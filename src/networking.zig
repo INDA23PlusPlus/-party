@@ -651,6 +651,9 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8, port: 
     const stream = try std.net.tcpConnectToHost(alloc, hostname, port);
     var poller = PollerForClient{ .fd = .{stream.handle} };
 
+    // Now that we are connected, unlock the timeline for a short moment.
+    networking_queue.server_timeline_length = 0;
+
     std.debug.print("connection established\n", .{});
     var newest_input_tick: u64 = 0;
 
