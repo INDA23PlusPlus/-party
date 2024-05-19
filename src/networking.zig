@@ -275,6 +275,8 @@ fn sendUpdatesToLocalClient(networking_queue: *NetworkingQueue, input_merger: *I
             .data = inputs,
         };
         networking_queue.outgoing_data_count += 1;
+
+        // TODO: Doing + 1 here probably causes a desynch.
         new_consistent_until = @max(new_consistent_until, tick_index + 1);
     }
     return new_consistent_until;
