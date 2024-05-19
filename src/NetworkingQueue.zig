@@ -13,7 +13,9 @@ outgoing_data: [max_backlog]Packet = undefined,
 outgoing_data_count: u64 = 0,
 
 client_acknowledge_tick: u64 = 0,
-server_timeline_length: u64 = 0,
+// A high value prevents the client from acting before it has even 
+// had the chance to receive some inptuts from the server.
+server_timeline_length: u64 = std.math.maxInt(u64), 
 
 const Self = @This();
 
