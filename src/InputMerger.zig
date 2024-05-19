@@ -12,6 +12,7 @@ const PlayerBitSetArrayList = std.ArrayListUnmanaged(input.PlayerBitSet);
 rw_lock: std.Thread.RwLock = .{},
 buttons: InputStateArrayList,
 is_certain: PlayerBitSetArrayList,
+is_server: bool = false, // Only used for debug prints. TODO: Remove in favour of a logger that is aware.
 
 pub fn init(allocator: std.mem.Allocator) !Self {
     // We append one to each array because extendTimeline() must have at least one frame available
@@ -113,7 +114,8 @@ pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, player: u32, new_
     // Setting this flag also lets us know that it is worth sending in the net-code.
     // We only set consistency for <tick> because future values are just "guesses".
     self.is_certain.items[tick].set(player);
-    std.debug.print("after remote update {b}\n", .{self.is_certain.items[tick].mask});
+
+    //std.debug.print("{} after remote update {b}\n", .{self.is_server, self.is_certain.items[tick].mask});
 
     return changes != 0;
 }

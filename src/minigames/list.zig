@@ -9,7 +9,7 @@ const lobby = @import("lobby.zig");
 const gamewheel = @import("gamewheel.zig");
 const example = @import("example.zig");
 const scoreboard = @import("scoreboard.zig");
-const preferred = @import("preferred.zig");
+const wait_for_input = @import("wait_for_input.zig");
 const winscreen = @import("winscreen.zig");
 
 const Minigame = @import("Minigame.zig");
@@ -17,9 +17,9 @@ const Minigame = @import("Minigame.zig");
 /// Create a list of Minigames.
 pub const list = [_]Minigame{
     .{
-        .name = "preferred",
-        .update = preferred.update,
-        .init = preferred.init,
+        .name = "wait_for_input",
+        .update = wait_for_input.update,
+        .init = wait_for_input.init,
     },
     .{
         .name = "menu",

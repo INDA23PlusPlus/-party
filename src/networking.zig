@@ -160,8 +160,8 @@ const NetServerData = struct {
 
         var did_set = false;
         while (players.next()) |player| {
-            std.debug.print("updating input for player {d} at tick {d}\n", .{player, change.tick});
-            did_set = did_set or try self.input_merger.remoteUpdate(std.heap.page_allocator, @truncate(player), change.data[player], change.tick);
+            //std.debug.print("updating input for player {d} at tick {d}\n", .{player, change.tick});
+            did_set = try self.input_merger.remoteUpdate(std.heap.page_allocator, @truncate(player), change.data[player], change.tick) or did_set;
         }
 
         if (self.conns_latest_input_from_client[conn_index] < change.tick) {
@@ -169,7 +169,7 @@ const NetServerData = struct {
             // control over.
             self.conns_latest_input_from_client[conn_index] = change.tick;
             self.conns_owned_players[conn_index] = change.players;
-            std.debug.print("setting ownership mask {b} for conn_index {d}\n", .{self.conns_owned_players[conn_index].mask, conn_index});
+            //std.debug.print("setting ownership mask {b} for conn_index {d}\n", .{self.conns_owned_players[conn_index].mask, conn_index});
         }
 
         if (!did_set) {
@@ -284,7 +284,7 @@ fn sendUpdatesToLocalClient(networking_queue: *NetworkingQueue, input_merger: *I
             return new_consistent_until;
         }
 
-        std.debug.print("sending to local an update for player 0b{b} at tick {d}\n", .{is_certain.mask, tick_index});
+        //std.debug.print("sending to local an update for player 0b{b} at tick {d}\n", .{is_certain.mask, tick_index});
         networking_queue.outgoing_data[networking_queue.outgoing_data_count] = .{
             .tick = tick_index,
             .players = is_certain,
@@ -345,7 +345,7 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
     networking_queue.rw_lock.lock();
 
     for (server_data.incoming_packets[0..server_data.incoming_packets_count]) |packet| {
-        std.debug.print("ingesting package with player mask {b} at tick {d}\n", .{packet.packet.players.mask, packet.packet.tick});
+        //std.debug.print("ingesting package with player mask {b} at tick {d}\n", .{packet.packet.players.mask, packet.packet.tick});
         try server_data.ingestPlayerInput(packet.conn_index, packet.packet);
         if (packet.is_disconnect and server_data.conns_type[packet.conn_index] == .disconnecting) {
             server_data.conns_type[packet.conn_index] = .empty;
@@ -555,6 +555,7 @@ fn serverThread(networking_queue: *NetworkingQueue, port: u16) !void {
     var server_data = NetServerData{
         .input_merger = try InputMerger.init(std.heap.page_allocator),
     };
+    server_data.input_merger.is_server = true;
     //defer server_data.input_history.deinit(std.heap.page_allocator);
 
     if (server_data.connectSlot()) |slot| {
