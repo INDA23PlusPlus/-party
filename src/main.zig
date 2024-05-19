@@ -34,6 +34,14 @@ const useful_input_delay = 1;
 /// the future.
 const max_allowed_time_travel_to_future = 8;
 
+/// How many frames the client may be behind and still send input frames
+/// to the server.
+const max_allowed_behind_time_inputs = 8;
+
+/// The max amount of unreceived inputs from the server
+/// that the client will tolerate before pausing simulation.
+const max_allowed_behind_time_simulations = 64;
+
 fn findMinigameID(preferred_minigame: []const u8) u32 {
     for (minigames_list, 0..) |mg, i| {
         if (std.mem.eql(u8, mg.name, preferred_minigame)) {
@@ -192,7 +200,7 @@ pub fn main() !void {
 
     // Used by networking code.
     var rewind_to_tick: u64 = std.math.maxInt(u64);
-    var known_server_tick: u64 = 0;
+    var received_server_tick: u64 = 0;
     var newest_local_input_tick: u64 = 0;
 
     // var benchmarker = try @import("Benchmarker.zig").init("Simulation");
@@ -218,7 +226,7 @@ pub fn main() !void {
 
         // Ingest the updates.
         for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_count]) |change| {
-            known_server_tick = @max(change.tick, known_server_tick);
+            received_server_tick = @max(change.tick, received_server_tick);
 
             var player_iterator = change.players.iterator(.{});
             //std.debug.print("remoteUpdate {d} 0b{b}\n", .{change.tick, change.players.mask});
@@ -241,7 +249,7 @@ pub fn main() !void {
             // We can only get local input, if we have the ability to send it. If we can't send it, we
             // mustn't accept local input as that could cause desynchs.
 
-            if (known_server_tick -| (useful_input_delay * 2) < input_tick_delayed) {
+            if (main_thread_queue.server_timeline_length -| max_allowed_behind_time_inputs < input_tick_delayed) {
                 // We only try to update the timeline if we are not too far back in the past.
 
                 //std.debug.print("setting local {d}\n", .{input_tick_delayed});
@@ -261,14 +269,18 @@ pub fn main() !void {
         if (launch_options.start_as_role == .local) {
             // Make sure we can scream into the void as much as we wish.
             main_thread_queue.outgoing_data_count = 0;
+
+            // Make sure optimizations in other places don't think that
+            // we are lagging behind while running local mode.
+            received_server_tick = tick;
         } else {
             // Make sure the server knows how far the local client has come.
-            main_thread_queue.client_acknowledge_tick = known_server_tick;
+            main_thread_queue.client_acknowledge_tick = received_server_tick;
 
             main_thread_queue.interchange(&net_thread_queue);
         }
 
-         if (newest_local_input_tick > known_server_tick + max_allowed_time_travel_to_future) {
+         if (newest_local_input_tick > received_server_tick + max_allowed_time_travel_to_future) {
             // If we stray too far away from the known_server_tick, we reset
             // the variable such that resimulation doesn't take us too far
             // into the future.
@@ -298,6 +310,13 @@ pub fn main() !void {
         // benchmarker.start();
 
         for (0..max_simulations_per_frame) |_| {
+            if (main_thread_queue.server_timeline_length -| max_allowed_behind_time_simulations >= received_server_tick and tick > max_allowed_behind_time_simulations) {
+                // We know that we are missing a lot of input data. Simulating right now would be a waste.
+                // Instead we wait for more input data to arrive before starting to simulate again.
+                std.debug.print("game is paused while inputs are transferred\n", .{});
+                break;
+            }
+
             // All code that controls how objects behave over time in our game
             // should be placed inside of the simulate procedure as the simulate procedure
             // is called in other places. Not doing so will lead to inconsistencies.
@@ -307,7 +326,7 @@ pub fn main() !void {
             }
             _ = frame_arena.reset(.retain_capacity);
 
-            const close_to_server = simulation_cache.head_tick_elapsed >= known_server_tick;
+            const close_to_server = simulation_cache.head_tick_elapsed >= received_server_tick;
             const close_to_local = simulation_cache.head_tick_elapsed >= newest_local_input_tick -| (useful_input_delay + 1);
 
             if (close_to_server and close_to_local) {

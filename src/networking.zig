@@ -286,6 +286,8 @@ fn sendUpdatesToRemoteClient(fd: std.posix.socket_t, input_merger: *InputMerger,
 
     var fb = std.io.fixedBufferStream(send_buffer[4..]);
     const writer = fb.writer();
+    try cbor.writeArrayHeader(writer, 2);
+    try cbor.writeUint(writer, input_merger.buttons.items.len); // Tell the client how long the complete timeline is.
     try cbor.writeArrayHeader(writer, send_amount);
     for (consistent_until..targeted_tick) |tick_index| {
         const inputs = input_merger.buttons.items[tick_index];
@@ -376,6 +378,9 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
             .empty => 0,
         };
     }
+
+    // Make sure the local client knows how long the complete timeline is.
+    networking_queue.server_timeline_length = server_data.input_merger.buttons.items.len;
 
     networking_queue.rw_lock.unlock();
 }
@@ -556,7 +561,10 @@ pub fn startServer(networking_queue: *NetworkingQueue, port: u16) !void {
 fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []const u8) !u64 {
     var scanner = cbor.Scanner{};
     var ctx = scanner.begin(packet);
-    var all_packets = try ctx.readArray();
+    var input_synch = try ctx.readArray();
+    std.debug.assert(input_synch.items == 2);
+    networking_queue.server_timeline_length = try input_synch.readU64();
+    var all_packets = try input_synch.readArray();
     var newest_input_tick: u64 = 0;
     for (0..all_packets.items) |_| {
         var tick_info = try all_packets.readArray();
@@ -621,6 +629,7 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []const u8
         newest_input_tick = @max(newest_input_tick, input_tick_index);
     }
     try all_packets.readEnd();
+    try input_synch.readEnd();
 
     return newest_input_tick;
 }

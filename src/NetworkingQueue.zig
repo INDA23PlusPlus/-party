@@ -13,6 +13,7 @@ outgoing_data: [max_backlog]Packet = undefined,
 outgoing_data_count: u64 = 0,
 
 client_acknowledge_tick: u64 = 0,
+server_timeline_length: u64 = 0,
 
 const Self = @This();
 
@@ -35,12 +36,11 @@ pub fn interchange(self: *Self, other: *Self) void {
         self.incoming_data_count += 1;
     }
 
-    // Swap the client_acknowledge_tick. Technically only the networking thread
-    // needs this variable. But we wish to maintain symmetry in the code. So doing
-    // an integer swap does not really hurt.
-    const temporary_acknowledge_tick = other.client_acknowledge_tick;
+    // Transfer some constants. This operation is not symmetric.
+    // Results will vary between a.interchange(b) and b.interchange(a).
+    // TODO: for this reason, a better name for the procedure should be found.
     other.client_acknowledge_tick = self.client_acknowledge_tick;
-    self.client_acknowledge_tick = temporary_acknowledge_tick;
+    self.server_timeline_length = other.server_timeline_length;
 
     self.rw_lock.unlock();
     other.rw_lock.unlock();
