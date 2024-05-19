@@ -229,7 +229,7 @@ pub fn main() !void {
             received_server_tick = @max(change.tick, received_server_tick);
 
             var player_iterator = change.players.iterator(.{});
-            //std.debug.print("remoteUpdate {d} 0b{b}\n", .{change.tick, change.players.mask});
+            std.debug.print("remoteUpdate {d} player mask {b}\n", .{change.tick, change.players.mask});
             while (player_iterator.next()) |player| {
                 if (try input_merger.remoteUpdate(std.heap.page_allocator, @truncate(player), change.data[player], change.tick)) {
                     std.debug.assert(change.tick != 0);
@@ -306,6 +306,10 @@ pub fn main() !void {
             const file = std.io.getStdErr();
             const writer = file.writer();
             try input_merger.dumpInputs((tick >> 9) << 9, writer);
+        }
+        if (debug_key_down and rl.isKeyPressed(rl.KeyboardKey.key_four)) {
+            const until = (tick >> 9) << 9;
+            std.debug.print("checksum until {d} is {d}\n", .{until, input_merger.createChecksum(until)});
         }
 
         // benchmarker.start();

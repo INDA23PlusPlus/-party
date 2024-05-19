@@ -150,11 +150,15 @@ const NetServerData = struct {
 
     fn ingestPlayerInput(self: *NetServerData, change: NetworkingQueue.Packet) !void {
         var players = change.players.iterator(.{});
+
+        var did_set = false;
         while (players.next()) |player| {
-            if (!try self.input_merger.remoteUpdate(std.heap.page_allocator, @truncate(player), change.data[player], change.tick)) {
-                // If input was already set, we can just exit early and not resend anything.
-                return;
-            }
+            did_set = did_set or try self.input_merger.remoteUpdate(std.heap.page_allocator, @truncate(player), change.data[player], change.tick);
+        }
+
+        if (!did_set) {
+            // If input was already set, we can just exit early and not resend anything.
+            return;
         }
 
         inline for (&self.conns_list, self.conns_type) |*connection, conn_type| {
