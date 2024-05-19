@@ -23,6 +23,9 @@ const ConnectionType = enum(u8) {
 
     /// Already occupied by a remote client.
     remote,
+
+    /// Disconnecting. No longer accepting new packages. Once the last package is processed, slot will be empty.
+    disconnecting,
 };
 
 const max_net_packet_size = 65535 - 8;
@@ -31,7 +34,11 @@ const max_input_packets_per_socket = 64;
 const max_packets_to_send = 256;
 const max_unresponded_ticks = 128 + 64;
 
-
+const ClientPacket = struct {
+    packet: NetworkingQueue.Packet,
+    conn_index: u32,
+    is_disconnect: bool = false,
+};
 
 fn debugPacket(packet: []const u8) void {
     // Print the CBOR contents.
@@ -126,7 +133,7 @@ const NetServerData = struct {
     conns_owned_players: [constants.max_connected_count]input.PlayerBitSet = undefined,
 
     /// Parsed packages that are ready to be ingested by the InputMerger.
-    incoming_packets: [constants.max_connected_count * max_input_packets_per_socket]NetworkingQueue.Packet = undefined,
+    incoming_packets: [constants.max_connected_count * max_input_packets_per_socket]ClientPacket = undefined,
 
     /// How many packets are in the incoming_packets queue.
     incoming_packets_count: u64 = 0,
@@ -148,12 +155,21 @@ const NetServerData = struct {
         return null;
     }
 
-    fn ingestPlayerInput(self: *NetServerData, change: NetworkingQueue.Packet) !void {
+    fn ingestPlayerInput(self: *NetServerData, conn_index: u32, change: NetworkingQueue.Packet) !void {
         var players = change.players.iterator(.{});
 
         var did_set = false;
         while (players.next()) |player| {
+            std.debug.print("updating input for player {d} at tick {d}\n", .{player, change.tick});
             did_set = did_set or try self.input_merger.remoteUpdate(std.heap.page_allocator, @truncate(player), change.data[player], change.tick);
+        }
+
+        if (self.conns_latest_input_from_client[conn_index] < change.tick) {
+            // The most recent tick from the client dictates what players it has
+            // control over.
+            self.conns_latest_input_from_client[conn_index] = change.tick;
+            self.conns_owned_players[conn_index] = change.players;
+            std.debug.print("setting ownership mask {b} for conn_index {d}\n", .{self.conns_owned_players[conn_index].mask, conn_index});
         }
 
         if (!did_set) {
@@ -161,15 +177,15 @@ const NetServerData = struct {
             return;
         }
 
-        inline for (&self.conns_list, self.conns_type) |*connection, conn_type| {
-            if (conn_type != .empty) {
+        inline for (&self.conns_list, self.conns_type, 0..) |*connection, conn_type, other_conn_index| {
+            if (conn_type != .empty and other_conn_index != conn_index) {
                 connection.consistent_until = @min(connection.consistent_until, change.tick);
             }
         }
     }
 };
 
-fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packet: []const u8) !void {
+fn parsePacketFromClient(server_data: *NetServerData, client_index: usize, packet: []const u8) !void {
     if (packet.len == 0) {
         return;
     }
@@ -232,19 +248,15 @@ fn parsePacketFromClient(client_index: usize, server_data: *NetServerData, packe
         }
 
         server_data.incoming_packets[server_data.incoming_packets_count] = .{
-            .tick = @truncate(input_tick_index),
-            .data = player_buttons,
-            .players = players_affected,
+            .packet = .{
+                .tick = @truncate(input_tick_index),
+                .data = player_buttons,
+                .players = players_affected,
+            },
+            .conn_index = @truncate(client_index),
+            .is_disconnect = false,
         };
         server_data.incoming_packets_count += 1;
-
-        if (server_data.conns_latest_input_from_client[client_index] < input_tick_index) {
-            // The most recent tick from the client dictates what players it has
-            // control over.
-            server_data.conns_latest_input_from_client[client_index] = input_tick_index;
-            server_data.conns_owned_players[client_index] = players_affected;
-            //std.debug.print("setting ownership mask {b}\n", .{server_data.conns_owned_players[client_index].mask});
-        }
     }
     try all_packets.readEnd();
     try input_synch.readEnd();
@@ -272,7 +284,7 @@ fn sendUpdatesToLocalClient(networking_queue: *NetworkingQueue, input_merger: *I
             return new_consistent_until;
         }
 
-        //std.debug.print("sending to local an update for player 0b{b} at tick {d}\n", .{is_certain.mask, tick_index});
+        std.debug.print("sending to local an update for player 0b{b} at tick {d}\n", .{is_certain.mask, tick_index});
         networking_queue.outgoing_data[networking_queue.outgoing_data_count] = .{
             .tick = tick_index,
             .players = is_certain,
@@ -332,21 +344,12 @@ fn sendUpdatesToRemoteClient(fd: std.posix.socket_t, input_merger: *InputMerger,
 fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *NetworkingQueue) !void {
     networking_queue.rw_lock.lock();
 
-    // Ingest the updates from the local-client.
-    for (networking_queue.incoming_data[0..networking_queue.incoming_data_count]) |change| {
-        try server_data.ingestPlayerInput(change);
-    }
-    networking_queue.incoming_data_count = 0;
-
-    // Update local tick_acknowledged.
-    for (&server_data.conns_list, server_data.conns_type) |*connection, conn_type| {
-        if (conn_type == .local) {
-            connection.tick_acknowledged = @max(connection.tick_acknowledged, networking_queue.client_acknowledge_tick);
-        }
-    }
-
     for (server_data.incoming_packets[0..server_data.incoming_packets_count]) |packet| {
-        try server_data.ingestPlayerInput(packet);
+        std.debug.print("ingesting package with player mask {b} at tick {d}\n", .{packet.packet.players.mask, packet.packet.tick});
+        try server_data.ingestPlayerInput(packet.conn_index, packet.packet);
+        if (packet.is_disconnect and server_data.conns_type[packet.conn_index] == .disconnecting) {
+            server_data.conns_type[packet.conn_index] = .empty;
+        }
     }
     server_data.incoming_packets_count = 0;
 
@@ -381,7 +384,7 @@ fn serverThreadQueueTransfer(server_data: *NetServerData, networking_queue: *Net
                 std.debug.print("error while sending to remote client: {any}", .{e});
                 continue;
             },
-            .empty => 0,
+            else => 0,
         };
     }
 
@@ -471,25 +474,49 @@ fn pollSockets(timeout_ms: u32, conns_type: []ConnectionType, conns_sockets: []s
 fn performDisconnect(server_data: *NetServerData, conn_index: u32) void {
     std.debug.print("disconnecting players {b}\n", .{server_data.conns_owned_players[conn_index].mask});
     const fd = server_data.conns_sockets[conn_index];
-    server_data.conns_type[conn_index] = .empty;
+    server_data.conns_type[conn_index] = .disconnecting;
 
     if (server_data.incoming_packets_count >= server_data.incoming_packets.len) {
         std.debug.panic("properly disconnecting player is impossible\n", .{});
     }
     const all_disconnected = [_]input.PlayerInputState{.{.dpad = .Disconnected}} ** constants.max_player_count;
     server_data.incoming_packets[server_data.incoming_packets_count] = .{
-        .tick = server_data.input_merger.buttons.items.len,
-        .data = all_disconnected,
-        .players = server_data.conns_owned_players[conn_index],
+        .packet = .{
+            .tick = server_data.input_merger.buttons.items.len,
+            .data = all_disconnected,
+            .players = server_data.conns_owned_players[conn_index],
+        },
+        .is_disconnect = true,
+        .conn_index = conn_index,
     };
     server_data.incoming_packets_count += 1;
     std.posix.close(fd);
 }
 
-fn readFromSockets(server_data: *NetServerData) void {
+fn transferPacketsFromLocalClient(server_data: *NetServerData, networking_queue: *NetworkingQueue, conn_index: u32) void {
+    while (networking_queue.incoming_data_count > 0) {
+        if (server_data.incoming_packets_count >= server_data.incoming_packets.len) {
+            continue;
+        }
+        networking_queue.incoming_data_count -= 1;
+        server_data.incoming_packets[server_data.incoming_packets_count] = .{
+            .packet = networking_queue.incoming_data[networking_queue.incoming_data_count],
+            .conn_index = conn_index,
+            .is_disconnect = false,
+        };
+        server_data.incoming_packets_count += 1;
+    }
+    server_data.conns_list[conn_index].tick_acknowledged = @max(server_data.conns_list[conn_index].tick_acknowledged, networking_queue.client_acknowledge_tick);
+}
+
+fn readIncomingPackets(server_data: *NetServerData, networking_queue: *NetworkingQueue) void {
     var packet_part_buf: [max_net_packet_size]u8 = undefined;
     pollSockets(10, &server_data.conns_type, &server_data.conns_sockets, &server_data.conns_should_read);
     for (&server_data.conns_packet_buffer, server_data.conns_sockets, server_data.conns_type, server_data.conns_should_read, 0..) |*packet_buffer, fd, conn_type, should_read, conn_index| {
+        if (conn_type == .local) {
+            transferPacketsFromLocalClient(server_data, networking_queue, @truncate(conn_index));
+            continue;
+        }
         if (conn_type != .remote) {
             continue;
         }
@@ -516,7 +543,7 @@ fn readFromSockets(server_data: *NetServerData) void {
         // that eventually reads will be filled with a ton of unread
         // packets.
         while (full_packet.len > 0) {
-            parsePacketFromClient(conn_index, server_data, full_packet) catch |e| {
+            parsePacketFromClient(server_data, conn_index, full_packet) catch |e| {
                 std.debug.print("error while parsing packet of player {d}: {any}\n", .{ conn_index, e });
             };
             full_packet = packet_buffer.toPacket("");
@@ -544,7 +571,7 @@ fn serverThread(networking_queue: *NetworkingQueue, port: u16) !void {
             clientConnected(&server_data, new_client);
         } else |_| {}
 
-        readFromSockets(&server_data);
+        readIncomingPackets(&server_data, networking_queue);
 
         try serverThreadQueueTransfer(&server_data, networking_queue);
 

@@ -113,6 +113,7 @@ pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, player: u32, new_
     // Setting this flag also lets us know that it is worth sending in the net-code.
     // We only set consistency for <tick> because future values are just "guesses".
     self.is_certain.items[tick].set(player);
+    std.debug.print("after remote update {b}\n", .{self.is_certain.items[tick].mask});
 
     return changes != 0;
 }

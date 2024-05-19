@@ -185,6 +185,9 @@ pub fn main() !void {
         std.debug.print("starting server thread\n", .{});
         try networking.startServer(&net_thread_queue, launch_options.port);
     } else {
+        // Server timeline length is 0 if we are playing locally.
+        main_thread_queue.server_timeline_length = 0;
+
         std.debug.print("warning: multiplayer is disabled\n", .{});
     }
 
@@ -229,7 +232,7 @@ pub fn main() !void {
             received_server_tick = @max(change.tick, received_server_tick);
 
             var player_iterator = change.players.iterator(.{});
-            std.debug.print("remoteUpdate {d} player mask {b}\n", .{change.tick, change.players.mask});
+            std.debug.print("received remoteUpdate at tick {d} player mask {b}\n", .{change.tick, change.players.mask});
             while (player_iterator.next()) |player| {
                 if (try input_merger.remoteUpdate(std.heap.page_allocator, @truncate(player), change.data[player], change.tick)) {
                     std.debug.assert(change.tick != 0);
