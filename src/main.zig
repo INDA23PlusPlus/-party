@@ -71,6 +71,10 @@ const LaunchOptions = struct {
     force_minigame: u32 = 1,
     hostname: []const u8 = "127.0.0.1",
     port: u16 = 8080,
+
+    /// How many players to wait for until leaving the wait_for_input minigame.
+    min_players: u16 = 1, // TODO: Make sure it is synched. Or remove it from release as this is mostly for debugging.
+
     fn parse() !LaunchOptions {
         var result = LaunchOptions{};
         var mem: [1024]u8 = undefined;
@@ -100,6 +104,8 @@ const LaunchOptions = struct {
                 result.hostname = args.next() orelse "";
             } else if (std.mem.eql(u8, arg, "--port")) {
                 result.port = try std.fmt.parseInt(u16, args.next() orelse "missing", 10);
+            } else if (std.mem.eql(u8, arg, "--min-players")) {
+                result.min_players = try std.fmt.parseInt(u16, args.next() orelse "missing", 10);
             } else {
                 std.debug.print("unknown argument: {s}\n", .{arg});
                 return error.UnknownArg;
@@ -149,6 +155,7 @@ pub fn main() !void {
 
     var simulation_cache = SimulationCache{};
     simulation_cache.start_state.meta.preferred_minigame_id = launch_options.force_minigame;
+    simulation_cache.start_state.meta.min_players = launch_options.min_players;
     simulation_cache.reset();
 
     var input_merger = try InputMerger.init(std.heap.page_allocator);
@@ -245,29 +252,29 @@ pub fn main() !void {
         Controller.pollAll(&controllers, input_merger.buttons.items[input_tick_delayed - 1]);
 
 
-        if (main_thread_queue.server_timeline_length -| max_allowed_behind_time_inputs < input_tick_delayed) {
-            // We only try to update the timeline if we are not too far back in the past.
-    
-            // We want to know how many controllers are active locally in order to know if
-            // all of their states can be sent over to the networking thread later on.
-            const controllers_active = input_merger.autoAssign(&controllers, input_tick_delayed - 1);
+        // We only try to update the timeline if we are not too far back in the past.
+        const close_enough_for_inputs = main_thread_queue.server_timeline_length -| max_allowed_behind_time_inputs < input_tick_delayed;
 
-            if (main_thread_queue.outgoing_data_count + controllers_active <= main_thread_queue.outgoing_data.len) {
-                // We can only get local input, if we have the ability to send it. If we can't send it, we
-                // mustn't accept local input as that could cause desynchs.
+        // We can only get local input, if we have the ability to send it. If we can't send it, we
+        // mustn't accept local input as that could cause desynchs.
+        const has_space_for_inputs = main_thread_queue.outgoing_data_count < main_thread_queue.outgoing_data.len;
 
-                //std.debug.print("setting local {d}\n", .{input_tick_delayed});
-                try input_merger.localUpdate(&controllers, input_tick_delayed);
+        if (close_enough_for_inputs and has_space_for_inputs) {
+            input_merger.autoAssign(&controllers, input_tick_delayed - 1);
 
-                // Tell the networking thread about the changes we just made to the timeline.
-                submitInputs(&controllers, &input_merger, input_tick_delayed, &main_thread_queue);
+            //std.debug.print("setting local {d}\n", .{input_tick_delayed});
+            try input_merger.localUpdate(&controllers, input_tick_delayed);
 
-                newest_local_input_tick = @max(newest_local_input_tick, input_tick_delayed);
+            // Tell the networking thread about the changes we just made to the timeline.
+            submitInputs(&controllers, &input_merger, input_tick_delayed, &main_thread_queue);
+
+            newest_local_input_tick = @max(newest_local_input_tick, input_tick_delayed);
+        } else {
+            if (has_space_for_inputs) {
+                std.debug.print("too far back in the past to take input as server has length {d} and client has tick {d}\n", .{main_thread_queue.server_timeline_length, input_tick_delayed});
             } else {
                 std.debug.print("unable to send further inputs as too many have been sent without answer\n", .{});
             }
-        } else {
-            std.debug.print("too far back in the past to take input as server has length {d} and client has tick {d}\n", .{main_thread_queue.server_timeline_length, input_tick_delayed});
         }
 
         if (launch_options.start_as_role == .local) {
@@ -312,7 +319,7 @@ pub fn main() !void {
         }
         if (debug_key_down and rl.isKeyPressed(rl.KeyboardKey.key_four)) {
             const until = (tick >> 9) << 9;
-            std.debug.print("checksum until {d} is {d}\n", .{until, input_merger.createChecksum(until)});
+            std.debug.print("checksum until {d} is {x}\n", .{until, input_merger.createChecksum(until)});
         }
 
         // benchmarker.start();

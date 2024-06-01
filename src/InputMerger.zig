@@ -154,23 +154,16 @@ pub fn forceAutoAssign(self: *Self, prev_tick: u64, controllers: []Controller, n
     return false;
 }
 
-pub fn autoAssign(self: *Self, controllers: []Controller, prev_tick: u64) usize {
-    var count: usize = 0;
+pub fn autoAssign(self: *Self, controllers: []Controller, prev_tick: u64) void {
     for (controllers, 0..) |controller, nth_controller| {
         if (controller.isAssigned()) {
-            count += 1;
             continue;
         }
         if (!controller.givingInputs()) {
             continue;
         }
-        if (self.forceAutoAssign(prev_tick, controllers, nth_controller)) {
-            // Increase if we are successful in force-assigning this controller.
-            // The if-statement will change our state a bit.
-            count += 1;
-        }
+        _ = self.forceAutoAssign(prev_tick, controllers, nth_controller);
     }
-    return count;
 }
 
 pub fn createChecksum(self: *Self, until: u64) u32 {

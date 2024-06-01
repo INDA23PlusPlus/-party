@@ -1,3 +1,12 @@
+// TODO: To get a desynch, start a game, set min-players to 3. Connect one player on the host, another player on the client.
+// TODO: Then spam X and Z and switch between the windows. Then do P+2 to chek the checksum.
+
+// TODO: Old method, might be related:
+// TODO: To get a desynch, hide the window such that the local-client stops receiving input.
+// TODO: Wait a minute. Then open the window and start spamming random directions. You will desynch if you are lucky by a little.
+// TODO: This must be fixed! Their seems to be a little window of time where inputs are allowed to be sent because we are close enough to the server timeline, but the inputs are already overriden by
+// TODO: other factors.
+
 const std = @import("std");
 const constants = @import("constants.zig");
 
@@ -30,9 +39,15 @@ const ConnectionType = enum(u8) {
 
 const max_net_packet_size = 65535 - 8;
 
+// Good values.
 const max_input_packets_per_socket = 64;
 const max_packets_to_send = 256;
 const max_unresponded_ticks = 128 + 64;
+
+// TODO: Remove bad values
+//const max_input_packets_per_socket = 1;
+//const max_packets_to_send = 1;
+//const max_unresponded_ticks = 1;
 
 const ClientPacket = struct {
     packet: NetworkingQueue.Packet,
