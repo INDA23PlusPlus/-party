@@ -1,6 +1,3 @@
-// TODO: To get a desynch, start a game, set min-players to 3. Connect one player on the host, another player on the client.
-// TODO: Then spam X and Z and switch between the windows. Then do P+2 to chek the checksum.
-
 // TODO: Old method, might be related:
 // TODO: To get a desynch, hide the window such that the local-client stops receiving input.
 // TODO: Wait a minute. Then open the window and start spamming random directions. You will desynch if you are lucky by a little.
@@ -43,15 +40,8 @@ const ConnectionType = enum(u8) {
 
 const max_net_packet_size = 65535 - 8;
 
-// Good values.
-const max_input_packets_per_socket = 64;
 const max_packets_to_send = 256;
-const max_unresponded_ticks = 128 + 64;
 
-// TODO: Remove bad values
-//const max_input_packets_per_socket = 1;
-//const max_packets_to_send = 1;
-//const max_unresponded_ticks = 1;
 
 /// Just a helper to avoid @intCast everywhere.
 fn nextTick(current: u64, delta: i16) u64 {
@@ -621,12 +611,7 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []const u8
         try tick_info.readEnd();
 
         if (networking_queue.outgoing_data_count >= networking_queue.outgoing_data.len) {
-            std.debug.panic("desynchg casued by networking_queue oversaturation", .{});
-
-            // It is impossible to send. So skip this iteration and all after.
-            // We can't break as we want to parse the whole package.
-            //std.debug.print("packet from server was ignored due to networking_queue bandwith\n", .{});
-            //continue;
+            std.debug.panic("desynch casued by networking_queue oversaturation", .{});
         }
 
         networking_queue.outgoing_data[networking_queue.outgoing_data_count] = .{

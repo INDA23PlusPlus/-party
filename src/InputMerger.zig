@@ -89,14 +89,6 @@ pub fn extendTimeline(self: *Self, allocator: std.mem.Allocator, tick: u64) !voi
         return;
     }
 
-    // var guess_buttons = self.buttons.getLast();
-    // for (&guess_buttons) |*guess_player| {
-    //     // It doesn't make sense for the prediction
-    //     // to be that the player keeps button mashing at a pefect
-    //     // 1 click per tick. So we adjust it.
-    //     guess_player.button_a = guess_player.button_a.prediction();
-    //     guess_player.button_b = guess_player.button_b.prediction();
-    // }
     const start = self.buttons.items.len;
 
     try self.buttons.ensureTotalCapacity(allocator, tick + 1);
@@ -140,11 +132,6 @@ pub fn localUpdate(self: *Self, controllers: []Controller, tick: u64) !void {
 
 /// Returns true if the timeline was changed by this call.
 pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, player: u32, new_state: input.PlayerInputState, tick: u64) !bool {
-    //if (tick < self.newest_remote_frame) {
-    //    std.debug.print("newest_remote_frame: {d}, tick: {d}\n", .{self.newest_remote_frame, tick});
-    //    @panic("the inputs came out of order");
-    //}
-
     try self.extendTimeline(allocator, tick);
 
     if (self.is_certain.items[tick].isSet(player)) {
