@@ -12,10 +12,10 @@ incoming_data_count: u64 = 0,
 outgoing_data: [max_backlog]Packet = undefined,
 outgoing_data_count: u64 = 0,
 
-client_acknowledge_tick: u64 = 0,
-// A high value prevents the client from acting before it has even 
-// had the chance to receive some inptuts from the server.
-server_timeline_length: u64 = std.math.maxInt(u64), 
+/// The total amount of input packets that the server has received.
+/// A high value prevents the client from acting before it has even 
+/// had the chance to receive some inptuts from the server.
+server_total_packet_count: u64 = std.math.maxInt(u64), 
 
 const Self = @This();
 
@@ -41,8 +41,7 @@ pub fn interchange(self: *Self, other: *Self) void {
     // Transfer some constants. This operation is not symmetric.
     // Results will vary between a.interchange(b) and b.interchange(a).
     // TODO: for this reason, a better name for the procedure should be found.
-    other.client_acknowledge_tick = self.client_acknowledge_tick;
-    self.server_timeline_length = other.server_timeline_length;
+    self.server_total_packet_count = other.server_total_packet_count;
 
     self.rw_lock.unlock();
     other.rw_lock.unlock();

@@ -34,9 +34,9 @@ const useful_input_delay = 1;
 /// the future.
 const max_allowed_time_travel_to_future = 8;
 
-/// How many frames the client may be behind and still send input frames
+/// How many packets the client may be behind and still send input packets
 /// to the server.
-const max_allowed_behind_time_inputs = 8;
+const max_allowed_missing_packets = 8;
 
 /// The max amount of unreceived inputs from the server
 /// that the client will tolerate before pausing simulation.
@@ -193,7 +193,7 @@ pub fn main() !void {
         try networking.startServer(&net_thread_queue, launch_options.port);
     } else {
         // Server timeline length is 0 if we are playing locally.
-        main_thread_queue.server_timeline_length = 0;
+        main_thread_queue.server_total_packet_count = 0;
 
         std.debug.print("warning: multiplayer is disabled\n", .{});
     }
@@ -212,6 +212,10 @@ pub fn main() !void {
     var rewind_to_tick: u64 = std.math.maxInt(u64);
     var received_server_tick: u64 = 0;
     var newest_local_input_tick: u64 = 0;
+
+    // Used to know if we are still synching old packets.
+    // If we are, then simulation & input might be pointless.
+    var total_input_packets_recevied: u64 = 0;
 
     // var benchmarker = try @import("Benchmarker.zig").init("Simulation");
 
@@ -236,6 +240,7 @@ pub fn main() !void {
 
         // Ingest the updates.
         for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_count]) |change| {
+            total_input_packets_recevied += 1;
             received_server_tick = @max(change.tick, received_server_tick);
 
             var player_iterator = change.players.iterator(.{});
@@ -251,9 +256,8 @@ pub fn main() !void {
 
         Controller.pollAll(&controllers, input_merger.buttons.items[input_tick_delayed - 1]);
 
-
         // We only try to update the timeline if we are not too far back in the past.
-        const close_enough_for_inputs = main_thread_queue.server_timeline_length -| max_allowed_behind_time_inputs < input_tick_delayed;
+        const close_enough_for_inputs = main_thread_queue.server_total_packet_count -| max_allowed_missing_packets < total_input_packets_recevied;
 
         // We can only get local input, if we have the ability to send it. If we can't send it, we
         // mustn't accept local input as that could cause desynchs.
@@ -271,7 +275,7 @@ pub fn main() !void {
             newest_local_input_tick = @max(newest_local_input_tick, input_tick_delayed);
         } else {
             if (has_space_for_inputs) {
-                std.debug.print("too far back in the past to take input as server has length {d} and client has tick {d}\n", .{main_thread_queue.server_timeline_length, input_tick_delayed});
+                std.debug.print("too far back in the past to take input as server has length {d} and client has tick {d}\n", .{main_thread_queue.server_total_packet_count, input_tick_delayed});
             } else {
                 std.debug.print("unable to send further inputs as too many have been sent without answer\n", .{});
             }
@@ -285,9 +289,6 @@ pub fn main() !void {
             // we are lagging behind while running local mode.
             received_server_tick = tick;
         } else {
-            // Make sure the server knows how far the local client has come.
-            main_thread_queue.client_acknowledge_tick = received_server_tick;
-
             main_thread_queue.interchange(&net_thread_queue);
         }
 
@@ -325,7 +326,8 @@ pub fn main() !void {
         // benchmarker.start();
 
         for (0..max_simulations_per_frame) |_| {
-            if (main_thread_queue.server_timeline_length -| max_allowed_behind_time_simulations >= received_server_tick and tick > max_allowed_behind_time_simulations) {
+            // We check tick > max_allowed_behind_time_simulations such that people can join where time is not ticking. This is a ugly hack really.
+            if (!close_enough_for_inputs and tick > max_allowed_behind_time_simulations) {
                 // We know that we are missing a lot of input data. Simulating right now would be a waste.
                 // Instead we wait for more input data to arrive before starting to simulate again.
                 std.debug.print("game is paused while inputs are transferred\n", .{});
