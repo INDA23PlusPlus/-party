@@ -288,6 +288,8 @@ pub fn main() !void {
             // Make sure optimizations in other places don't think that
             // we are lagging behind while running local mode.
             received_server_tick = tick;
+
+            total_input_packets_recevied = std.math.maxInt(u64);
         } else {
             main_thread_queue.interchange(&net_thread_queue);
         }
