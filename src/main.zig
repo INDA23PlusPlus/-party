@@ -266,7 +266,7 @@ pub fn main() !void {
         if (close_enough_for_inputs and has_space_for_inputs) {
             input_merger.autoAssign(&controllers, input_tick_delayed - 1);
 
-            //std.debug.print("setting local {d}\n", .{input_tick_delayed});
+            std.debug.print("setting local {d}\n", .{input_tick_delayed});
             try input_merger.localUpdate(&controllers, input_tick_delayed);
 
             // Tell the networking thread about the changes we just made to the timeline.
@@ -298,6 +298,9 @@ pub fn main() !void {
             // into the future.
             newest_local_input_tick = 0;
         }
+
+        // Now that both remote inputs and local inputs have been inserted. We must fix our predictions.
+        rewind_to_tick = @min(rewind_to_tick, input_merger.fixInputPredictions());
 
         if (rewind_to_tick < simulation_cache.head_tick_elapsed) {
             //std.debug.print("rewind to {d}\n", .{rewind_to_tick});
