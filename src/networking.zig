@@ -21,6 +21,7 @@ const MultiplayerError = error {
 const PacketType = enum(u8) {
     input = 0,
     undo = 1,
+    player_assignments = 2,
 };
 
 const InputPacket = struct {
@@ -30,7 +31,7 @@ const InputPacket = struct {
     players: input.PlayerBitSet,
 
     /// Change in tick count relative to previous InputPacket.
-    tick_delta: i16, 
+    tick_delta: i16,
 };
 
 const UndoPacket = struct {
@@ -38,9 +39,12 @@ const UndoPacket = struct {
     players: input.PlayerBitSet,
 };
 
+const PlayerAssignmentsPacket = struct {};
+
 const ServerPacket = union(PacketType) {
     input: InputPacket,
     undo: UndoPacket,
+    player_assignments: PlayerAssignmentsPacket,
 };
 
 const ConnectionType = enum(u8) {
@@ -55,6 +59,10 @@ const ConnectionType = enum(u8) {
 
     /// Disconnecting. No longer accepting new packages. Once the last package is processed, slot will be empty.
     disconnecting,
+
+    fn is_playing(self: ConnectionType) bool {
+        return self == .local or self == .remote;
+    }
 };
 
 const max_net_packet_size = 65535 - 8;
@@ -167,13 +175,15 @@ const NetServerData = struct {
     /// Modified by the pollSockets procedure.
     conns_should_read: [constants.max_connected_count]bool = undefined,
 
-    /// Used to know when to set conns_owned_players as only the latest input packets
-    /// should affect conns_owned_players.
-    conns_latest_input_from_client: [constants.max_connected_count]u64 = undefined,
+    /// Used to know on which tick to place the disconnect packet.
+    conns_last_seen_tick: [constants.max_connected_count]u64 = undefined,
 
     /// What player does the server thing a certain client is trying to control.
-    /// This affects disconnect logic as well as the is_owned flag when sending the timeline.
+    /// This affects disconnect logic.
     conns_owned_players: [constants.max_connected_count]input.PlayerBitSet = undefined,
+
+    /// The amount of owned players that this connection wants.
+    conns_wanted_player_count: [constants.max_connected_count]u32 = undefined,
 
     fn connectSlot(self: *NetServerData) ?usize {
         for (self.conns_type, 0..) |t, i| {
@@ -186,7 +196,8 @@ const NetServerData = struct {
             self.conns_packet_budget[i] = 1;
             self.conns_packets_sent[i] = 0;
             self.conns_sent_tick[i] = 0;
-            self.conns_latest_input_from_client[i] = 0;
+            self.conns_last_seen_tick[i] = 0;
+            self.conns_wanted_player_count[i] = 0;
             self.conns_owned_players[i] = input.empty_player_bit_set;
             return i;
         }
@@ -218,9 +229,41 @@ const NetServerData = struct {
         }}) catch @panic("could not expand unchronological_inputs");
         self.packet_history_tick = new_tick;
 
-        if (self.conns_latest_input_from_client[conn_index] < new_tick) {
-            self.conns_latest_input_from_client[conn_index] = @intCast(new_tick);
-            self.conns_owned_players[conn_index] = packet.players;
+        self.conns_last_seen_tick[conn_index] = @max(self.conns_last_seen_tick[conn_index], @as(u64, @intCast(new_tick)));
+    }
+
+    /// Gives out players to those that want them.
+    fn assignPlayers(self: *NetServerData) void {
+        var owned_players = input.empty_player_bit_set;
+        var did_assign = false;
+
+        for (self.conns_type, self.conns_owned_players) |conn_type, owned| {
+            if (conn_type.is_playing()) {
+                owned_players.setUnion(owned);
+            }
+        }
+
+        var unowned_players_iterator = owned_players.complement().iterator(.{});
+
+        for(0..constants.max_player_count) |conn_index| {
+            if (!self.conns_type[conn_index].is_playing()) {
+                continue;
+            }
+
+            while (self.conns_owned_players[conn_index].count() < self.conns_wanted_player_count[conn_index]) {
+                if (unowned_players_iterator.next()) |player_index| {
+                    self.conns_owned_players[conn_index].set(player_index);
+                    did_assign = true;
+                } else {
+                    // Out of players. Ignore the request.
+                    break;
+                }
+            }
+        }
+
+        if (did_assign) {
+            self.packet_history.append(std.heap.page_allocator, .{ .player_assignments = .{}})
+                catch @panic("could not expand unchronological_inputs");
         }
     }
 };
@@ -235,10 +278,13 @@ fn parsePacketFromClient(server_data: *NetServerData, conn_index: usize, packet:
     var scanner = cbor.Scanner{};
     var ctx = scanner.begin(packet);
     var input_synch = try ctx.readArray();
-    std.debug.assert(input_synch.items == 3);
+    std.debug.assert(input_synch.items == 4);
     _ = try input_synch.readU64(); //client.tick_acknowledged = @max(client.tick_acknowledged, try input_synch.readU64());
     server_data.conns_packet_budget[conn_index] = @truncate(try input_synch.readU64());
     //std.debug.print("packet from client with tick ack {}\n", .{new_tick_acknowledged});
+
+    server_data.conns_wanted_player_count[conn_index] = @truncate(try input_synch.readU64());
+
     var all_packets = try input_synch.readArray();
 
     for (0..all_packets.items) |_| {
@@ -282,7 +328,7 @@ fn parsePacketFromClient(server_data: *NetServerData, conn_index: usize, packet:
         try tick_info.readEnd();
 
         server_data.addInputPacket(conn_index, .{
-            .is_undo = false,
+            .type = .input,
             .tick = @truncate(input_tick_index),
             .data = player_buttons,
             .players = players_affected,
@@ -320,15 +366,21 @@ fn sendUpdatesToLocalClient(server_data: *NetServerData, networking_queue: *Netw
                     .tick = new_tick,
                     .players = input_packet.players,
                     .data = input_packet.inputs,
-                    .is_undo = false,
+                    .type = .input,
                 };
             },
             .undo => |undo_packet| .{
                 .tick = undo_packet.tick,
                 .players = undo_packet.players,
                 .data = input.default_input_state,
-                .is_undo = true,
-            }
+                .type = .undo,
+            },
+            .player_assignments => .{
+                .tick = 0,
+                .players = server_data.conns_owned_players[conn_index],
+                .data = input.default_input_state,
+                .type = .player_assignments
+            },
         };
 
         //std.debug.print("sending to local an update for player 0b{b} at tick {d}\n", .{is_certain.mask, tick_index});
@@ -340,7 +392,7 @@ fn sendUpdatesToLocalClient(server_data: *NetServerData, networking_queue: *Netw
 
 fn serializeInputPacket(writer: anytype, input_packet: InputPacket, tick: u64) !void {
     try cbor.writeArrayHeader(writer, 3);
-    try cbor.writeUint(writer, 0); // 0 means input_packet.
+    try cbor.writeUint(writer, @intFromEnum(PacketType.input));
     try cbor.writeUint(writer, tick);
     try cbor.writeArrayHeader(writer, input_packet.players.count());
     for (0..constants.max_player_count) |player| {
@@ -360,11 +412,22 @@ fn serializeInputPacket(writer: anytype, input_packet: InputPacket, tick: u64) !
 
 fn serializeUndoPacket(writer: anytype, undo_packet: UndoPacket) !void {
     try cbor.writeArrayHeader(writer, 3);
-    try cbor.writeUint(writer, 1); // 1 means undo_packet.
+    try cbor.writeUint(writer, @intFromEnum(PacketType.undo));
     try cbor.writeUint(writer, undo_packet.tick);
 
     try cbor.writeArrayHeader(writer, undo_packet.players.count());
     var iterator = undo_packet.players.iterator(.{});
+    while (iterator.next()) |player| {
+        try cbor.writeUint(writer, player);
+    }
+}
+
+fn serializePlayerAssignmentPacket(writer: anytype, player_assignments: input.PlayerBitSet) !void {
+    try cbor.writeArrayHeader(writer, 2);
+    try cbor.writeUint(writer, @intFromEnum(PacketType.player_assignments));
+
+    try cbor.writeArrayHeader(writer, player_assignments.count());
+    var iterator = player_assignments.iterator(.{});
     while (iterator.next()) |player| {
         try cbor.writeUint(writer, player);
     }
@@ -389,7 +452,8 @@ fn sendUpdatesToRemoteClient(server_data: *NetServerData, conn_index: usize, sen
                 server_data.conns_sent_tick[conn_index] = new_tick;
                 try serializeInputPacket(writer, input_packet, new_tick);
             },
-            .undo => |undo_packet| try serializeUndoPacket(writer, undo_packet)
+            .undo => |undo_packet| try serializeUndoPacket(writer, undo_packet),
+            .player_assignments => try serializePlayerAssignmentPacket(writer, server_data.conns_owned_players[conn_index]),
         }
     }
 
@@ -529,11 +593,12 @@ fn performDisconnect(server_data: *NetServerData, conn_index: u32) void {
 
     const all_disconnected = [_]input.PlayerInputState{.{.dpad = .Disconnected}} ** constants.max_player_count;
     server_data.addInputPacket(conn_index, .{
-        .is_undo = false,
-        .tick = server_data.conns_latest_input_from_client[conn_index] + 1,
+        .type = .undo,
+        .tick = server_data.conns_last_seen_tick[conn_index] + 1,
         .data = all_disconnected,
         .players = server_data.conns_owned_players[conn_index],
     });
+
     // TODO: change conns_type from disconnecting to empty somewhere appropriate.
 
     std.posix.close(fd);
@@ -547,6 +612,8 @@ fn transferPacketsFromLocalClient(server_data: *NetServerData, networking_queue:
 
     // We update each frame such that we don't accidentally send to much and crash.
     server_data.conns_packet_budget[conn_index] = @truncate(networking_queue.outgoing_data.len - networking_queue.outgoing_data_count);
+
+    server_data.conns_wanted_player_count[conn_index] = networking_queue.wanted_player_count;
 }
 
 fn readIncomingPackets(server_data: *NetServerData, networking_queue: *NetworkingQueue) void {
@@ -613,6 +680,8 @@ fn serverThread(networking_queue: *NetworkingQueue, port: u16) !void {
 
         readIncomingPackets(&server_data, networking_queue);
 
+        server_data.assignPlayers();
+
         try serverThreadQueueTransfer(&server_data, networking_queue);
     }
 }
@@ -664,7 +733,7 @@ inline fn parseInputPacket(tick_info: *cbor.Context) !NetworkingQueue.Packet {
         .tick = @truncate(input_tick_index),
         .data = player_buttons,
         .players = players_affected,
-        .is_undo = false,
+        .type = .input,
     };
 }
 
@@ -680,7 +749,7 @@ inline fn parseUndoPacket(tick_info: *cbor.Context) !NetworkingQueue.Packet {
     var players_affected = input.empty_player_bit_set;
 
     for (0..player_list.items) |_| {
-        const player_index = try tick_info.readU64();
+        const player_index = try player_list.readU64();
 
         if (player_index >= constants.max_player_count) {
             std.debug.panic("server seems to support more players than client does", .{});
@@ -693,7 +762,32 @@ inline fn parseUndoPacket(tick_info: *cbor.Context) !NetworkingQueue.Packet {
         .tick = @truncate(input_tick_index),
         .data = input.default_input_state,
         .players = players_affected,
-        .is_undo = true,
+        .type = .undo,
+    };
+}
+
+inline fn parsePlayerAssignmentsPacket(tick_info: *cbor.Context) !NetworkingQueue.Packet {
+    std.debug.assert(tick_info.items == 1);
+    var player_list = try tick_info.readArray();
+
+    var players_affected = input.empty_player_bit_set;
+
+    std.debug.print("players_list len {}\n", .{player_list.items});
+    for (0..player_list.items) |_| {
+        const player_index = try player_list.readU64();
+
+        if (player_index >= constants.max_player_count) {
+            std.debug.panic("server seems to support more players than client does", .{});
+        }
+
+        players_affected.set(player_index);
+    }
+    try player_list.readEnd();
+    return .{
+        .tick = 0,
+        .data = input.default_input_state,
+        .players = players_affected,
+        .type = .player_assignments,
     };
 }
 
@@ -711,6 +805,7 @@ fn handlePacketFromServer(networking_queue: *NetworkingQueue, packet: []const u8
         const parsed_packet = switch (packet_type) {
             @intFromEnum(PacketType.input) => try parseInputPacket(&tick_info),
             @intFromEnum(PacketType.undo) => try parseUndoPacket(&tick_info),
+            @intFromEnum(PacketType.player_assignments) => try parsePlayerAssignmentsPacket(&tick_info),
             else => return MultiplayerError.unknown_packet,
         };
         try tick_info.readEnd();
@@ -819,9 +914,10 @@ fn clientThread(networking_queue: *NetworkingQueue, hostname: []const u8, port: 
         var fb = std.io.fixedBufferStream(send_buffer[4..]);
         const writer = fb.writer();
 
-        try cbor.writeArrayHeader(writer, 3);
+        try cbor.writeArrayHeader(writer, 4);
         try cbor.writeUint(writer, newest_input_tick);
         try cbor.writeUint(writer, packet_per_receive_bandwidth);
+        try cbor.writeUint(writer, networking_queue.wanted_player_count);
 
         //std.debug.print("client is sending {}\n", .{networking_queue.incoming_data_count});
         try cbor.writeArrayHeader(writer, networking_queue.incoming_data_count);

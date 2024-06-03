@@ -188,52 +188,6 @@ pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, player: u32, new_
     return true;
 }
 
-pub fn forceAutoAssign(self: *Self, prev_tick: u64, controllers: []Controller, nth_controller: usize) bool {
-    // Works a bit like localUpdate() but forces a controller to go online (for testing).
-
-    // Make sure that extendTimeline() is called before.
-    std.debug.assert(prev_tick < self.buttons.items.len);
-    const inputs = self.buttons.items[prev_tick];
-
-    // Find an available player.
-    var unavailable = [_]bool{false} ** constants.max_player_count;
-    for (inputs, 0..) |inp, player_index| {
-        if (inp.is_connected()) {
-            unavailable[player_index] = true;
-        }
-    }
-
-    // We also check the controllers in case two or more controllers
-    // were force-assigned the same tick. This way we avoid having
-    // to change the timeline to prevent this.
-    for (controllers) |controller| {
-        if (controller.isAssigned()) {
-            unavailable[controller.input_index] = true;
-        }
-    }
-    const available = std.mem.indexOfScalar(bool, &unavailable, false);
-
-    // Assign the available plyer to nth_controller.
-    if (available) |available_player| {
-        std.debug.print("Controller {} joined with id {}\n", .{ nth_controller, available_player });
-        controllers[nth_controller].input_index = available_player;
-        return true;
-    }
-    return false;
-}
-
-pub fn autoAssign(self: *Self, controllers: []Controller, prev_tick: u64) void {
-    for (controllers, 0..) |controller, nth_controller| {
-        if (controller.isAssigned()) {
-            continue;
-        }
-        if (!controller.givingInputs()) {
-            continue;
-        }
-        _ = self.forceAutoAssign(prev_tick, controllers, nth_controller);
-    }
-}
-
 pub fn createChecksum(self: *Self, until: u64) u32 {
     var hasher = std.hash.crc.Crc32.init();
     for (0.., self.buttons.items) |tick_index, buttons| {

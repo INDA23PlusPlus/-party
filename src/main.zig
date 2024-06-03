@@ -126,7 +126,7 @@ pub fn submitInputs(controllers: []Controller, input_merger: *InputMerger, input
         players_affected.set(controller.input_index);
     }
     main_thread_queue.outgoing_data[main_thread_queue.outgoing_data_count] = .{
-        .is_undo = false,
+        .type = .input,
         .tick = input_tick,
         .data = data,
         .players = players_affected,
@@ -166,21 +166,23 @@ pub fn main() !void {
     var main_thread_queue = NetworkingQueue{};
     var net_thread_queue = NetworkingQueue{};
 
+    var owned_players = input.empty_player_bit_set;
+
     // Force WASD or IJKL for games that do not support hot-joining.
-    try input_merger.extendTimeline(std.heap.page_allocator, 1);
     if (launch_options.force_wasd) {
-        _ = input_merger.forceAutoAssign(0, &controllers, 0);
+        controllers[0].assignment_state = .wants_assignment;
     }
     if (launch_options.force_ijkl) {
-        _ = input_merger.forceAutoAssign(0, &controllers, 1);
+        controllers[1].assignment_state = .wants_assignment;
     }
 
+    // TODO: This code should not be needed anymore.
     // If this is not done, then we desynch. Maybe there is a prettier solution
     // to forced input assignments. But this works, so too bad!
     // In other words, we make sure that other clients know about the forceAutoAssigns.
     // If no forceAutoAssign has happened, then all of the controllers will be unassigned at this stage.
     // So the call can't hurt anyone.
-    submitInputs(&controllers, &input_merger, 1, &main_thread_queue);
+    //submitInputs(&controllers, &input_merger, 1, &main_thread_queue);
 
     // Networking
     if (launch_options.start_as_role == .client) {
@@ -193,6 +195,9 @@ pub fn main() !void {
         std.debug.print("starting server thread\n", .{});
         try networking.startServer(&net_thread_queue, launch_options.port);
     } else {
+        // If running locally, then every player is up for grabs.
+        owned_players = input.full_player_bit_set;
+
         // Server timeline length is 0 if we are playing locally.
         main_thread_queue.server_total_packet_count = 0;
 
@@ -231,6 +236,7 @@ pub fn main() !void {
 
         const input_tick_delayed = tick + 1 + useful_input_delay;
 
+        // TODO: This could probably be moved further down.
         // Make sure that the timeline extends far enough for the input polling to work.
         try input_merger.extendTimeline(std.heap.page_allocator, input_tick_delayed);
 
@@ -247,19 +253,21 @@ pub fn main() !void {
             var player_iterator = packet.players.iterator(.{});
             std.debug.print("received remoteUpdate at tick {d} player mask {b}\n", .{packet.tick, packet.players.mask});
             while (player_iterator.next()) |player| {
-                if (packet.is_undo) {
-                    input_merger.undoUpdate(@truncate(player), packet.tick);
-                    continue;
-                }
-                if (try input_merger.remoteUpdate(std.heap.page_allocator, @truncate(player), packet.data[player], packet.tick)) {
-                    std.debug.assert(packet.tick != 0);
-                    rewind_to_tick = @min(packet.tick -| 1, rewind_to_tick);
+                switch (packet.type) {
+                    .undo => input_merger.undoUpdate(@truncate(player), packet.tick),
+
+                    .player_assignments => owned_players = packet.players,
+
+                    .input =>  if (try input_merger.remoteUpdate(std.heap.page_allocator, @truncate(player), packet.data[player], packet.tick)) {
+                        std.debug.assert(packet.tick != 0);
+                        rewind_to_tick = @min(packet.tick -| 1, rewind_to_tick);
+                    }
                 }
             }
         }
         main_thread_queue.incoming_data_count = 0;
 
-        Controller.pollAll(&controllers, input_merger.buttons.items[input_tick_delayed - 1]);
+        main_thread_queue.wanted_player_count = Controller.pollAll(&controllers, input_merger.buttons.items[input_tick_delayed - 1]);
 
         // We only try to update the timeline if we are not too far back in the past.
         const close_enough_for_inputs = main_thread_queue.server_total_packet_count -| max_allowed_missing_packets < total_server_packets_recevied;
@@ -269,7 +277,7 @@ pub fn main() !void {
         const has_space_for_inputs = main_thread_queue.outgoing_data_count < main_thread_queue.outgoing_data.len;
 
         if (close_enough_for_inputs and has_space_for_inputs) {
-            input_merger.autoAssign(&controllers, input_tick_delayed - 1);
+            Controller.autoAssign(&controllers, owned_players);
 
             std.debug.print("setting local {d}\n", .{input_tick_delayed});
             try input_merger.localUpdate(&controllers, input_tick_delayed);
@@ -353,8 +361,13 @@ pub fn main() !void {
             }
             _ = frame_arena.reset(.retain_capacity);
 
-            const close_to_server = simulation_cache.head_tick_elapsed >= received_server_tick;
-            const close_to_local = simulation_cache.head_tick_elapsed >= newest_local_input_tick -| (useful_input_delay + 1);
+            // TOOD: Currently, this code does not allow different clients to run with different useful_input_delays.
+            // TODO: This is because the server is unable to decide what the current tick is by itself, and just uses the highest tick it has found.
+            // TODO: But this means that if one client has a really high useful_input_delay, then time will speed up for
+            // TODO: Other clients. Which is really funny because that will in turn speed up the time for all clients.
+
+            const close_to_server = simulation_cache.head_tick_elapsed >= received_server_tick -| useful_input_delay;
+            const close_to_local = simulation_cache.head_tick_elapsed >= newest_local_input_tick -| useful_input_delay;
 
             if (close_to_server and close_to_local) {
                 // We have caught up. No need to do extra simulation steps now.
