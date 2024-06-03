@@ -1,7 +1,7 @@
 const std = @import("std");
 const input = @import("input.zig");
 
-pub const Packet = struct { tick: u64, data: input.AllPlayerButtons, players: input.PlayerBitSet };
+pub const Packet = struct { tick: u64, data: input.AllPlayerButtons, players: input.PlayerBitSet, is_undo: bool };
 const max_backlog = 1024;
 
 rw_lock: std.Thread.RwLock = .{},

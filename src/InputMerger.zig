@@ -12,6 +12,7 @@ const PlayerBitSetArrayList = std.ArrayListUnmanaged(input.PlayerBitSet);
 rw_lock: std.Thread.RwLock = .{},
 buttons: InputStateArrayList,
 is_certain: PlayerBitSetArrayList,
+is_local: PlayerBitSetArrayList,
 
 prediction_fix_start: u64 = 1,
 prediction_fix_end: u64 = 1,
@@ -27,9 +28,14 @@ pub fn init(allocator: std.mem.Allocator) !Self {
     var is_certain = try PlayerBitSetArrayList.initCapacity(allocator, 1024);
     try is_certain.append(allocator, input.full_player_bit_set);
 
+    // First input was not created locally. It is just universally known.
+    var is_local = try PlayerBitSetArrayList.initCapacity(allocator, 1024);
+    try is_local.append(allocator, input.empty_player_bit_set);
+
     return .{
         .buttons = buttons,
         .is_certain = is_certain,
+        .is_local = is_local,
     };
 }
 
@@ -84,18 +90,23 @@ pub fn fixInputPredictions(self: *Self) u64 {
 }
 
 pub fn extendTimeline(self: *Self, allocator: std.mem.Allocator, tick: u64) !void {
-    if (tick + 1 < self.buttons.items.len) {
+    const new_len = tick + 1;
+
+    if (new_len < self.buttons.items.len) {
         // No need to extend the timeline.
         return;
     }
 
     const start = self.buttons.items.len;
 
-    try self.buttons.ensureTotalCapacity(allocator, tick + 1);
-    self.buttons.items.len = tick + 1;
-    try self.is_certain.ensureTotalCapacity(allocator, tick + 1);
-    self.is_certain.items.len = tick + 1;
+    try self.buttons.ensureTotalCapacity(allocator, new_len);
+    self.buttons.items.len = new_len;
 
+    try self.is_certain.ensureTotalCapacity(allocator, new_len);
+    self.is_certain.items.len = new_len;
+
+    try self.is_local.ensureTotalCapacity(allocator, new_len);
+    self.is_local.items.len = new_len;
 
     for (self.buttons.items[start..]) |*frame| {
         frame.* = input.default_input_state;
@@ -106,7 +117,12 @@ pub fn extendTimeline(self: *Self, allocator: std.mem.Allocator, tick: u64) !voi
         frame.* = input.empty_player_bit_set;
     }
 
-    self.mustFixPrediction(start, tick + 1);
+    for (self.is_local.items[start..]) |*frame| {
+        // No inputs have been set yet.
+        frame.* = input.empty_player_bit_set;
+    }
+
+    self.mustFixPrediction(start, new_len);
 }
 
 pub fn localUpdate(self: *Self, controllers: []Controller, tick: u64) !void {
@@ -114,6 +130,7 @@ pub fn localUpdate(self: *Self, controllers: []Controller, tick: u64) !void {
     std.debug.assert(tick < self.buttons.items.len);
 
     var is_certain = self.is_certain.items[tick];
+    var is_local = self.is_local.items[tick];
     for (controllers) |controller| {
         const player = controller.input_index;
         if (controller.isAssigned()) {
@@ -123,22 +140,38 @@ pub fn localUpdate(self: *Self, controllers: []Controller, tick: u64) !void {
             }
             self.buttons.items[tick][player] = controller.polled_state;
             is_certain.set(player);
+            is_local.set(player);
+
         }
     }
     self.is_certain.items[tick] = is_certain;
+    self.is_local.items[tick] = is_local;
 
     self.mustFixPrediction(tick, tick + 1);
+}
+
+pub fn undoUpdate(self: *Self, player: u32, tick: u64) void {
+    if (tick >= self.is_local.items.len) {
+        // No point in undoing something outside of the current timeline.
+        return;
+    }
+
+    // The server said it did not accept the local input. So undo this local input if it is local.
+    if (self.is_local.items[tick].isSet(player)) {
+        self.is_local.items[tick].unset(player);
+        self.is_certain.items[tick].unset(player);
+
+        // The mustFixPrediction call will ensure that we set a more reasonable guess for this input.
+        self.mustFixPrediction(tick, tick + 1);
+        std.debug.print("warning, local input was removed for player {} at {}\n", .{player, tick});
+    }
 }
 
 /// Returns true if the timeline was changed by this call.
 pub fn remoteUpdate(self: *Self, allocator: std.mem.Allocator, player: u32, new_state: input.PlayerInputState, tick: u64) !bool {
     try self.extendTimeline(allocator, tick);
 
-    if (self.is_certain.items[tick].isSet(player)) {
-        return false;
-    }
-
-    // We will not let anyone override this input in the future.
+    // We will not let local input override this input in the future.
     // It is locked in for consistency.
     // Setting this flag also lets us know that it is worth sending in the net-code.
     // We only set consistency for <tick> because future values are just "guesses".

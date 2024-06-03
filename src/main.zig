@@ -126,6 +126,7 @@ pub fn submitInputs(controllers: []Controller, input_merger: *InputMerger, input
         players_affected.set(controller.input_index);
     }
     main_thread_queue.outgoing_data[main_thread_queue.outgoing_data_count] = .{
+        .is_undo = false,
         .tick = input_tick,
         .data = data,
         .players = players_affected,
@@ -215,7 +216,7 @@ pub fn main() !void {
 
     // Used to know if we are still synching old packets.
     // If we are, then simulation & input might be pointless.
-    var total_input_packets_recevied: u64 = 0;
+    var total_server_packets_recevied: u64 = 0;
 
     // var benchmarker = try @import("Benchmarker.zig").init("Simulation");
 
@@ -239,16 +240,20 @@ pub fn main() !void {
         }
 
         // Ingest the updates.
-        for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_count]) |change| {
-            total_input_packets_recevied += 1;
-            received_server_tick = @max(change.tick, received_server_tick);
+        for (main_thread_queue.incoming_data[0..main_thread_queue.incoming_data_count]) |packet| {
+            total_server_packets_recevied += 1;
+            received_server_tick = @max(packet.tick, received_server_tick);
 
-            var player_iterator = change.players.iterator(.{});
-            std.debug.print("received remoteUpdate at tick {d} player mask {b}\n", .{change.tick, change.players.mask});
+            var player_iterator = packet.players.iterator(.{});
+            std.debug.print("received remoteUpdate at tick {d} player mask {b}\n", .{packet.tick, packet.players.mask});
             while (player_iterator.next()) |player| {
-                if (try input_merger.remoteUpdate(std.heap.page_allocator, @truncate(player), change.data[player], change.tick)) {
-                    std.debug.assert(change.tick != 0);
-                    rewind_to_tick = @min(change.tick -| 1, rewind_to_tick);
+                if (packet.is_undo) {
+                    input_merger.undoUpdate(@truncate(player), packet.tick);
+                    continue;
+                }
+                if (try input_merger.remoteUpdate(std.heap.page_allocator, @truncate(player), packet.data[player], packet.tick)) {
+                    std.debug.assert(packet.tick != 0);
+                    rewind_to_tick = @min(packet.tick -| 1, rewind_to_tick);
                 }
             }
         }
@@ -257,7 +262,7 @@ pub fn main() !void {
         Controller.pollAll(&controllers, input_merger.buttons.items[input_tick_delayed - 1]);
 
         // We only try to update the timeline if we are not too far back in the past.
-        const close_enough_for_inputs = main_thread_queue.server_total_packet_count -| max_allowed_missing_packets < total_input_packets_recevied;
+        const close_enough_for_inputs = main_thread_queue.server_total_packet_count -| max_allowed_missing_packets < total_server_packets_recevied;
 
         // We can only get local input, if we have the ability to send it. If we can't send it, we
         // mustn't accept local input as that could cause desynchs.
@@ -289,7 +294,7 @@ pub fn main() !void {
             // we are lagging behind while running local mode.
             received_server_tick = tick;
 
-            total_input_packets_recevied = std.math.maxInt(u64);
+            total_server_packets_recevied = std.math.maxInt(u64);
         } else {
             main_thread_queue.interchange(&net_thread_queue);
         }
