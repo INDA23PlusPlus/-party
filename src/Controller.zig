@@ -79,9 +79,9 @@ inline fn pollKeyboardDPads(key_up: rl.KeyboardKey, key_down: rl.KeyboardKey, ke
 
 fn pollKeyboard1(previous: input.PlayerInputState) input.PlayerInputState {
     _ = previous;
-    const dpad = pollKeyboardDPads(rl.KeyboardKey.key_w, rl.KeyboardKey.key_s, rl.KeyboardKey.key_a, rl.KeyboardKey.key_d);
-    const a = keyboardKeyToButtonState(rl.KeyboardKey.key_z); // pressedToButtonState(rl.isKeyPressed(rl.KeyboardKey.key_z), previous.button_a);
-    const b = keyboardKeyToButtonState(rl.KeyboardKey.key_x); // pressedToButtonState(rl.isKeyPressed(rl.KeyboardKey.key_x), previous.button_b);
+    const dpad = pollKeyboardDPads(rl.KeyboardKey.key_up, rl.KeyboardKey.key_down, rl.KeyboardKey.key_left, rl.KeyboardKey.key_right);
+    const a = keyboardKeyToButtonState(rl.KeyboardKey.key_left_alt); // pressedToButtonState(rl.isKeyPressed(rl.KeyboardKey.key_z), previous.button_a);
+    const b = keyboardKeyToButtonState(rl.KeyboardKey.key_left_control); // pressedToButtonState(rl.isKeyPressed(rl.KeyboardKey.key_x), previous.button_b);
     return .{
         .dpad = dpad,
         .button_a = a,
@@ -91,9 +91,9 @@ fn pollKeyboard1(previous: input.PlayerInputState) input.PlayerInputState {
 
 fn pollKeyboard2(previous: input.PlayerInputState) input.PlayerInputState {
     _ = previous;
-    const dpad = pollKeyboardDPads(rl.KeyboardKey.key_i, rl.KeyboardKey.key_k, rl.KeyboardKey.key_j, rl.KeyboardKey.key_l);
-    const a = keyboardKeyToButtonState(rl.KeyboardKey.key_n);
-    const b = keyboardKeyToButtonState(rl.KeyboardKey.key_m);
+    const dpad = pollKeyboardDPads(rl.KeyboardKey.key_r, rl.KeyboardKey.key_f, rl.KeyboardKey.key_d, rl.KeyboardKey.key_g);
+    const a = keyboardKeyToButtonState(rl.KeyboardKey.key_s);
+    const b = keyboardKeyToButtonState(rl.KeyboardKey.key_a);
     return .{
         .dpad = dpad,
         .button_a = a,
